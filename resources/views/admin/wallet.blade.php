@@ -10,69 +10,66 @@
     <div class="card-body">
         <div class="row">
             {{-- Salary --}}
-            <div class="col-md-6">
+            <div class="col-md-6 border-right">
                 <form method="POST" action="{{ route('admin.wallet.salary') }}">
                     @csrf
-                    <p class="font-weight-bold mb-1">Pay Salary to Employee Driver</p>
-                    <div class="form-row align-items-end">
-                        <div class="form-group col-md-4 mb-0">
-                            <label class="small">Driver</label>
-                            <select name="user_id" class="form-control form-control-sm" required>
-                                <option value="">— Select driver —</option>
-                                @foreach(\App\Models\User::where('role','driver')->where('driver_type','employee')->orderBy('name')->get() as $d)
-                                    <option value="{{ $d->id }}">{{ $d->name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="form-group col-md-3 mb-0">
+                    <p class="font-weight-bold mb-2">Pay Salary — Employee Driver</p>
+                    <div class="form-group">
+                        <label class="small">Driver</label>
+                        <select name="user_id" class="form-control" required>
+                            <option value="">— Select employee driver —</option>
+                            @foreach(\App\Models\User::where('role','driver')->where('driver_type','employee')->orderBy('name')->get() as $d)
+                                <option value="{{ $d->id }}">{{ $d->name }} ({{ $d->phone ?? $d->email }})</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
                             <label class="small">Amount (KHR ៛)</label>
-                            <input type="number" name="amount" class="form-control form-control-sm" min="1000" step="1000" required placeholder="e.g. 500000">
+                            <input type="number" name="amount" class="form-control" min="1000" step="1000" required placeholder="e.g. 500,000">
                         </div>
-                        <div class="form-group col-md-3 mb-0">
+                        <div class="form-group col-md-6">
                             <label class="small">Note</label>
-                            <input type="text" name="note" class="form-control form-control-sm" placeholder="Monthly salary">
-                        </div>
-                        <div class="col-md-2">
-                            <button class="btn btn-sm btn-success btn-block"><i class="fas fa-money-bill-wave"></i> Pay</button>
+                            <input type="text" name="note" class="form-control" placeholder="Monthly salary May 2026">
                         </div>
                     </div>
+                    <button class="btn btn-success btn-block"><i class="fas fa-money-bill-wave mr-1"></i> Pay Salary</button>
                 </form>
             </div>
+
             {{-- Manual credit --}}
             <div class="col-md-6">
                 <form method="POST" action="{{ route('admin.wallet.credit') }}">
                     @csrf
-                    <p class="font-weight-bold mb-1">Manual Bonus / Adjustment</p>
-                    <div class="form-row align-items-end">
-                        <div class="form-group col-md-3 mb-0">
-                            <label class="small">Driver / User</label>
-                            <select name="user_id" class="form-control form-control-sm" required>
-                                <option value="">— Select —</option>
-                                @foreach(\App\Models\User::where('role','driver')->orderBy('name')->get() as $d)
-                                    <option value="{{ $d->id }}">{{ $d->name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="form-group col-md-2 mb-0">
+                    <p class="font-weight-bold mb-2">Bonus / Adjustment Credit</p>
+                    <div class="form-group">
+                        <label class="small">Driver / User</label>
+                        <select name="user_id" class="form-control" required>
+                            <option value="">— Select user —</option>
+                            @foreach(\App\Models\User::where('role','driver')->orderBy('name')->get() as $d)
+                                <option value="{{ $d->id }}">{{ $d->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
                             <label class="small">Amount (KHR)</label>
-                            <input type="number" name="amount" class="form-control form-control-sm" min="100" step="100" required>
+                            <input type="number" name="amount" class="form-control" min="100" step="100" required>
                         </div>
-                        <div class="form-group col-md-3 mb-0">
+                        <div class="form-group col-md-4">
                             <label class="small">Type</label>
-                            <select name="type" class="form-control form-control-sm">
+                            <select name="type" class="form-control">
                                 <option value="bonus">Bonus</option>
                                 <option value="adjustment">Adjustment</option>
                                 <option value="top_up">Top-up</option>
                             </select>
                         </div>
-                        <div class="form-group col-md-2 mb-0">
+                        <div class="form-group col-md-4">
                             <label class="small">Note</label>
-                            <input type="text" name="note" class="form-control form-control-sm">
-                        </div>
-                        <div class="col-md-2">
-                            <button class="btn btn-sm btn-primary btn-block"><i class="fas fa-plus"></i> Credit</button>
+                            <input type="text" name="note" class="form-control">
                         </div>
                     </div>
+                    <button class="btn btn-primary btn-block"><i class="fas fa-plus mr-1"></i> Credit Wallet</button>
                 </form>
             </div>
         </div>

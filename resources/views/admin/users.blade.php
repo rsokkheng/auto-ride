@@ -56,18 +56,16 @@
                     <td>{{ $user->created_at->format('Y-m-d') }}</td>
                     <td>
                         <button class="btn btn-xs btn-info mr-1"
-                            data-user="{{ e(json_encode([
-                                'id'              => $user->id,
-                                'name'            => $user->name,
-                                'email'           => $user->email,
-                                'phone'           => $user->phone ?? '',
-                                'role'            => $user->role ?? 'passenger',
-                                'driver_type'     => $user->driver_type ?? '',
-                                'company_id'      => $user->company_id ?? '',
-                                'salary'          => $user->salary ?? 0,
-                                'commission_rate' => $user->commission_rate ?? '',
-                                'wallet_balance'  => $user->wallet_balance ?? 0,
-                            ])) }}"
+                            data-id="{{ $user->id }}"
+                            data-name="{{ $user->name }}"
+                            data-email="{{ $user->email }}"
+                            data-phone="{{ $user->phone ?? '' }}"
+                            data-role="{{ $user->role ?? 'passenger' }}"
+                            data-driver-type="{{ $user->driver_type ?? '' }}"
+                            data-company-id="{{ $user->company_id ?? '' }}"
+                            data-salary="{{ $user->salary ?? '' }}"
+                            data-commission="{{ $user->commission_rate ?? '' }}"
+                            data-wallet="{{ $user->wallet_balance ?? 0 }}"
                             onclick="openEdit(this)"><i class="fas fa-edit"></i></button>
                         <form method="POST" action="{{ route('admin.users.destroy', $user) }}" class="d-inline"
                               onsubmit="return confirm('Delete user {{ addslashes($user->name) }}?')">
@@ -109,7 +107,7 @@
                     </div>
                     <div class="form-group">
                         <label id="pw-label">Password <span class="text-danger">*</span></label>
-                        <input type="password" name="password" id="f-password" class="form-control" placeholder="Leave blank to keep current">
+                        <input type="password" name="password" id="f-password" class="form-control">
                     </div>
                     <div class="form-row">
                         <div class="form-group col-md-6">
@@ -118,7 +116,7 @@
                         </div>
                         <div class="form-group col-md-6">
                             <label>Role <span class="text-danger">*</span></label>
-                            <select name="role" id="f-role" class="form-control" required onchange="toggleDriverFields()">
+                            <select name="role" id="f-role" class="form-control" required onchange="toggleDriverInfo()">
                                 <option value="passenger">Passenger</option>
                                 <option value="driver">Driver</option>
                                 <option value="admin">Admin</option>
@@ -126,47 +124,25 @@
                         </div>
                     </div>
 
-                    {{-- Driver-only section --}}
-                    <div id="driver-section" style="display:none;">
+                    {{-- Driver Information — shown only when role = driver --}}
+                    <div id="driver-info" style="display:none;">
                         <hr>
-                        <p class="font-weight-bold text-sm mb-2" style="color:#1e293b;">
-                            <i class="fas fa-id-card mr-1 text-primary"></i> Driver Details
+                        <p class="font-weight-bold mb-2" style="color:#1e293b;">
+                            <i class="fas fa-id-card mr-1 text-primary"></i>
+                            Driver Information
                         </p>
 
-                        {{-- Driver type --}}
-                        <div class="form-group">
-                            <label>Driver Type <span class="text-danger">*</span></label>
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <label class="border rounded p-2 d-block text-center" id="lbl-owner" style="cursor:pointer;">
-                                        <input type="radio" name="driver_type" value="owner" id="dt-owner" onchange="toggleDriverType()">
-                                        <div class="mt-1"><i class="fas fa-car fa-lg text-success"></i></div>
-                                        <div class="font-weight-bold mt-1" style="font-size:.85rem;">Own Vehicle</div>
-                                        <small class="text-muted">Pays platform fee per trip</small>
-                                    </label>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="border rounded p-2 d-block text-center" id="lbl-employee" style="cursor:pointer;">
-                                        <input type="radio" name="driver_type" value="employee" id="dt-employee" onchange="toggleDriverType()">
-                                        <div class="mt-1"><i class="fas fa-user-tie fa-lg text-info"></i></div>
-                                        <div class="font-weight-bold mt-1" style="font-size:.85rem;">Employee</div>
-                                        <small class="text-muted">Salary-based, company vehicle</small>
-                                    </label>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="border rounded p-2 d-block text-center" id="lbl-rental" style="cursor:pointer;">
-                                        <input type="radio" name="driver_type" value="rental" id="dt-rental" onchange="toggleDriverType()">
-                                        <div class="mt-1"><i class="fas fa-key fa-lg text-warning"></i></div>
-                                        <div class="font-weight-bold mt-1" style="font-size:.85rem;">Rental</div>
-                                        <small class="text-muted">Rents vehicle from company</small>
-                                    </label>
-                                </div>
+                        <div class="form-row">
+                            <div class="form-group col-md-6">
+                                <label>Driver Type</label>
+                                <select name="driver_type" id="f-driver-type" class="form-control" onchange="toggleSalary()">
+                                    <option value="">— Select driver type —</option>
+                                    <option value="owner">Own Vehicle (Independent)</option>
+                                    <option value="employee">Employee — Company Vehicle</option>
+                                    <option value="rental">Rental — Rents from Company</option>
+                                </select>
                             </div>
-                        </div>
-
-                        {{-- Company (employee/rental only) --}}
-                        <div id="company-section" style="display:none;">
-                            <div class="form-group">
+                            <div class="form-group col-md-6">
                                 <label>Company</label>
                                 <select name="company_id" id="f-company" class="form-control">
                                     <option value="">— No company —</option>
@@ -176,26 +152,20 @@
                                 </select>
                             </div>
                         </div>
-
-                        {{-- Salary (employee only) --}}
-                        <div id="salary-section" style="display:none;">
-                            <div class="form-group">
-                                <label>Monthly Salary (KHR ៛)</label>
-                                <input type="number" name="salary" id="f-salary" class="form-control" min="0" step="10000" placeholder="e.g. 500000">
+                        <div class="form-row">
+                            <div class="form-group col-md-6" id="salary-field" style="display:none;">
+                                <label>Monthly Salary (KHR ៛) <small class="text-muted">— employee only</small></label>
+                                <input type="number" name="salary" id="f-salary" class="form-control" min="0" step="10000" placeholder="e.g. 500,000">
                             </div>
-                        </div>
-
-                        {{-- Commission override --}}
-                        <div class="form-group">
-                            <label>
-                                Platform Commission Rate Override (%)
-                                <small class="text-muted ml-1">— leave blank to use default</small>
-                            </label>
-                            <input type="number" name="commission_rate" id="f-commission" class="form-control" min="0" max="100" step="0.5" placeholder="Default: {{ config('commission.platform_rate.owner', 20) }}%">
+                            <div class="form-group col-md-6">
+                                <label>Commission Rate Override (%) <small class="text-muted">— blank = default</small></label>
+                                <input type="number" name="commission_rate" id="f-commission" class="form-control" min="0" max="100" step="0.5"
+                                    placeholder="{{ config('commission.platform_rate.owner', 20) }}%">
+                            </div>
                         </div>
                     </div>
 
-                    {{-- Wallet (edit only) --}}
+                    {{-- Wallet balance — edit only --}}
                     <div class="form-group" id="wallet-group" style="display:none;">
                         <label>Wallet Balance (KHR ៛)</label>
                         <input type="number" name="wallet_balance" id="f-wallet" class="form-control" min="0" step="100">
@@ -214,81 +184,66 @@
 
 @push('scripts')
 <script>
-const storeUrl = '{{ route('admin.users.store') }}';
+const storeUrl = '{{ route("admin.users.store") }}';
 const updateBase = '/admin/users/';
 
-function toggleDriverFields() {
-    const isDriver = document.getElementById('f-role').value === 'driver';
-    document.getElementById('driver-section').style.display = isDriver ? 'block' : 'none';
+function toggleDriverInfo() {
+    var isDriver = document.getElementById('f-role').value === 'driver';
+    document.getElementById('driver-info').style.display = isDriver ? 'block' : 'none';
     if (!isDriver) {
-        document.querySelectorAll('input[name=driver_type]').forEach(r => r.checked = false);
-        highlightType(null);
+        document.getElementById('f-driver-type').value = '';
+        document.getElementById('f-company').value     = '';
+        document.getElementById('f-salary').value      = '';
+        document.getElementById('salary-field').style.display = 'none';
     }
-    toggleDriverType();
 }
 
-function toggleDriverType() {
-    const type = document.querySelector('input[name=driver_type]:checked')?.value ?? '';
-    const needsCompany = type === 'employee' || type === 'rental';
-    const needsSalary  = type === 'employee';
-    document.getElementById('company-section').style.display = needsCompany ? 'block' : 'none';
-    document.getElementById('salary-section').style.display  = needsSalary  ? 'block' : 'none';
-    highlightType(type);
-}
-
-function highlightType(type) {
-    ['owner', 'employee', 'rental'].forEach(t => {
-        const lbl = document.getElementById('lbl-' + t);
-        if (lbl) lbl.style.borderColor = (t === type) ? '#007bff' : '';
-        if (lbl) lbl.style.background  = (t === type) ? '#f0f7ff' : '';
-    });
+function toggleSalary() {
+    var type = document.getElementById('f-driver-type').value;
+    document.getElementById('salary-field').style.display = type === 'employee' ? 'block' : 'none';
 }
 
 function openCreate() {
-    document.getElementById('modalTitle').textContent = 'Add User';
-    document.getElementById('userForm').action = storeUrl;
-    document.getElementById('formMethod').value = 'POST';
-    document.getElementById('pw-label').innerHTML = 'Password <span class="text-danger">*</span>';
-    document.getElementById('f-password').required = true;
+    document.getElementById('modalTitle').textContent  = 'Add User';
+    document.getElementById('userForm').action         = storeUrl;
+    document.getElementById('formMethod').value        = 'POST';
+    document.getElementById('pw-label').textContent    = 'Password *';
+    document.getElementById('f-password').required     = true;
+    document.getElementById('f-name').value            = '';
+    document.getElementById('f-email').value           = '';
+    document.getElementById('f-password').value        = '';
+    document.getElementById('f-phone').value           = '';
+    document.getElementById('f-role').value            = 'passenger';
+    document.getElementById('f-driver-type').value     = '';
+    document.getElementById('f-company').value         = '';
+    document.getElementById('f-salary').value          = '';
+    document.getElementById('f-commission').value      = '';
+    document.getElementById('driver-info').style.display  = 'none';
+    document.getElementById('salary-field').style.display = 'none';
     document.getElementById('wallet-group').style.display = 'none';
-    document.getElementById('driver-section').style.display = 'none';
-    document.getElementById('company-section').style.display = 'none';
-    document.getElementById('salary-section').style.display = 'none';
-    document.getElementById('userForm').reset();
-    highlightType(null);
     $('#formModal').modal('show');
 }
 
 function openEdit(btn) {
-    const d = JSON.parse(btn.getAttribute('data-user'));
-    document.getElementById('modalTitle').textContent = 'Edit User #' + d.id;
-    document.getElementById('userForm').action = updateBase + d.id;
-    document.getElementById('formMethod').value = 'PUT';
-    document.getElementById('pw-label').innerHTML = 'Password <small class="text-muted">(leave blank to keep)</small>';
-    document.getElementById('f-password').required = false;
-    document.getElementById('f-name').value    = d.name;
-    document.getElementById('f-email').value   = d.email;
-    document.getElementById('f-password').value = '';
-    document.getElementById('f-phone').value   = d.phone;
-    document.getElementById('f-role').value    = d.role;
-    document.getElementById('f-wallet').value  = d.wallet_balance;
+    var isDriver = btn.dataset.role === 'driver';
+    document.getElementById('modalTitle').textContent  = 'Edit User #' + btn.dataset.id;
+    document.getElementById('userForm').action         = updateBase + btn.dataset.id;
+    document.getElementById('formMethod').value        = 'PUT';
+    document.getElementById('pw-label').textContent    = 'Password (leave blank to keep)';
+    document.getElementById('f-password').required     = false;
+    document.getElementById('f-name').value            = btn.dataset.name;
+    document.getElementById('f-email').value           = btn.dataset.email;
+    document.getElementById('f-password').value        = '';
+    document.getElementById('f-phone').value           = btn.dataset.phone;
+    document.getElementById('f-role').value            = btn.dataset.role;
+    document.getElementById('f-driver-type').value     = btn.dataset.driverType  || '';
+    document.getElementById('f-company').value         = btn.dataset.companyId   || '';
+    document.getElementById('f-salary').value          = btn.dataset.salary      || '';
+    document.getElementById('f-commission').value      = btn.dataset.commission  || '';
+    document.getElementById('f-wallet').value          = btn.dataset.wallet      || 0;
+    document.getElementById('driver-info').style.display  = isDriver ? 'block' : 'none';
+    document.getElementById('salary-field').style.display = btn.dataset.driverType === 'employee' ? 'block' : 'none';
     document.getElementById('wallet-group').style.display = 'block';
-
-    const isDriver = d.role === 'driver';
-    document.getElementById('driver-section').style.display = isDriver ? 'block' : 'none';
-
-    if (isDriver) {
-        const radio = document.getElementById('dt-' + d.driver_type);
-        if (radio) radio.checked = true;
-        document.getElementById('f-company').value    = d.company_id || '';
-        document.getElementById('f-salary').value     = d.salary || '';
-        document.getElementById('f-commission').value = d.commission_rate || '';
-        toggleDriverType();
-    } else {
-        document.querySelectorAll('input[name=driver_type]').forEach(r => r.checked = false);
-        highlightType(null);
-    }
-
     $('#formModal').modal('show');
 }
 </script>

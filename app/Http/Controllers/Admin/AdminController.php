@@ -597,26 +597,30 @@ class AdminController extends Controller
         ]);
     }
 
-    public function paySalary(Request $request, User $user)
+    public function paySalary(Request $request)
     {
         $data = $request->validate([
-            'amount' => 'required|integer|min:1000',
-            'note'   => 'nullable|string|max:255',
+            'user_id' => 'required|exists:users,id',
+            'amount'  => 'required|integer|min:1000',
+            'note'    => 'nullable|string|max:255',
         ]);
 
+        $user = User::findOrFail($data['user_id']);
         app(WalletService::class)->paySalary($user, $data['amount'], Auth::user(), $data['note'] ?? '');
 
         return redirect()->route('admin.wallet')->with('success', "Salary of " . number_format($data['amount'], 0) . " ៛ paid to {$user->name}.");
     }
 
-    public function adminCredit(Request $request, User $user)
+    public function adminCredit(Request $request)
     {
         $data = $request->validate([
-            'amount'    => 'required|integer|min:100',
-            'type'      => 'required|in:bonus,adjustment,top_up',
-            'note'      => 'nullable|string|max:255',
+            'user_id' => 'required|exists:users,id',
+            'amount'  => 'required|integer|min:100',
+            'type'    => 'required|in:bonus,adjustment,top_up',
+            'note'    => 'nullable|string|max:255',
         ]);
 
+        $user = User::findOrFail($data['user_id']);
         app(WalletService::class)->credit($user, $data['amount'], $data['type'], $data['note'] ?? 'Admin credit', null, Auth::id());
 
         return redirect()->route('admin.wallet')->with('success', "Credit of " . number_format($data['amount'], 0) . " ៛ added to {$user->name}.");

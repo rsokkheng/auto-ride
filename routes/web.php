@@ -70,8 +70,8 @@ Route::prefix('admin')->group(function () {
 
     // Wallet & Transactions
     Route::get('wallet', [AdminController::class, 'walletTransactions'])->name('admin.wallet');
-    Route::post('wallet/salary/{user}', [AdminController::class, 'paySalary'])->name('admin.wallet.salary');
-    Route::post('wallet/credit/{user}', [AdminController::class, 'adminCredit'])->name('admin.wallet.credit');
+    Route::post('wallet/salary', [AdminController::class, 'paySalary'])->name('admin.wallet.salary');
+    Route::post('wallet/credit', [AdminController::class, 'adminCredit'])->name('admin.wallet.credit');
 
     // Top-up Requests
     Route::get('topups', [AdminController::class, 'topups'])->name('admin.topups');
