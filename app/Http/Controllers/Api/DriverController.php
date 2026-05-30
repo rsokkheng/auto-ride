@@ -78,17 +78,34 @@ class DriverController extends ApiController
         }
 
         $data = $request->validate([
-            'ride_id' => 'required|exists:rides,id',
-            'latitude' => 'required|numeric|between:-90,90',
+            'ride_id'   => 'nullable|exists:rides,id',
+            'latitude'  => 'required|numeric|between:-90,90',
             'longitude' => 'required|numeric|between:-180,180',
-            'speed' => 'nullable|numeric|min:0',
-            'heading' => 'nullable|numeric|min:0|max:360',
-            'status' => 'nullable|string|max:64',
+            'speed'     => 'nullable|numeric|min:0',
+            'heading'   => 'nullable|numeric|min:0|max:360',
+            'status'    => 'nullable|string|max:64',
         ]);
 
-        $location = RideLocation::create($data);
+        // Always persist the driver's current position so the matching
+        // algorithm can find them without querying ride_locations.
+        $user->update([
+            'current_latitude'  => $data['latitude'],
+            'current_longitude' => $data['longitude'],
+        ]);
 
-        return $this->success(['location' => $location]);
+        $location = null;
+
+        if (! empty($data['ride_id'])) {
+            $location = RideLocation::create($data);
+        }
+
+        return $this->success([
+            'location' => $location,
+            'current'  => [
+                'latitude'  => (float) $data['latitude'],
+                'longitude' => (float) $data['longitude'],
+            ],
+        ]);
     }
 
     public function getDriverStats(Request $request)

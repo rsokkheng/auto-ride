@@ -47,14 +47,18 @@ Route::prefix('v1')->group(function () {
     Route::post('rides/{ride}/cancel', [RideController::class, 'cancel']);
     Route::post('rides/{ride}/rate', [RideController::class, 'rate']);
 
+    // Static delivery routes must come before {delivery} wildcard routes.
+    Route::get('deliveries/nearby-drivers', [DeliveryController::class, 'nearbyDrivers']);
+    Route::get('deliveries/history', [DeliveryController::class, 'history']);
+    Route::post('deliveries/estimate', [DeliveryController::class, 'estimate']);
+
     Route::get('deliveries', [DeliveryController::class, 'index']);
     Route::post('deliveries', [DeliveryController::class, 'store']);
     Route::post('deliveries/{delivery}/accept', [DeliveryController::class, 'accept']);
     Route::post('deliveries/{delivery}/cancel', [DeliveryController::class, 'cancel']);
     Route::post('deliveries/{delivery}/track', [DeliveryController::class, 'track']);
     Route::post('deliveries/{delivery}/complete', [DeliveryController::class, 'complete']);
-    Route::get('deliveries/history', [DeliveryController::class, 'history']);
-    Route::post('deliveries/estimate', [DeliveryController::class, 'estimate']);
+    Route::post('deliveries/{delivery}/rate', [DeliveryController::class, 'rate']);
 
     Route::get('charging-stations', [ChargingStationController::class, 'index']);
 

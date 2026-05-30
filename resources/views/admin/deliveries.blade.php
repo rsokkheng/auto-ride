@@ -33,7 +33,7 @@
                 @forelse($deliveries as $d)
                 @php
                     $pc = ['small' => 'success', 'medium' => 'warning', 'large' => 'danger'];
-                    $sc = ['pending' => 'warning', 'accepted' => 'info', 'in_progress' => 'primary', 'completed' => 'success', 'cancelled' => 'danger'];
+                    $sc = ['requested' => 'secondary', 'pending' => 'warning', 'accepted' => 'info', 'in_progress' => 'primary', 'completed' => 'success', 'cancelled' => 'danger'];
                 @endphp
                 <tr>
                     <td>{{ $d->id }}</td>
@@ -171,6 +171,7 @@
                         <div class="form-group col-md-4">
                             <label>Status <span class="text-danger">*</span></label>
                             <select name="status" id="f-status" class="form-control" required>
+                                <option value="requested">Requested</option>
                                 <option value="pending">Pending</option>
                                 <option value="accepted">Accepted</option>
                                 <option value="in_progress">In Progress</option>

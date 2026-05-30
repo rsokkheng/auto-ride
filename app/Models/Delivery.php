@@ -20,16 +20,23 @@ class Delivery extends Model
         'vehicle_id',
         'pickup_address',
         'dropoff_address',
+        'pickup_lat',
+        'pickup_lng',
         'scheduled_at',
         'status',
         'package_details',
         'fee',
         'notes',
+        'rating',
+        'rating_comment',
     ];
 
     protected $casts = [
         'scheduled_at' => 'datetime',
-        'fee' => 'decimal:2',
+        'fee'          => 'decimal:2',
+        'rating'       => 'float',
+        'pickup_lat'   => 'float',
+        'pickup_lng'   => 'float',
     ];
 
     public function sender(): BelongsTo
