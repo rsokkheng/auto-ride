@@ -11,7 +11,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['name', 'email', 'password', 'phone', 'role', 'driver_type', 'company_name', 'api_token', 'refresh_token', 'token_expires_at', 'refresh_token_expires_at', 'available', 'status_note', 'wallet_balance', 'current_latitude', 'current_longitude', 'rating', 'total_ratings'])]
+#[Fillable(['name', 'email', 'password', 'phone', 'role', 'driver_type', 'company_name', 'company_id', 'salary', 'commission_rate', 'api_token', 'refresh_token', 'token_expires_at', 'refresh_token_expires_at', 'available', 'status_note', 'wallet_balance', 'current_latitude', 'current_longitude', 'rating', 'total_ratings'])]
 #[Hidden(['password', 'remember_token', 'api_token', 'refresh_token'])]
 class User extends Authenticatable
 {
@@ -29,6 +29,8 @@ class User extends Authenticatable
             'email_verified_at'         => 'datetime',
             'password'                  => 'hashed',
             'wallet_balance'            => 'integer',
+            'salary'                    => 'integer',
+            'commission_rate'           => 'float',
             'token_expires_at'          => 'datetime',
             'refresh_token_expires_at'  => 'datetime',
         ];
@@ -97,5 +99,20 @@ class User extends Authenticatable
     public function sosAlerts(): HasMany
     {
         return $this->hasMany(SOSAlert::class);
+    }
+
+    public function company(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function walletTransactions(): HasMany
+    {
+        return $this->hasMany(WalletTransaction::class)->orderByDesc('created_at');
+    }
+
+    public function topUpRequests(): HasMany
+    {
+        return $this->hasMany(TopUpRequest::class)->orderByDesc('created_at');
     }
 }

@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Models\Ride;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\CommissionService;
+use App\Services\WalletService;
 use Illuminate\Http\Request;
 
 class RideController extends ApiController
@@ -115,7 +117,17 @@ class RideController extends ApiController
 
         $ride->update(['status' => 'completed']);
 
-        return $this->success(['ride' => $ride->fresh()->load('driver', 'vehicle')]);
+        // Process payment: split fare and credit driver wallet.
+        if ($ride->fare > 0 && $ride->driver) {
+            $driver = $ride->driver()->with('company')->first();
+            $split  = app(CommissionService::class)->split($ride->fare, $driver);
+            app(WalletService::class)->processTripPayment($driver, $split, $ride);
+        }
+
+        return $this->success([
+            'ride'    => $ride->fresh()->load('driver', 'vehicle'),
+            'payment' => isset($split) ? $split : null,
+        ]);
     }
 
     public function estimate(Request $request)

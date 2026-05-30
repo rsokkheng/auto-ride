@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Delivery;
 use App\Models\Vehicle;
+use App\Services\CommissionService;
 use App\Services\DriverMatchingService;
+use App\Services\WalletService;
 use Illuminate\Http\Request;
 
 class DeliveryController extends ApiController
@@ -254,7 +256,18 @@ class DeliveryController extends ApiController
 
         $delivery->update(['status' => 'completed']);
 
-        return $this->success(['delivery' => $delivery]);
+        // Process payment: split fee and credit driver wallet.
+        $split = null;
+        if ($delivery->fee > 0 && $delivery->driver) {
+            $driver = $delivery->driver()->with('company')->first();
+            $split  = app(CommissionService::class)->split($delivery->fee, $driver);
+            app(WalletService::class)->processTripPayment($driver, $split, $delivery);
+        }
+
+        return $this->success([
+            'delivery' => $delivery->fresh(),
+            'payment'  => $split,
+        ]);
     }
 
     public function complete(Request $request, Delivery $delivery)

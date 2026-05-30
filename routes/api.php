@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ChatController;
+use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\ChargingStationController;
 use App\Http\Controllers\Api\DeliveryController;
 use App\Http\Controllers\Api\DriverController;
@@ -82,6 +83,13 @@ Route::prefix('v1')->group(function () {
     Route::get('safety-incidents', [SafetyController::class, 'index']);
     Route::post('safety-incidents', [SafetyController::class, 'store']);
     Route::post('sos/alert', [SafetyController::class, 'sos']);
+
+    // Wallet
+    Route::get('wallet', [WalletController::class, 'index']);
+    Route::get('wallet/transactions', [WalletController::class, 'transactions']);
+    Route::post('wallet/topup', [WalletController::class, 'requestTopUp']);
+    Route::get('wallet/topup/{topup}', [WalletController::class, 'topUpStatus']);
+    Route::post('wallet/withdraw', [WalletController::class, 'requestWithdrawal']);
 
     Route::get('driver/status', [DriverController::class, 'status']);
     Route::post('driver/availability', [DriverController::class, 'setAvailability']);

@@ -61,4 +61,20 @@ Route::prefix('admin')->group(function () {
     Route::post('safety', [AdminController::class, 'storeSafety'])->name('admin.safety.store');
     Route::put('safety/{incident}', [AdminController::class, 'updateSafety'])->name('admin.safety.update');
     Route::delete('safety/{incident}', [AdminController::class, 'destroySafety'])->name('admin.safety.destroy');
+
+    // Companies
+    Route::get('companies', [AdminController::class, 'companies'])->name('admin.companies');
+    Route::post('companies', [AdminController::class, 'storeCompany'])->name('admin.companies.store');
+    Route::put('companies/{company}', [AdminController::class, 'updateCompany'])->name('admin.companies.update');
+    Route::delete('companies/{company}', [AdminController::class, 'destroyCompany'])->name('admin.companies.destroy');
+
+    // Wallet & Transactions
+    Route::get('wallet', [AdminController::class, 'walletTransactions'])->name('admin.wallet');
+    Route::post('wallet/salary/{user}', [AdminController::class, 'paySalary'])->name('admin.wallet.salary');
+    Route::post('wallet/credit/{user}', [AdminController::class, 'adminCredit'])->name('admin.wallet.credit');
+
+    // Top-up Requests
+    Route::get('topups', [AdminController::class, 'topups'])->name('admin.topups');
+    Route::post('topups/{topup}/approve', [AdminController::class, 'approveTopUp'])->name('admin.topups.approve');
+    Route::post('topups/{topup}/reject', [AdminController::class, 'rejectTopUp'])->name('admin.topups.reject');
 });

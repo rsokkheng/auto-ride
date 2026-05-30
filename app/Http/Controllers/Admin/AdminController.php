@@ -4,13 +4,17 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ChargingStation;
+use App\Models\Company;
 use App\Models\Delivery;
 use App\Models\MarketplaceItem;
 use App\Models\Ride;
 use App\Models\SafetyIncident;
 use App\Models\SupportTicket;
+use App\Models\TopUpRequest;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Models\WalletTransaction;
+use App\Services\WalletService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -528,5 +532,133 @@ class AdminController extends Controller
     {
         $incident->delete();
         return redirect()->route('admin.safety')->with('success', 'Safety incident deleted.');
+    }
+
+    // ─── Companies ────────────────────────────────────────────────────────────
+
+    public function companies()
+    {
+        return view('admin.companies', [
+            'companies' => Company::withCount('drivers')->orderByDesc('created_at')->paginate(20),
+        ]);
+    }
+
+    public function storeCompany(Request $request)
+    {
+        $data = $request->validate([
+            'name'                     => 'required|string|max:255',
+            'phone'                    => 'nullable|string|max:24',
+            'email'                    => 'nullable|email|max:255',
+            'address'                  => 'nullable|string|max:255',
+            'platform_commission_rate' => 'nullable|numeric|min:0|max:100',
+            'company_commission_rate'  => 'nullable|numeric|min:0|max:100',
+            'rental_daily_rate'        => 'nullable|integer|min:0',
+            'active'                   => 'boolean',
+        ]);
+
+        $data['active'] = $request->boolean('active', true);
+        Company::create($data);
+
+        return redirect()->route('admin.companies')->with('success', 'Company created.');
+    }
+
+    public function updateCompany(Request $request, Company $company)
+    {
+        $data = $request->validate([
+            'name'                     => 'required|string|max:255',
+            'phone'                    => 'nullable|string|max:24',
+            'email'                    => 'nullable|email|max:255',
+            'address'                  => 'nullable|string|max:255',
+            'platform_commission_rate' => 'nullable|numeric|min:0|max:100',
+            'company_commission_rate'  => 'nullable|numeric|min:0|max:100',
+            'rental_daily_rate'        => 'nullable|integer|min:0',
+            'active'                   => 'boolean',
+        ]);
+
+        $data['active'] = $request->boolean('active');
+        $company->update($data);
+
+        return redirect()->route('admin.companies')->with('success', 'Company updated.');
+    }
+
+    public function destroyCompany(Company $company)
+    {
+        $company->delete();
+        return redirect()->route('admin.companies')->with('success', 'Company deleted.');
+    }
+
+    // ─── Wallet / Transactions ────────────────────────────────────────────────
+
+    public function walletTransactions()
+    {
+        return view('admin.wallet', [
+            'transactions' => WalletTransaction::with('user')
+                ->orderByDesc('created_at')
+                ->paginate(30),
+        ]);
+    }
+
+    public function paySalary(Request $request, User $user)
+    {
+        $data = $request->validate([
+            'amount' => 'required|integer|min:1000',
+            'note'   => 'nullable|string|max:255',
+        ]);
+
+        app(WalletService::class)->paySalary($user, $data['amount'], Auth::user(), $data['note'] ?? '');
+
+        return redirect()->route('admin.wallet')->with('success', "Salary of " . number_format($data['amount'], 0) . " ៛ paid to {$user->name}.");
+    }
+
+    public function adminCredit(Request $request, User $user)
+    {
+        $data = $request->validate([
+            'amount'    => 'required|integer|min:100',
+            'type'      => 'required|in:bonus,adjustment,top_up',
+            'note'      => 'nullable|string|max:255',
+        ]);
+
+        app(WalletService::class)->credit($user, $data['amount'], $data['type'], $data['note'] ?? 'Admin credit', null, Auth::id());
+
+        return redirect()->route('admin.wallet')->with('success', "Credit of " . number_format($data['amount'], 0) . " ៛ added to {$user->name}.");
+    }
+
+    // ─── Top-up Requests ─────────────────────────────────────────────────────
+
+    public function topups()
+    {
+        return view('admin.topups', [
+            'pending'  => TopUpRequest::with('user')->where('status', 'pending')->orderByDesc('created_at')->get(),
+            'history'  => TopUpRequest::with(['user', 'approvedBy'])->whereIn('status', ['approved', 'rejected'])->orderByDesc('updated_at')->paginate(20),
+        ]);
+    }
+
+    public function approveTopUp(Request $request, TopUpRequest $topup)
+    {
+        if ($topup->status !== 'pending') {
+            return redirect()->route('admin.topups')->with('error', 'Request already processed.');
+        }
+
+        app(WalletService::class)->approveTopUp($topup, Auth::user());
+
+        return redirect()->route('admin.topups')->with('success', "Top-up of " . number_format($topup->amount, 0) . " ៛ approved for {$topup->user->name}.");
+    }
+
+    public function rejectTopUp(Request $request, TopUpRequest $topup)
+    {
+        if ($topup->status !== 'pending') {
+            return redirect()->route('admin.topups')->with('error', 'Request already processed.');
+        }
+
+        $data = $request->validate(['admin_note' => 'nullable|string|max:500']);
+
+        $topup->update([
+            'status'      => 'rejected',
+            'admin_note'  => $data['admin_note'] ?? null,
+            'approved_by' => Auth::id(),
+            'approved_at' => now(),
+        ]);
+
+        return redirect()->route('admin.topups')->with('success', "Top-up request rejected.");
     }
 }
