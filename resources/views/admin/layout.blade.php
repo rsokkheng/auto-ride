@@ -159,6 +159,33 @@
                         </a>
                     </li>
 
+                    <li class="nav-header" style="font-size:.65rem;color:#475569;letter-spacing:.1em;padding:8px 16px 4px;">DRIVER &amp; FINANCE</li>
+
+                    <li class="nav-item">
+                        <a href="{{ route('admin.companies') }}" class="nav-link {{ request()->routeIs('admin.companies') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-building"></i>
+                            <p>Companies</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ route('admin.wallet') }}" class="nav-link {{ request()->routeIs('admin.wallet') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-wallet"></i>
+                            <p>Wallet &amp; Transactions</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ route('admin.topups') }}" class="nav-link {{ request()->routeIs('admin.topups') ? 'active' : '' }}">
+                            @php $pendingCount = \App\Models\TopUpRequest::where('status','pending')->count(); @endphp
+                            <i class="nav-icon fas fa-money-bill-transfer"></i>
+                            <p>
+                                Top-up Requests
+                                @if($pendingCount)
+                                    <span class="right badge badge-warning">{{ $pendingCount }}</span>
+                                @endif
+                            </p>
+                        </a>
+                    </li>
+
                     <li class="nav-header" style="font-size:.65rem;color:#475569;letter-spacing:.1em;padding:8px 16px 4px;">SERVICES</li>
 
                     <li class="nav-item">

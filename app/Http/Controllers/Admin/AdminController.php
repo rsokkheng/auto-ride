@@ -94,30 +94,30 @@ class AdminController extends Controller
     public function users()
     {
         return view('admin.users', [
-            'users' => User::orderByDesc('created_at')->paginate(20),
+            'users'     => User::with('company')->orderByDesc('created_at')->paginate(20),
+            'companies' => Company::where('active', true)->orderBy('name')->get(),
         ]);
     }
 
     public function storeUser(Request $request)
     {
         $data = $request->validate([
-            'name'         => 'required|string|max:255',
-            'email'        => 'required|email|unique:users,email',
-            'password'     => 'required|string|min:6',
-            'phone'        => 'nullable|string|max:20',
-            'role'         => 'required|in:admin,driver,passenger',
-            'driver_type'  => 'nullable|in:owner,company_staff,rental',
-            'company_name' => 'nullable|string|max:255',
+            'name'            => 'required|string|max:255',
+            'email'           => 'required|email|unique:users,email',
+            'password'        => 'required|string|min:6',
+            'phone'           => 'nullable|string|max:20',
+            'role'            => 'required|in:admin,driver,passenger',
+            'driver_type'     => 'nullable|in:employee,owner,rental',
+            'company_id'      => 'nullable|exists:companies,id',
+            'salary'          => 'nullable|integer|min:0',
+            'commission_rate' => 'nullable|numeric|min:0|max:100',
         ]);
 
         $data['password']  = Hash::make($data['password']);
         $data['api_token'] = bin2hex(random_bytes(40));
 
         if ($data['role'] !== 'driver') {
-            $data['driver_type']  = null;
-            $data['company_name'] = null;
-        } elseif (! in_array($data['driver_type'] ?? '', ['company_staff', 'rental'])) {
-            $data['company_name'] = null;
+            $data['driver_type'] = $data['company_id'] = $data['salary'] = $data['commission_rate'] = null;
         }
 
         User::create($data);
@@ -128,14 +128,16 @@ class AdminController extends Controller
     public function updateUser(Request $request, User $user)
     {
         $data = $request->validate([
-            'name'           => 'required|string|max:255',
-            'email'          => 'required|email|unique:users,email,' . $user->id,
-            'password'       => 'nullable|string|min:6',
-            'phone'          => 'nullable|string|max:20',
-            'role'           => 'required|in:admin,driver,passenger',
-            'wallet_balance' => 'nullable|numeric|min:0',
-            'driver_type'    => 'nullable|in:owner,company_staff,rental',
-            'company_name'   => 'nullable|string|max:255',
+            'name'            => 'required|string|max:255',
+            'email'           => 'required|email|unique:users,email,' . $user->id,
+            'password'        => 'nullable|string|min:6',
+            'phone'           => 'nullable|string|max:20',
+            'role'            => 'required|in:admin,driver,passenger',
+            'wallet_balance'  => 'nullable|integer|min:0',
+            'driver_type'     => 'nullable|in:employee,owner,rental',
+            'company_id'      => 'nullable|exists:companies,id',
+            'salary'          => 'nullable|integer|min:0',
+            'commission_rate' => 'nullable|numeric|min:0|max:100',
         ]);
 
         if (empty($data['password'])) {
@@ -145,10 +147,7 @@ class AdminController extends Controller
         }
 
         if ($data['role'] !== 'driver') {
-            $data['driver_type']  = null;
-            $data['company_name'] = null;
-        } elseif (! in_array($data['driver_type'] ?? '', ['company_staff', 'rental'])) {
-            $data['company_name'] = null;
+            $data['driver_type'] = $data['company_id'] = $data['salary'] = $data['commission_rate'] = null;
         }
 
         $user->update($data);
@@ -633,7 +632,7 @@ class AdminController extends Controller
         ]);
     }
 
-    public function approveTopUp(Request $request, TopUpRequest $topup)
+    public function approveTopUp(TopUpRequest $topup)
     {
         if ($topup->status !== 'pending') {
             return redirect()->route('admin.topups')->with('error', 'Request already processed.');
