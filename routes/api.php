@@ -1,0 +1,92 @@
+<?php
+
+use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ChatController;
+use App\Http\Controllers\Api\ChargingStationController;
+use App\Http\Controllers\Api\DeliveryController;
+use App\Http\Controllers\Api\DriverController;
+use App\Http\Controllers\Api\MarketplaceController;
+use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\RideController;
+use App\Http\Controllers\Api\RideTrackingController;
+use App\Http\Controllers\Api\SafetyController;
+use App\Http\Controllers\Api\SupportController;
+use App\Http\Controllers\Api\VehicleController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/user', function (Request $request) {
+    return $request->user();
+})->middleware('auth:sanctum');
+
+Route::prefix('v1')->group(function () {
+    Route::post('auth/register', [AuthController::class, 'register']);
+    Route::post('auth/login', [AuthController::class, 'login']);
+    Route::post('auth/logout', [AuthController::class, 'logout']);
+    Route::post('auth/refresh', [AuthController::class, 'refreshToken']);
+    Route::get('auth/me', [AuthController::class, 'me']);
+    Route::put('auth/profile', [AuthController::class, 'updateProfile']);
+    Route::post('auth/otp/send', [AuthController::class, 'sendOTP']);
+    Route::post('auth/otp/verify', [AuthController::class, 'verifyOTP']);
+
+    Route::get('vehicles', [VehicleController::class, 'index']);
+    Route::get('vehicles/{vehicle}', [VehicleController::class, 'show']);
+    Route::post('vehicles', [VehicleController::class, 'store']);
+
+    Route::get('marketplace', [MarketplaceController::class, 'index']);
+    Route::get('marketplace/{item}', [MarketplaceController::class, 'show']);
+    Route::post('marketplace', [MarketplaceController::class, 'store']);
+    Route::post('marketplace/{item}/purchase', [MarketplaceController::class, 'purchase']);
+
+    Route::get('rides', [RideController::class, 'index']);
+    Route::get('rides/available', [RideController::class, 'available']);
+    Route::post('rides', [RideController::class, 'store']);
+    Route::post('rides/{ride}/accept', [RideController::class, 'accept']);
+    Route::post('rides/{ride}/complete', [RideController::class, 'complete']);
+    Route::post('rides/{ride}/cancel', [RideController::class, 'cancel']);
+    Route::post('rides/{ride}/rate', [RideController::class, 'rate']);
+
+    Route::get('deliveries', [DeliveryController::class, 'index']);
+    Route::post('deliveries', [DeliveryController::class, 'store']);
+    Route::post('deliveries/{delivery}/accept', [DeliveryController::class, 'accept']);
+    Route::post('deliveries/{delivery}/cancel', [DeliveryController::class, 'cancel']);
+    Route::post('deliveries/{delivery}/track', [DeliveryController::class, 'track']);
+    Route::post('deliveries/{delivery}/complete', [DeliveryController::class, 'complete']);
+    Route::get('deliveries/history', [DeliveryController::class, 'history']);
+    Route::post('deliveries/estimate', [DeliveryController::class, 'estimate']);
+
+    Route::get('charging-stations', [ChargingStationController::class, 'index']);
+
+    Route::get('tracking/rides/{ride}', [RideTrackingController::class, 'show']);
+    Route::post('tracking/rides/{ride}', [RideTrackingController::class, 'update']);
+
+    Route::get('chats', [ChatController::class, 'index']);
+    Route::get('chats/{conversation}', [ChatController::class, 'show']);
+    Route::post('chats/{conversation}/messages', [ChatController::class, 'store']);
+
+    Route::get('support/tickets', [SupportController::class, 'index']);
+    Route::post('support/tickets', [SupportController::class, 'store']);
+    Route::post('support/tickets/{ticket}/reply', [SupportController::class, 'reply']);
+
+    Route::get('notifications', [NotificationController::class, 'index']);
+    Route::post('notifications/send', [NotificationController::class, 'send']);
+
+    Route::get('payments', [PaymentController::class, 'index']);
+    Route::post('payments', [PaymentController::class, 'store']);
+
+    Route::get('safety-incidents', [SafetyController::class, 'index']);
+    Route::post('safety-incidents', [SafetyController::class, 'store']);
+    Route::post('sos/alert', [SafetyController::class, 'sos']);
+
+    Route::get('driver/status', [DriverController::class, 'status']);
+    Route::post('driver/availability', [DriverController::class, 'setAvailability']);
+    Route::post('driver/go-online', [DriverController::class, 'goOnline']);
+    Route::post('driver/go-offline', [DriverController::class, 'goOffline']);
+    Route::post('driver/location', [DriverController::class, 'updateLocation']);
+    Route::post('driver/rides/{ride}/decline', [DriverController::class, 'declineRide']);
+    Route::get('driver/tasks', [DriverController::class, 'tasks']);
+    Route::get('driver/stats', [DriverController::class, 'getDriverStats']);
+    Route::post('driver/vehicles', [DriverController::class, 'registerVehicle']);
+    Route::put('driver/vehicles/{vehicle}', [DriverController::class, 'updateVehicle']);
+});
