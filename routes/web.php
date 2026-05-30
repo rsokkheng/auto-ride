@@ -25,6 +25,8 @@ Route::prefix('admin')->group(function () {
     Route::post('vehicles', [AdminController::class, 'storeVehicle'])->name('admin.vehicles.store');
     Route::put('vehicles/{vehicle}', [AdminController::class, 'updateVehicle'])->name('admin.vehicles.update');
     Route::delete('vehicles/{vehicle}', [AdminController::class, 'destroyVehicle'])->name('admin.vehicles.destroy');
+    Route::post('vehicles/{vehicle}/images', [AdminController::class, 'storeVehicleImage'])->name('admin.vehicles.images.store');
+    Route::delete('vehicles/{vehicle}/images', [AdminController::class, 'destroyVehicleImage'])->name('admin.vehicles.images.destroy');
 
     // Rides
     Route::get('rides', [AdminController::class, 'rides'])->name('admin.rides');

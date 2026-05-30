@@ -20,6 +20,8 @@ use App\Services\WalletService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class AdminController extends Controller
 {
@@ -122,7 +124,26 @@ class AdminController extends Controller
             $data['driver_type'] = $data['company_id'] = $data['salary'] = $data['commission_rate'] = null;
         }
 
-        User::create($data);
+        // Handle optional avatar upload on create.
+        if ($request->hasFile('avatar')) {
+            $request->validate(['avatar' => 'file|mimes:jpeg,jpg,png,webp|max:3072']);
+            $file = $request->file('avatar');
+            $data['avatar'] = $file->storeAs(
+                'avatars',
+                'tmp_' . Str::random(12) . '.' . $file->getClientOriginalExtension(),
+                'public'
+            );
+        }
+
+        $user = User::create($data);
+
+        // Rename avatar to use real user ID now that we have it.
+        if (! empty($data['avatar']) && str_starts_with($data['avatar'], 'avatars/tmp_')) {
+            $ext     = pathinfo($data['avatar'], PATHINFO_EXTENSION);
+            $newPath = 'avatars/' . $user->id . '_' . Str::random(8) . '.' . $ext;
+            Storage::disk('public')->move($data['avatar'], $newPath);
+            $user->update(['avatar' => $newPath]);
+        }
 
         return redirect()->route('admin.users')->with('success', 'User created successfully.');
     }
@@ -150,6 +171,20 @@ class AdminController extends Controller
 
         if ($data['role'] !== 'driver') {
             $data['driver_type'] = $data['company_id'] = $data['salary'] = $data['commission_rate'] = null;
+        }
+
+        // Handle avatar upload if a file was attached.
+        if ($request->hasFile('avatar')) {
+            $request->validate(['avatar' => 'file|mimes:jpeg,jpg,png,webp|max:3072']);
+            if ($user->avatar) {
+                Storage::disk('public')->delete($user->avatar);
+            }
+            $file = $request->file('avatar');
+            $data['avatar'] = $file->storeAs(
+                'avatars',
+                $user->id . '_' . Str::random(8) . '.' . $file->getClientOriginalExtension(),
+                'public'
+            );
         }
 
         $user->update($data);
@@ -181,13 +216,27 @@ class AdminController extends Controller
             'make'          => 'required|string|max:100',
             'model'         => 'required|string|max:100',
             'year'          => 'required|integer|min:1990|max:' . (date('Y') + 1),
-            'type'          => 'required|in:electric,sedan,suv,van,motorcycle,truck',
+            'type'          => 'required|in:electric,sedan,suv,van,motorcycle,truck,tuk_tuk',
             'status'        => 'required|in:active,inactive,maintenance',
             'capacity'      => 'required|integer|min:1|max:50',
             'details'       => 'nullable|string',
+            'images.*'      => 'nullable|file|mimes:jpeg,jpg,png,webp|max:3072',
         ]);
 
-        Vehicle::create($data);
+        unset($data['images']);
+        $vehicle = Vehicle::create($data);
+
+        if ($request->hasFile('images')) {
+            $paths = [];
+            foreach (array_slice($request->file('images'), 0, 5) as $file) {
+                $paths[] = $file->storeAs(
+                    'vehicles/' . $vehicle->id,
+                    Str::random(12) . '.' . $file->getClientOriginalExtension(),
+                    'public'
+                );
+            }
+            $vehicle->update(['images' => $paths]);
+        }
 
         return redirect()->route('admin.vehicles')->with('success', 'Vehicle created successfully.');
     }
@@ -200,13 +249,28 @@ class AdminController extends Controller
             'make'          => 'required|string|max:100',
             'model'         => 'required|string|max:100',
             'year'          => 'required|integer|min:1990|max:' . (date('Y') + 1),
-            'type'          => 'required|in:electric,sedan,suv,van,motorcycle,truck',
+            'type'          => 'required|in:electric,sedan,suv,van,motorcycle,truck,tuk_tuk',
             'status'        => 'required|in:active,inactive,maintenance',
             'capacity'      => 'required|integer|min:1|max:50',
             'details'       => 'nullable|string',
+            'images.*'      => 'nullable|file|mimes:jpeg,jpg,png,webp|max:3072',
         ]);
 
+        unset($data['images']);
         $vehicle->update($data);
+
+        if ($request->hasFile('images')) {
+            $existing = $vehicle->images ?? [];
+            $slots = max(0, 5 - count($existing));
+            foreach (array_slice($request->file('images'), 0, $slots) as $file) {
+                $existing[] = $file->storeAs(
+                    'vehicles/' . $vehicle->id,
+                    Str::random(12) . '.' . $file->getClientOriginalExtension(),
+                    'public'
+                );
+            }
+            $vehicle->update(['images' => $existing]);
+        }
 
         return redirect()->route('admin.vehicles')->with('success', 'Vehicle updated successfully.');
     }
@@ -215,6 +279,44 @@ class AdminController extends Controller
     {
         $vehicle->delete();
         return redirect()->route('admin.vehicles')->with('success', 'Vehicle deleted.');
+    }
+
+    public function storeVehicleImage(Request $request, Vehicle $vehicle)
+    {
+        $request->validate(['image' => 'required|file|mimes:jpeg,jpg,png,webp|max:3072']);
+
+        $images = $vehicle->images ?? [];
+
+        if (count($images) >= 5) {
+            return back()->with('error', 'Maximum 5 images allowed per vehicle.');
+        }
+
+        $file = $request->file('image');
+        $path = $file->storeAs(
+            'vehicles/' . $vehicle->id,
+            Str::random(12) . '.' . $file->getClientOriginalExtension(),
+            'public'
+        );
+
+        $images[] = $path;
+        $vehicle->update(['images' => $images]);
+
+        return back()->with('success', 'Image uploaded.');
+    }
+
+    public function destroyVehicleImage(Request $request, Vehicle $vehicle)
+    {
+        $data   = $request->validate(['path' => 'required|string']);
+        $images = $vehicle->images ?? [];
+
+        if (! in_array($data['path'], $images, true)) {
+            return back()->with('error', 'Image not found.');
+        }
+
+        Storage::disk('public')->delete($data['path']);
+        $vehicle->update(['images' => array_values(array_filter($images, fn($p) => $p !== $data['path']))]);
+
+        return back()->with('success', 'Image deleted.');
     }
 
     // ─── Rides ───────────────────────────────────────────────────────────────

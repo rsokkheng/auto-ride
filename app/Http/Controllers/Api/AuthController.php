@@ -117,7 +117,9 @@ class AuthController extends ApiController
             return $this->unauthorized();
         }
 
-        return $this->success(['user' => $user]);
+        return $this->success([
+            'user' => array_merge($user->toArray(), ['avatar_url' => $user->avatar_url]),
+        ]);
     }
 
     public function updateProfile(Request $request)
@@ -195,8 +197,12 @@ class AuthController extends ApiController
 
     protected function tokenResponse(User $user): array
     {
+        $fresh = $user->fresh();
+
         return [
-            'user'                     => $user->fresh(),
+            'user'                     => array_merge($fresh->toArray(), [
+                'avatar_url' => $fresh->avatar_url,
+            ]),
             'access_token'             => $user->api_token,
             'refresh_token'            => $user->refresh_token,
             'token_type'               => 'Bearer',

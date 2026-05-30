@@ -11,7 +11,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['name', 'email', 'password', 'phone', 'role', 'driver_type', 'company_name', 'company_id', 'salary', 'commission_rate', 'api_token', 'refresh_token', 'token_expires_at', 'refresh_token_expires_at', 'available', 'status_note', 'wallet_balance', 'current_latitude', 'current_longitude', 'rating', 'total_ratings'])]
+#[Fillable(['name', 'email', 'password', 'phone', 'avatar', 'role', 'driver_type', 'company_name', 'company_id', 'salary', 'commission_rate', 'api_token', 'refresh_token', 'token_expires_at', 'refresh_token_expires_at', 'available', 'status_note', 'wallet_balance', 'current_latitude', 'current_longitude', 'rating', 'total_ratings'])]
 #[Hidden(['password', 'remember_token', 'api_token', 'refresh_token'])]
 class User extends Authenticatable
 {
@@ -34,6 +34,12 @@ class User extends Authenticatable
             'token_expires_at'          => 'datetime',
             'refresh_token_expires_at'  => 'datetime',
         ];
+    }
+
+    /** Full public URL for the profile avatar, or null if not set. */
+    public function getAvatarUrlAttribute(): ?string
+    {
+        return $this->avatar ? asset('storage/' . $this->avatar) : null;
     }
 
     public function vehicles(): HasMany

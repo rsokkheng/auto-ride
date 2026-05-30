@@ -15,6 +15,7 @@
             <thead>
                 <tr>
                     <th>#</th>
+                    <th></th>
                     <th>Name</th>
                     <th>Email</th>
                     <th>Role</th>
@@ -34,6 +35,16 @@
                 @endphp
                 <tr>
                     <td>{{ $user->id }}</td>
+                    <td>
+                        @if($user->avatar)
+                            <img src="{{ asset('storage/'.$user->avatar) }}" alt=""
+                                 style="width:36px;height:36px;border-radius:50%;object-fit:cover;">
+                        @else
+                            <div style="width:36px;height:36px;border-radius:50%;background:#e2e8f0;display:flex;align-items:center;justify-content:center;">
+                                <i class="fas fa-user" style="color:#94a3b8;font-size:.75rem;"></i>
+                            </div>
+                        @endif
+                    </td>
                     <td>{{ $user->name }}</td>
                     <td>{{ $user->email }}</td>
                     <td>
@@ -66,6 +77,7 @@
                             data-salary="{{ $user->salary ?? '' }}"
                             data-commission="{{ $user->commission_rate ?? '' }}"
                             data-wallet="{{ $user->wallet_balance ?? 0 }}"
+                            data-avatar="{{ $user->avatar_url ?? '' }}"
                             onclick="openEdit(this)"><i class="fas fa-edit"></i></button>
                         <form method="POST" action="{{ route('admin.users.destroy', $user) }}" class="d-inline"
                               onsubmit="return confirm('Delete user {{ addslashes($user->name) }}?')">
@@ -75,7 +87,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="10" class="text-center text-muted py-4">No users found.</td></tr>
+                <tr><td colspan="11" class="text-center text-muted py-4">No users found.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -91,10 +103,22 @@
                 <h5 class="modal-title" id="modalTitle">Add User</h5>
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
-            <form id="userForm" method="POST" action="{{ route('admin.users.store') }}">
+            <form id="userForm" method="POST" action="{{ route('admin.users.store') }}" enctype="multipart/form-data">
                 @csrf
                 <input type="hidden" name="_method" id="formMethod" value="POST">
                 <div class="modal-body">
+
+                    {{-- Avatar --}}
+                    <div class="form-group text-center" id="avatar-group">
+                        <div id="avatar-preview" class="mb-2"></div>
+                        <label class="d-block font-weight-bold mb-1">
+                            <i class="fas fa-camera mr-1 text-primary"></i> Profile Photo
+                        </label>
+                        <input type="file" name="avatar" id="f-avatar" class="form-control-file"
+                               accept="image/jpeg,image/png,image/webp" onchange="previewAvatar(this)">
+                        <small class="text-muted">jpeg / png / webp — max 3 MB</small>
+                    </div>
+                    <hr>
 
                     {{-- Basic info --}}
                     <div class="form-group">
@@ -203,6 +227,17 @@ function toggleSalary() {
     document.getElementById('salary-field').style.display = type === 'employee' ? 'block' : 'none';
 }
 
+function previewAvatar(input) {
+    var preview = document.getElementById('avatar-preview');
+    if (input.files && input.files[0]) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            preview.innerHTML = '<img src="' + e.target.result + '" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid #e63946;">';
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
 function openCreate() {
     document.getElementById('modalTitle').textContent  = 'Add User';
     document.getElementById('userForm').action         = storeUrl;
@@ -221,6 +256,11 @@ function openCreate() {
     document.getElementById('driver-info').style.display  = 'none';
     document.getElementById('salary-field').style.display = 'none';
     document.getElementById('wallet-group').style.display = 'none';
+    document.getElementById('avatar-group').style.display = 'block';
+    document.getElementById('avatar-preview').innerHTML   =
+        '<div style="width:80px;height:80px;border-radius:50%;background:#e2e8f0;display:inline-flex;align-items:center;justify-content:center;">' +
+        '<i class="fas fa-user" style="color:#94a3b8;font-size:1.5rem;"></i></div>' +
+        '<br><small class="text-muted">No photo selected</small>';
     $('#formModal').modal('show');
 }
 
@@ -244,6 +284,15 @@ function openEdit(btn) {
     document.getElementById('driver-info').style.display  = isDriver ? 'block' : 'none';
     document.getElementById('salary-field').style.display = btn.dataset.driverType === 'employee' ? 'block' : 'none';
     document.getElementById('wallet-group').style.display = 'block';
+
+    // Show avatar section with current photo preview in edit mode.
+    var avatarGroup   = document.getElementById('avatar-group');
+    var avatarPreview = document.getElementById('avatar-preview');
+    avatarGroup.style.display = 'block';
+    avatarPreview.innerHTML   = btn.dataset.avatar
+        ? '<img src="' + btn.dataset.avatar + '" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid #e63946;" class="mb-1"><br><small class="text-muted">Current photo</small>'
+        : '<div style="width:80px;height:80px;border-radius:50%;background:#e2e8f0;display:inline-flex;align-items:center;justify-content:center;"><i class="fas fa-user" style="color:#94a3b8;font-size:1.5rem;"></i></div><br><small class="text-muted">No photo</small>';
+
     $('#formModal').modal('show');
 }
 </script>

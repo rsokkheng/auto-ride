@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ChatController;
+use App\Http\Controllers\Api\UploadController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\ChargingStationController;
 use App\Http\Controllers\Api\DeliveryController;
@@ -83,6 +84,13 @@ Route::prefix('v1')->group(function () {
     Route::get('safety-incidents', [SafetyController::class, 'index']);
     Route::post('safety-incidents', [SafetyController::class, 'store']);
     Route::post('sos/alert', [SafetyController::class, 'sos']);
+
+    // Upload — profile avatar & vehicle images
+    Route::post('upload/avatar',                              [UploadController::class, 'avatar']);
+    Route::delete('upload/avatar',                            [UploadController::class, 'deleteAvatar']);
+    Route::post('upload/vehicle/{vehicle}/images',            [UploadController::class, 'addVehicleImage']);
+    Route::delete('upload/vehicle/{vehicle}/images',          [UploadController::class, 'deleteVehicleImage']);
+    Route::get('upload/vehicle/{vehicle}/images',             [UploadController::class, 'vehicleImages']);
 
     // Wallet
     Route::get('wallet', [WalletController::class, 'index']);
