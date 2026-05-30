@@ -124,10 +124,11 @@ class DeliveryController extends ApiController
         $delivery = Delivery::create(array_merge(
             $data,
             [
-                'sender_id' => $user->id,
-                'driver_id' => $driverId,
-                'status'    => 'requested',
-                'fee'       => $data['fee'] ?? 0,
+                'sender_id'       => $user->id,
+                'driver_id'       => $driverId,
+                'status'          => 'requested',
+                'fee'             => $data['fee'] ?? 0,
+                'package_details' => $data['package_details'] ?? '',
             ]
         ));
 

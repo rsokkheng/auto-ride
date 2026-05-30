@@ -212,7 +212,7 @@ class AdminController extends Controller
             'driver_id'       => 'nullable|exists:users,id',
             'pickup_address'  => 'required|string|max:255',
             'dropoff_address' => 'required|string|max:255',
-            'status'          => 'required|in:pending,accepted,in_progress,completed,cancelled',
+            'status'          => 'required|in:requested,pending,accepted,in_progress,completed,cancelled',
             'fare'            => 'nullable|numeric|min:0',
             'service_type'    => 'nullable|string|max:50',
             'notes'           => 'nullable|string',
@@ -230,7 +230,7 @@ class AdminController extends Controller
             'driver_id'       => 'nullable|exists:users,id',
             'pickup_address'  => 'required|string|max:255',
             'dropoff_address' => 'required|string|max:255',
-            'status'          => 'required|in:pending,accepted,in_progress,completed,cancelled',
+            'status'          => 'required|in:requested,pending,accepted,in_progress,completed,cancelled',
             'fare'            => 'nullable|numeric|min:0',
             'service_type'    => 'nullable|string|max:50',
             'notes'           => 'nullable|string',
@@ -273,7 +273,10 @@ class AdminController extends Controller
             'fee'             => 'nullable|numeric|min:0',
             'scheduled_at'    => 'nullable|date',
             'notes'           => 'nullable|string',
+            'package_details' => 'nullable|string|max:500',
         ]);
+
+        $data['package_details'] = $data['package_details'] ?? '';
 
         Delivery::create($data);
 

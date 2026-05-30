@@ -34,7 +34,7 @@
                     <td>{{ \Illuminate\Support\Str::limit($r->pickup_address, 22) }}</td>
                     <td>{{ \Illuminate\Support\Str::limit($r->dropoff_address, 22) }}</td>
                     <td>
-                        @php $sc = ['pending'=>'warning','accepted'=>'info','in_progress'=>'primary','completed'=>'success','cancelled'=>'danger']; @endphp
+                        @php $sc = ['requested'=>'secondary','pending'=>'warning','accepted'=>'info','in_progress'=>'primary','completed'=>'success','cancelled'=>'danger']; @endphp
                         <span class="badge badge-{{ $sc[$r->status] ?? 'secondary' }}">{{ ucfirst(str_replace('_',' ',$r->status)) }}</span>
                     </td>
                     <td>{{ $r->fare ? number_format($r->fare, 0).' ៛' : '—' }}</td>
@@ -111,6 +111,7 @@
                         <div class="form-group col-md-4">
                             <label>Status <span class="text-danger">*</span></label>
                             <select name="status" id="f-status" class="form-control" required>
+                                <option value="requested">Requested</option>
                                 <option value="pending">Pending</option>
                                 <option value="accepted">Accepted</option>
                                 <option value="in_progress">In Progress</option>

@@ -74,6 +74,7 @@
                                 'status'          => $d->status,
                                 'fee'             => $d->fee ?? '',
                                 'scheduled_at'    => $d->scheduled_at ? $d->scheduled_at->format('Y-m-d\TH:i') : '',
+                                'package_details' => $d->package_details ?? '',
                                 'notes'           => $d->notes ?? '',
                             ])) }}"
                             onclick="openEdit(this)">
@@ -189,6 +190,12 @@
                         </div>
                     </div>
 
+                    {{-- Package Details --}}
+                    <div class="form-group">
+                        <label>Package Details</label>
+                        <input type="text" name="package_details" id="f-package-details" class="form-control" placeholder="e.g. Fragile, electronics, documents…" maxlength="500">
+                    </div>
+
                     {{-- Notes --}}
                     <div class="form-group">
                         <label>Notes</label>
@@ -235,6 +242,7 @@ function openEdit(btn) {
     document.getElementById('f-status').value           = d.status;
     document.getElementById('f-fee').value              = d.fee;
     document.getElementById('f-scheduled-at').value     = d.scheduled_at;
+    document.getElementById('f-package-details').value  = d.package_details;
     document.getElementById('f-notes').value            = d.notes;
     $('#formModal').modal('show');
 }
