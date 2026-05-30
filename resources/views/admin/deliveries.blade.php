@@ -24,6 +24,7 @@
                     <th>Dropoff</th>
                     <th>Status</th>
                     <th>Total Fee</th>
+                    <th>Paid By</th>
                     <th>Scheduled</th>
                     <th>Date</th>
                     <th>Actions</th>
@@ -57,6 +58,13 @@
                         </span>
                     </td>
                     <td>{{ $d->fee ? number_format($d->fee, 0).' ៛' : '—' }}</td>
+                    <td>
+                        @if($d->payment_by === 'recipient')
+                            <span class="badge badge-warning"><i class="fas fa-user-check mr-1"></i>Recipient (COD)</span>
+                        @else
+                            <span class="badge badge-info"><i class="fas fa-paper-plane mr-1"></i>Sender</span>
+                        @endif
+                    </td>
                     <td>{{ $d->scheduled_at ? $d->scheduled_at->format('Y-m-d H:i') : '—' }}</td>
                     <td>{{ $d->created_at->format('Y-m-d') }}</td>
                     <td>
@@ -73,6 +81,7 @@
                                 'dropoff_address' => $d->dropoff_address,
                                 'status'          => $d->status,
                                 'fee'             => $d->fee ?? '',
+                                'payment_by'      => $d->payment_by ?? 'sender',
                                 'scheduled_at'    => $d->scheduled_at ? $d->scheduled_at->format('Y-m-d\TH:i') : '',
                                 'package_details' => $d->package_details ?? '',
                                 'notes'           => $d->notes ?? '',
@@ -88,7 +97,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="13" class="text-center text-muted py-4">No deliveries found.</td></tr>
+                <tr><td colspan="14" class="text-center text-muted py-4">No deliveries found.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -167,9 +176,9 @@
                         <input type="text" name="dropoff_address" id="f-dropoff" class="form-control" required>
                     </div>
 
-                    {{-- Status, Fee & Schedule --}}
+                    {{-- Status, Fee, Payment & Schedule --}}
                     <div class="form-row">
-                        <div class="form-group col-md-4">
+                        <div class="form-group col-md-3">
                             <label>Status <span class="text-danger">*</span></label>
                             <select name="status" id="f-status" class="form-control" required>
                                 <option value="requested">Requested</option>
@@ -180,11 +189,18 @@
                                 <option value="cancelled">Cancelled</option>
                             </select>
                         </div>
-                        <div class="form-group col-md-4">
+                        <div class="form-group col-md-3">
                             <label>Total Fee (KHR ៛)</label>
                             <input type="number" name="fee" id="f-fee" class="form-control" min="0" step="100">
                         </div>
-                        <div class="form-group col-md-4">
+                        <div class="form-group col-md-3">
+                            <label>Payment By <span class="text-danger">*</span></label>
+                            <select name="payment_by" id="f-payment-by" class="form-control" required>
+                                <option value="sender">Sender (pays upfront)</option>
+                                <option value="recipient">Recipient (COD)</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-3">
                             <label>Scheduled Date</label>
                             <input type="datetime-local" name="scheduled_at" id="f-scheduled-at" class="form-control">
                         </div>
@@ -241,6 +257,7 @@ function openEdit(btn) {
     document.getElementById('f-dropoff').value          = d.dropoff_address;
     document.getElementById('f-status').value           = d.status;
     document.getElementById('f-fee').value              = d.fee;
+    document.getElementById('f-payment-by').value       = d.payment_by || 'sender';
     document.getElementById('f-scheduled-at').value     = d.scheduled_at;
     document.getElementById('f-package-details').value  = d.package_details;
     document.getElementById('f-notes').value            = d.notes;

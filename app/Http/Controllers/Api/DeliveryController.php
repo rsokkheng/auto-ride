@@ -105,6 +105,7 @@ class DeliveryController extends ApiController
             'scheduled_at'    => 'nullable|date',
             'package_details' => 'nullable|string|max:500',
             'fee'             => 'nullable|numeric|min:0',
+            'payment_by'      => 'nullable|in:sender,recipient',
             'notes'           => 'nullable|string',
             'vehicle_id'      => 'nullable|exists:vehicles,id',
         ]);
@@ -130,6 +131,7 @@ class DeliveryController extends ApiController
                 'driver_id'       => $driverId,
                 'status'          => 'requested',
                 'fee'             => $data['fee'] ?? 0,
+                'payment_by'      => $data['payment_by'] ?? 'sender',
                 'package_details' => $data['package_details'] ?? '',
             ]
         ));

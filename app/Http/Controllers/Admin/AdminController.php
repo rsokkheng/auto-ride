@@ -292,12 +292,14 @@ class AdminController extends Controller
             'dropoff_address' => 'required|string|max:255',
             'status'          => 'required|in:requested,pending,accepted,in_progress,completed,cancelled',
             'fee'             => 'nullable|numeric|min:0',
+            'payment_by'      => 'nullable|in:sender,recipient',
             'scheduled_at'    => 'nullable|date',
             'notes'           => 'nullable|string',
             'package_details' => 'nullable|string|max:500',
         ]);
 
         $data['package_details'] = $data['package_details'] ?? '';
+        $data['payment_by']      = $data['payment_by'] ?? 'sender';
 
         Delivery::create($data);
 
@@ -317,6 +319,7 @@ class AdminController extends Controller
             'dropoff_address' => 'required|string|max:255',
             'status'          => 'required|in:requested,pending,accepted,in_progress,completed,cancelled',
             'fee'             => 'nullable|numeric|min:0',
+            'payment_by'      => 'nullable|in:sender,recipient',
             'scheduled_at'    => 'nullable|date',
             'notes'           => 'nullable|string',
         ]);

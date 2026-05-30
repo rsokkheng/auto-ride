@@ -26,6 +26,7 @@ class Delivery extends Model
         'status',
         'package_details',
         'fee',
+        'payment_by',
         'notes',
         'rating',
         'rating_comment',
