@@ -20,6 +20,8 @@ class Ride extends Model
         'scheduled_at',
         'status',
         'fare',
+        'payment_method',
+        'payment_status',
         'service_type',
         'notes',
         'rating',

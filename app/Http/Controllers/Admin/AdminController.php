@@ -11,9 +11,11 @@ use App\Models\Ride;
 use App\Models\SafetyIncident;
 use App\Models\SupportTicket;
 use App\Models\TopUpRequest;
+use App\Models\TransactionRecord;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\WalletTransaction;
+use App\Services\PaymentService;
 use App\Services\WalletService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -293,6 +295,7 @@ class AdminController extends Controller
             'status'          => 'required|in:requested,pending,accepted,in_progress,completed,cancelled',
             'fee'             => 'nullable|numeric|min:0',
             'payment_by'      => 'nullable|in:sender,recipient',
+            'payment_method'  => 'nullable|in:cash,wallet,aba,wing,other_online',
             'scheduled_at'    => 'nullable|date',
             'notes'           => 'nullable|string',
             'package_details' => 'nullable|string|max:500',
@@ -300,6 +303,8 @@ class AdminController extends Controller
 
         $data['package_details'] = $data['package_details'] ?? '';
         $data['payment_by']      = $data['payment_by'] ?? 'sender';
+        $data['payment_method']  = $data['payment_method'] ?? 'cash';
+        $data['payment_status']  = 'unpaid';
 
         Delivery::create($data);
 
@@ -320,6 +325,7 @@ class AdminController extends Controller
             'status'          => 'required|in:requested,pending,accepted,in_progress,completed,cancelled',
             'fee'             => 'nullable|numeric|min:0',
             'payment_by'      => 'nullable|in:sender,recipient',
+            'payment_method'  => 'nullable|in:cash,wallet,aba,wing,other_online',
             'scheduled_at'    => 'nullable|date',
             'notes'           => 'nullable|string',
         ]);
@@ -534,6 +540,56 @@ class AdminController extends Controller
     {
         $incident->delete();
         return redirect()->route('admin.safety')->with('success', 'Safety incident deleted.');
+    }
+
+    // ─── Transaction Records ─────────────────────────────────────────────────
+
+    public function transactions(Request $request)
+    {
+        $query = TransactionRecord::with(['payer', 'payee', 'processedBy'])
+            ->orderByDesc('created_at');
+
+        if ($request->filled('method')) {
+            $query->where('payment_method', $request->method);
+        }
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
+        }
+
+        return view('admin.transactions', [
+            'transactions' => $query->paginate(30)->withQueryString(),
+            'pending_cash' => TransactionRecord::where('status', 'pending')
+                ->where('payment_method', 'cash')->count(),
+            'pending_online' => TransactionRecord::where('status', 'pending')
+                ->whereIn('payment_method', ['aba', 'wing', 'other_online'])->count(),
+        ]);
+    }
+
+    public function confirmTransaction(TransactionRecord $transaction)
+    {
+        if (! $transaction->isPending()) {
+            return redirect()->route('admin.transactions')->with('error', 'Transaction already processed.');
+        }
+
+        app(PaymentService::class)->confirm($transaction, Auth::user());
+
+        return redirect()->route('admin.transactions')
+            ->with('success', "Transaction #{$transaction->id} confirmed — " . number_format($transaction->gross_amount, 0) . " ៛ credited to driver.");
+    }
+
+    public function cancelTransaction(Request $request, TransactionRecord $transaction)
+    {
+        if (! $transaction->isPending()) {
+            return redirect()->route('admin.transactions')->with('error', 'Transaction is not pending.');
+        }
+
+        $data = $request->validate(['note' => 'nullable|string|max:500']);
+        app(PaymentService::class)->cancel($transaction, Auth::user(), $data['note'] ?? '');
+
+        return redirect()->route('admin.transactions')->with('success', "Transaction #{$transaction->id} cancelled.");
     }
 
     // ─── Companies ────────────────────────────────────────────────────────────

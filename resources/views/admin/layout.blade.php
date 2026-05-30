@@ -162,6 +162,18 @@
                     <li class="nav-header" style="font-size:.65rem;color:#475569;letter-spacing:.1em;padding:8px 16px 4px;">DRIVER &amp; FINANCE</li>
 
                     <li class="nav-item">
+                        <a href="{{ route('admin.transactions') }}" class="nav-link {{ request()->routeIs('admin.transactions') ? 'active' : '' }}">
+                            @php $pendingTx = \App\Models\TransactionRecord::where('status','pending')->count(); @endphp
+                            <i class="nav-icon fas fa-receipt"></i>
+                            <p>
+                                Transactions
+                                @if($pendingTx)
+                                    <span class="right badge badge-danger">{{ $pendingTx }}</span>
+                                @endif
+                            </p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ route('admin.companies') }}" class="nav-link {{ request()->routeIs('admin.companies') ? 'active' : '' }}">
                             <i class="nav-icon fas fa-building"></i>
                             <p>Companies</p>

@@ -6,6 +6,7 @@ use App\Models\Delivery;
 use App\Models\Vehicle;
 use App\Services\CommissionService;
 use App\Services\DriverMatchingService;
+use App\Services\PaymentService;
 use App\Services\WalletService;
 use Illuminate\Http\Request;
 
@@ -106,6 +107,7 @@ class DeliveryController extends ApiController
             'package_details' => 'nullable|string|max:500',
             'fee'             => 'nullable|numeric|min:0',
             'payment_by'      => 'nullable|in:sender,recipient',
+            'payment_method'  => 'nullable|in:cash,wallet,aba,wing,other_online',
             'notes'           => 'nullable|string',
             'vehicle_id'      => 'nullable|exists:vehicles,id',
         ]);
@@ -132,6 +134,8 @@ class DeliveryController extends ApiController
                 'status'          => 'requested',
                 'fee'             => $data['fee'] ?? 0,
                 'payment_by'      => $data['payment_by'] ?? 'sender',
+                'payment_method'  => $data['payment_method'] ?? 'cash',
+                'payment_status'  => 'unpaid',
                 'package_details' => $data['package_details'] ?? '',
             ]
         ));
@@ -258,17 +262,15 @@ class DeliveryController extends ApiController
 
         $delivery->update(['status' => 'completed']);
 
-        // Process payment: split fee and credit driver wallet.
-        $split = null;
-        if ($delivery->fee > 0 && $delivery->driver) {
-            $driver = $delivery->driver()->with('company')->first();
-            $split  = app(CommissionService::class)->split($delivery->fee, $driver);
-            app(WalletService::class)->processTripPayment($driver, $split, $delivery);
+        // Create/update transaction record and process payment.
+        $transaction = null;
+        if ($delivery->fee > 0) {
+            $transaction = app(PaymentService::class)->processDelivery($delivery->fresh());
         }
 
         return $this->success([
-            'delivery' => $delivery->fresh(),
-            'payment'  => $split,
+            'delivery'    => $delivery->fresh(),
+            'transaction' => $transaction,
         ]);
     }
 

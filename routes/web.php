@@ -62,6 +62,11 @@ Route::prefix('admin')->group(function () {
     Route::put('safety/{incident}', [AdminController::class, 'updateSafety'])->name('admin.safety.update');
     Route::delete('safety/{incident}', [AdminController::class, 'destroySafety'])->name('admin.safety.destroy');
 
+    // Transactions
+    Route::get('transactions', [AdminController::class, 'transactions'])->name('admin.transactions');
+    Route::post('transactions/{transaction}/confirm', [AdminController::class, 'confirmTransaction'])->name('admin.transactions.confirm');
+    Route::post('transactions/{transaction}/cancel', [AdminController::class, 'cancelTransaction'])->name('admin.transactions.cancel');
+
     // Companies
     Route::get('companies', [AdminController::class, 'companies'])->name('admin.companies');
     Route::post('companies', [AdminController::class, 'storeCompany'])->name('admin.companies.store');

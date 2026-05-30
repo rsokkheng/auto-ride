@@ -25,6 +25,8 @@
                     <th>Status</th>
                     <th>Total Fee</th>
                     <th>Paid By</th>
+                    <th>Method</th>
+                    <th>Pay Status</th>
                     <th>Scheduled</th>
                     <th>Date</th>
                     <th>Actions</th>
@@ -60,10 +62,27 @@
                     <td>{{ $d->fee ? number_format($d->fee, 0).' ៛' : '—' }}</td>
                     <td>
                         @if($d->payment_by === 'recipient')
-                            <span class="badge badge-warning"><i class="fas fa-user-check mr-1"></i>Recipient (COD)</span>
+                            <span class="badge badge-warning">Recipient (COD)</span>
                         @else
-                            <span class="badge badge-info"><i class="fas fa-paper-plane mr-1"></i>Sender</span>
+                            <span class="badge badge-info">Sender</span>
                         @endif
+                    </td>
+                    <td>
+                        @php
+                            $mc = ['cash'=>'secondary','wallet'=>'primary','aba'=>'success','wing'=>'info','other_online'=>'warning'];
+                            $mi = ['cash'=>'fa-money-bill-wave','wallet'=>'fa-wallet','aba'=>'fa-university','wing'=>'fa-mobile-alt','other_online'=>'fa-globe'];
+                            $ml = ['cash'=>'Cash','wallet'=>'Wallet','aba'=>'ABA','wing'=>'Wing','other_online'=>'Online'];
+                        @endphp
+                        <span class="badge badge-{{ $mc[$d->payment_method ?? 'cash'] ?? 'secondary' }}">
+                            <i class="fas {{ $mi[$d->payment_method ?? 'cash'] ?? 'fa-question' }} mr-1"></i>
+                            {{ $ml[$d->payment_method ?? 'cash'] ?? ucfirst($d->payment_method) }}
+                        </span>
+                    </td>
+                    <td>
+                        @php $ps = ['unpaid'=>'secondary','pending'=>'warning','paid'=>'success','refunded'=>'danger']; @endphp
+                        <span class="badge badge-{{ $ps[$d->payment_status ?? 'unpaid'] ?? 'secondary' }}">
+                            {{ ucfirst($d->payment_status ?? 'unpaid') }}
+                        </span>
                     </td>
                     <td>{{ $d->scheduled_at ? $d->scheduled_at->format('Y-m-d H:i') : '—' }}</td>
                     <td>{{ $d->created_at->format('Y-m-d') }}</td>
@@ -82,6 +101,7 @@
                                 'status'          => $d->status,
                                 'fee'             => $d->fee ?? '',
                                 'payment_by'      => $d->payment_by ?? 'sender',
+                                'payment_method'  => $d->payment_method ?? 'cash',
                                 'scheduled_at'    => $d->scheduled_at ? $d->scheduled_at->format('Y-m-d\TH:i') : '',
                                 'package_details' => $d->package_details ?? '',
                                 'notes'           => $d->notes ?? '',
@@ -97,7 +117,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="14" class="text-center text-muted py-4">No deliveries found.</td></tr>
+                <tr><td colspan="16" class="text-center text-muted py-4">No deliveries found.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -200,7 +220,19 @@
                                 <option value="recipient">Recipient (COD)</option>
                             </select>
                         </div>
-                        <div class="form-group col-md-3">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label>Payment Method <span class="text-danger">*</span></label>
+                            <select name="payment_method" id="f-payment-method" class="form-control" required>
+                                <option value="cash">💵 Cash</option>
+                                <option value="wallet">👛 Wallet (In-app)</option>
+                                <option value="aba">🏦 ABA Bank</option>
+                                <option value="wing">📱 Wing Money</option>
+                                <option value="other_online">🌐 Other Online</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-6">
                             <label>Scheduled Date</label>
                             <input type="datetime-local" name="scheduled_at" id="f-scheduled-at" class="form-control">
                         </div>
@@ -257,7 +289,8 @@ function openEdit(btn) {
     document.getElementById('f-dropoff').value          = d.dropoff_address;
     document.getElementById('f-status').value           = d.status;
     document.getElementById('f-fee').value              = d.fee;
-    document.getElementById('f-payment-by').value       = d.payment_by || 'sender';
+    document.getElementById('f-payment-by').value       = d.payment_by     || 'sender';
+    document.getElementById('f-payment-method').value   = d.payment_method || 'cash';
     document.getElementById('f-scheduled-at').value     = d.scheduled_at;
     document.getElementById('f-package-details').value  = d.package_details;
     document.getElementById('f-notes').value            = d.notes;
