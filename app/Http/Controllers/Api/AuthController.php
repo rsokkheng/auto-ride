@@ -18,15 +18,28 @@ class AuthController extends ApiController
     public function register(Request $request)
     {
         $data = $request->validate([
-            'name'     => 'required|string|max:255',
-            'email'    => 'required|email|unique:users,email',
-            'password' => 'required|string|min:8',
-            'phone'    => 'nullable|string|max:24',
-            'role'     => 'nullable|in:passenger,driver',
+            'name'         => 'required|string|max:255',
+            'email'        => 'required|email|unique:users,email',
+            'password'     => 'required|string|min:8',
+            'phone'        => 'nullable|string|max:24',
+            'role'         => 'nullable|in:passenger,driver',
+            'driver_type'  => 'nullable|in:owner,company_staff,rental',
+            'company_name' => 'nullable|string|max:255',
         ]);
 
         $data['role']           = $data['role'] ?? 'passenger';
         $data['wallet_balance'] = 0;
+
+        // driver_type only applies to drivers; default to owner.
+        if ($data['role'] === 'driver') {
+            $data['driver_type'] = $data['driver_type'] ?? 'owner';
+            // company_name is only kept for company_staff and rental.
+            if (! in_array($data['driver_type'], ['company_staff', 'rental'])) {
+                $data['company_name'] = null;
+            }
+        } else {
+            unset($data['driver_type'], $data['company_name']);
+        }
 
         $user = User::create($data);
 
@@ -116,11 +129,18 @@ class AuthController extends ApiController
         }
 
         $data = $request->validate([
-            'name' => 'sometimes|string|max:255',
-            'email' => 'sometimes|email|unique:users,email,' . $user->id,
-            'phone' => 'sometimes|string|max:24',
-            'status_note' => 'sometimes|nullable|string|max:255',
+            'name'         => 'sometimes|string|max:255',
+            'email'        => 'sometimes|email|unique:users,email,' . $user->id,
+            'phone'        => 'sometimes|string|max:24',
+            'status_note'  => 'sometimes|nullable|string|max:255',
+            'driver_type'  => 'sometimes|nullable|in:owner,company_staff,rental',
+            'company_name' => 'sometimes|nullable|string|max:255',
         ]);
+
+        // Enforce company_name only makes sense for company_staff / rental.
+        if (isset($data['driver_type']) && ! in_array($data['driver_type'], ['company_staff', 'rental'])) {
+            $data['company_name'] = null;
+        }
 
         $user->update($data);
 

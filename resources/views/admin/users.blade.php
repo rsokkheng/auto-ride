@@ -18,6 +18,8 @@
                     <th>Name</th>
                     <th>Email</th>
                     <th>Role</th>
+                    <th>Driver Type</th>
+                    <th>Company</th>
                     <th>Phone</th>
                     <th>Wallet</th>
                     <th>Registered</th>
@@ -26,6 +28,10 @@
             </thead>
             <tbody>
                 @forelse($users as $user)
+                @php
+                    $dtColor = ['owner' => 'success', 'company_staff' => 'info', 'rental' => 'warning'];
+                    $dtLabel = ['owner' => 'Own Vehicle', 'company_staff' => 'Company Staff', 'rental' => 'Rental'];
+                @endphp
                 <tr>
                     <td>{{ $user->id }}</td>
                     <td>{{ $user->name }}</td>
@@ -35,6 +41,16 @@
                             {{ ucfirst($user->role ?? 'passenger') }}
                         </span>
                     </td>
+                    <td>
+                        @if($user->role === 'driver' && $user->driver_type)
+                            <span class="badge badge-{{ $dtColor[$user->driver_type] ?? 'secondary' }}">
+                                {{ $dtLabel[$user->driver_type] ?? ucfirst($user->driver_type) }}
+                            </span>
+                        @else
+                            <span class="text-muted">—</span>
+                        @endif
+                    </td>
+                    <td>{{ $user->company_name ?? '—' }}</td>
                     <td>{{ $user->phone ?? '—' }}</td>
                     <td>{{ number_format($user->wallet_balance ?? 0, 0) }} ៛</td>
                     <td>{{ $user->created_at->format('Y-m-d') }}</td>
@@ -45,6 +61,8 @@
                             email: @json($user->email),
                             phone: @json($user->phone ?? ''),
                             role: @json($user->role ?? 'passenger'),
+                            driver_type: @json($user->driver_type ?? ''),
+                            company_name: @json($user->company_name ?? ''),
                             wallet_balance: '{{ $user->wallet_balance ?? 0 }}'
                         })"><i class="fas fa-edit"></i></button>
                         <form method="POST" action="{{ route('admin.users.destroy', $user) }}" class="d-inline"
@@ -55,7 +73,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="8" class="text-center text-muted py-4">No users found.</td></tr>
+                <tr><td colspan="10" class="text-center text-muted py-4">No users found.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -94,13 +112,32 @@
                         </div>
                         <div class="form-group col-md-6">
                             <label>Role <span class="text-danger">*</span></label>
-                            <select name="role" id="f-role" class="form-control" required>
+                            <select name="role" id="f-role" class="form-control" required onchange="toggleDriverFields()">
                                 <option value="passenger">Passenger</option>
                                 <option value="driver">Driver</option>
                                 <option value="admin">Admin</option>
                             </select>
                         </div>
                     </div>
+
+                    {{-- Driver-only fields --}}
+                    <div id="driver-fields" style="display:none;">
+                        <hr class="my-2">
+                        <p class="text-muted small mb-2"><i class="fas fa-car mr-1"></i> Driver Vehicle Ownership</p>
+                        <div class="form-group">
+                            <label>Driver Type <span class="text-danger">*</span></label>
+                            <select name="driver_type" id="f-driver-type" class="form-control" onchange="toggleCompanyField()">
+                                <option value="owner">Own Car / Tuk-tuk (Independent)</option>
+                                <option value="company_staff">Company Staff — vehicle provided by company</option>
+                                <option value="rental">Rental — rents car / tuk-tuk from company</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="company-field" style="display:none;">
+                            <label>Company Name</label>
+                            <input type="text" name="company_name" id="f-company-name" class="form-control" placeholder="Company or fleet name">
+                        </div>
+                    </div>
+
                     <div class="form-group" id="wallet-group" style="display:none;">
                         <label>Wallet Balance (KHR ៛)</label>
                         <input type="number" name="wallet_balance" id="f-wallet" class="form-control" min="0" step="100">
@@ -121,6 +158,23 @@
 const storeUrl = '{{ route('admin.users.store') }}';
 const updateBase = '/admin/users/';
 
+function toggleDriverFields() {
+    const role = document.getElementById('f-role').value;
+    const show = role === 'driver';
+    document.getElementById('driver-fields').style.display = show ? 'block' : 'none';
+    if (!show) {
+        document.getElementById('f-driver-type').value = 'owner';
+        document.getElementById('company-field').style.display = 'none';
+    }
+}
+
+function toggleCompanyField() {
+    const type = document.getElementById('f-driver-type').value;
+    const needs = type === 'company_staff' || type === 'rental';
+    document.getElementById('company-field').style.display = needs ? 'block' : 'none';
+    if (!needs) document.getElementById('f-company-name').value = '';
+}
+
 function openCreate() {
     document.getElementById('modalTitle').textContent = 'Add User';
     document.getElementById('userForm').action = storeUrl;
@@ -129,6 +183,8 @@ function openCreate() {
     document.getElementById('f-password').required = true;
     document.getElementById('wallet-group').style.display = 'none';
     document.getElementById('userForm').reset();
+    document.getElementById('driver-fields').style.display = 'none';
+    document.getElementById('company-field').style.display = 'none';
     $('#formModal').modal('show');
 }
 
@@ -145,6 +201,17 @@ function openEdit(d) {
     document.getElementById('f-role').value = d.role;
     document.getElementById('f-wallet').value = d.wallet_balance;
     document.getElementById('wallet-group').style.display = 'block';
+
+    // Driver fields
+    const isDriver = d.role === 'driver';
+    document.getElementById('driver-fields').style.display = isDriver ? 'block' : 'none';
+    if (isDriver) {
+        document.getElementById('f-driver-type').value = d.driver_type || 'owner';
+        const needsCompany = d.driver_type === 'company_staff' || d.driver_type === 'rental';
+        document.getElementById('company-field').style.display = needsCompany ? 'block' : 'none';
+        document.getElementById('f-company-name').value = d.company_name || '';
+    }
+
     $('#formModal').modal('show');
 }
 </script>

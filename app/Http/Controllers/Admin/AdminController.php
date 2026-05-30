@@ -97,15 +97,24 @@ class AdminController extends Controller
     public function storeUser(Request $request)
     {
         $data = $request->validate([
-            'name'     => 'required|string|max:255',
-            'email'    => 'required|email|unique:users,email',
-            'password' => 'required|string|min:6',
-            'phone'    => 'nullable|string|max:20',
-            'role'     => 'required|in:admin,driver,passenger',
+            'name'         => 'required|string|max:255',
+            'email'        => 'required|email|unique:users,email',
+            'password'     => 'required|string|min:6',
+            'phone'        => 'nullable|string|max:20',
+            'role'         => 'required|in:admin,driver,passenger',
+            'driver_type'  => 'nullable|in:owner,company_staff,rental',
+            'company_name' => 'nullable|string|max:255',
         ]);
 
         $data['password']  = Hash::make($data['password']);
         $data['api_token'] = bin2hex(random_bytes(40));
+
+        if ($data['role'] !== 'driver') {
+            $data['driver_type']  = null;
+            $data['company_name'] = null;
+        } elseif (! in_array($data['driver_type'] ?? '', ['company_staff', 'rental'])) {
+            $data['company_name'] = null;
+        }
 
         User::create($data);
 
@@ -121,12 +130,21 @@ class AdminController extends Controller
             'phone'          => 'nullable|string|max:20',
             'role'           => 'required|in:admin,driver,passenger',
             'wallet_balance' => 'nullable|numeric|min:0',
+            'driver_type'    => 'nullable|in:owner,company_staff,rental',
+            'company_name'   => 'nullable|string|max:255',
         ]);
 
         if (empty($data['password'])) {
             unset($data['password']);
         } else {
             $data['password'] = Hash::make($data['password']);
+        }
+
+        if ($data['role'] !== 'driver') {
+            $data['driver_type']  = null;
+            $data['company_name'] = null;
+        } elseif (! in_array($data['driver_type'] ?? '', ['company_staff', 'rental'])) {
+            $data['company_name'] = null;
         }
 
         $user->update($data);
