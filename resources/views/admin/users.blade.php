@@ -36,7 +36,7 @@
                         </span>
                     </td>
                     <td>{{ $user->phone ?? '—' }}</td>
-                    <td>${{ number_format($user->wallet_balance ?? 0, 2) }}</td>
+                    <td>{{ number_format($user->wallet_balance ?? 0, 0) }} ៛</td>
                     <td>{{ $user->created_at->format('Y-m-d') }}</td>
                     <td>
                         <button class="btn btn-xs btn-info mr-1" onclick="openEdit({
@@ -102,8 +102,8 @@
                         </div>
                     </div>
                     <div class="form-group" id="wallet-group" style="display:none;">
-                        <label>Wallet Balance ($)</label>
-                        <input type="number" name="wallet_balance" id="f-wallet" class="form-control" min="0" step="0.01">
+                        <label>Wallet Balance (KHR ៛)</label>
+                        <input type="number" name="wallet_balance" id="f-wallet" class="form-control" min="0" step="100">
                     </div>
                 </div>
                 <div class="modal-footer">

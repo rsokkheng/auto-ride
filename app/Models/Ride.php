@@ -28,8 +28,8 @@ class Ride extends Model
 
     protected $casts = [
         'scheduled_at' => 'datetime',
-        'fare' => 'decimal:2',
-        'rating' => 'decimal:1',
+        'fare'         => 'integer',
+        'rating'       => 'float',
     ];
 
     public function passenger(): BelongsTo

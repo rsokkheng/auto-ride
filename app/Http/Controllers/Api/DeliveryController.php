@@ -158,18 +158,48 @@ class DeliveryController extends ApiController
 
     // ── Fee Estimate ────────────────────────────────────────────────────────
 
+    /**
+     * POST /v1/deliveries/estimate
+     *
+     * Returns an estimated delivery fee in Khmer Riel (KHR ៛).
+     *
+     * Rates:
+     *   Base fee    : 3,000 ៛
+     *   Per km      : 1,200 ៛
+     *   Package size surcharge:
+     *     small  → +0
+     *     medium → +2,000 ៛
+     *     large  → +5,000 ៛
+     *
+     * Result is rounded up to the nearest 100 ៛.
+     */
     public function estimate(Request $request)
     {
         $data = $request->validate([
-            'distance'       => 'nullable|numeric|min:0',
-            'package_weight' => 'nullable|numeric|min:0',
+            'distance'     => 'nullable|numeric|min:0',
+            'package_size' => 'nullable|in:small,medium,large',
         ]);
 
-        $distance = $data['distance'] ?? 5;
-        $weight   = $data['package_weight'] ?? 2;
-        $fee      = round(3 + ($distance * 1.5) + ($weight * 0.5), 2);
+        $distance = (float) ($data['distance'] ?? 5);
+        $size     = $data['package_size'] ?? 'small';
 
-        return $this->success(['estimated_fee' => $fee]);
+        $base      = config('delivery.fee_base', 3000);
+        $perKm     = config('delivery.fee_per_km', 1200);
+        $surcharge = config("delivery.fee_surcharge_{$size}", 0);
+
+        $raw = $base + ($perKm * max(1, $distance)) + $surcharge;
+        $fee = (int) (ceil($raw / 100) * 100);
+
+        return $this->success([
+            'estimated_fee'  => $fee,
+            'currency'       => 'KHR',
+            'breakdown'      => [
+                'base_fee'   => $base,
+                'distance_km'=> $distance,
+                'per_km_rate'=> $perKm,
+                'surcharge'  => $surcharge,
+            ],
+        ]);
     }
 
     // ── Track ───────────────────────────────────────────────────────────────

@@ -32,8 +32,8 @@
                     <td>{{ \Illuminate\Support\Str::limit($item->title, 28) }}</td>
                     <td>{{ $item->seller?->name ?? '—' }}</td>
                     <td><span class="badge badge-{{ $item->type === 'rent' ? 'info' : 'success' }}">{{ ucfirst($item->type) }}</span></td>
-                    <td>{{ $item->price ? '$'.number_format($item->price,2) : '—' }}</td>
-                    <td>{{ $item->rent_rate ? '$'.number_format($item->rent_rate,2) : '—' }}</td>
+                    <td>{{ $item->price ? number_format($item->price, 0).' ៛' : '—' }}</td>
+                    <td>{{ $item->rent_rate ? number_format($item->rent_rate, 0).' ៛' : '—' }}</td>
                     <td>{{ ucfirst($item->condition) }}</td>
                     <td>
                         <span class="badge badge-{{ $item->available ? 'success' : 'secondary' }}">
@@ -118,12 +118,12 @@
                             </select>
                         </div>
                         <div class="form-group col-md-4">
-                            <label>Price ($)</label>
-                            <input type="number" name="price" id="f-price" class="form-control" min="0" step="0.01">
+                            <label>Price (KHR ៛)</label>
+                            <input type="number" name="price" id="f-price" class="form-control" min="0" step="100">
                         </div>
                         <div class="form-group col-md-4">
-                            <label>Rent Rate ($/day)</label>
-                            <input type="number" name="rent_rate" id="f-rent" class="form-control" min="0" step="0.01">
+                            <label>Rent Rate (KHR ៛/day)</label>
+                            <input type="number" name="rent_rate" id="f-rent" class="form-control" min="0" step="100">
                         </div>
                     </div>
                     <div class="form-row">

@@ -22,7 +22,7 @@ class Payment extends Model
     ];
 
     protected $casts = [
-        'amount' => 'decimal:2',
+        'amount' => 'integer',
     ];
 
     public function user(): BelongsTo

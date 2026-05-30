@@ -37,7 +37,7 @@
                         @php $sc = ['pending'=>'warning','accepted'=>'info','in_progress'=>'primary','completed'=>'success','cancelled'=>'danger']; @endphp
                         <span class="badge badge-{{ $sc[$r->status] ?? 'secondary' }}">{{ ucfirst(str_replace('_',' ',$r->status)) }}</span>
                     </td>
-                    <td>{{ $r->fare ? '$'.number_format($r->fare,2) : '—' }}</td>
+                    <td>{{ $r->fare ? number_format($r->fare, 0).' ៛' : '—' }}</td>
                     <td>{{ $r->created_at->format('Y-m-d') }}</td>
                     <td>
                         <button class="btn btn-xs btn-info mr-1" onclick="openEdit({
@@ -119,8 +119,8 @@
                             </select>
                         </div>
                         <div class="form-group col-md-4">
-                            <label>Fare ($)</label>
-                            <input type="number" name="fare" id="f-fare" class="form-control" min="0" step="0.01">
+                            <label>Fare (KHR ៛)</label>
+                            <input type="number" name="fare" id="f-fare" class="form-control" min="0" step="100">
                         </div>
                         <div class="form-group col-md-4">
                             <label>Service Type</label>

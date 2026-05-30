@@ -3,11 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Ride;
-use App\Models\RideLocation;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Http\Request;
-use Illuminate\Support\Arr;
 
 class RideController extends ApiController
 {
@@ -182,20 +180,33 @@ class RideController extends ApiController
         return $this->success(['ride' => $ride]);
     }
 
-    protected function calculateFare(?string $pickup, ?string $dropoff, string $serviceType = 'standard', float $distance = 5): float
+    /**
+     * Calculate ride fare in Khmer Riel (KHR ៛).
+     *
+     * Rates (Cambodia market):
+     *   Standard : 4,000 base + 1,500/km
+     *   Premium  : 8,000 base + 3,000/km
+     *   Shared   : 2,500 base + 1,000/km
+     *
+     * Result is rounded up to the nearest 100 ៛.
+     */
+    protected function calculateFare(?string $pickup, ?string $dropoff, string $serviceType = 'standard', float $distance = 5): int
     {
-        $base = 2.50;
-        $perKm = 1.25;
+        $base  = config('delivery.ride_base_standard',  4000);
+        $perKm = config('delivery.ride_perkm_standard', 1500);
 
         if ($serviceType === 'premium') {
-            $base = 4.00;
-            $perKm = 2.25;
+            $base  = config('delivery.ride_base_premium',  8000);
+            $perKm = config('delivery.ride_perkm_premium', 3000);
         } elseif ($serviceType === 'shared') {
-            $base = 1.75;
-            $perKm = 1.00;
+            $base  = config('delivery.ride_base_shared',  2500);
+            $perKm = config('delivery.ride_perkm_shared', 1000);
         }
 
-        return round($base + ($perKm * max(1, $distance)), 2);
+        $raw = $base + ($perKm * max(1, $distance));
+
+        // Round up to nearest 100 ៛ — standard practice in Cambodia.
+        return (int) (ceil($raw / 100) * 100);
     }
 
     protected function authUserOrFail(Request $request)

@@ -28,7 +28,7 @@ class User extends Authenticatable
         return [
             'email_verified_at'         => 'datetime',
             'password'                  => 'hashed',
-            'wallet_balance'            => 'decimal:2',
+            'wallet_balance'            => 'integer',
             'token_expires_at'          => 'datetime',
             'refresh_token_expires_at'  => 'datetime',
         ];

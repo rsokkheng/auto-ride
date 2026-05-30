@@ -56,7 +56,7 @@
                             {{ ucfirst(str_replace('_', ' ', $d->status)) }}
                         </span>
                     </td>
-                    <td>{{ $d->fee ? '$'.number_format($d->fee, 2) : '—' }}</td>
+                    <td>{{ $d->fee ? number_format($d->fee, 0).' ៛' : '—' }}</td>
                     <td>{{ $d->scheduled_at ? $d->scheduled_at->format('Y-m-d H:i') : '—' }}</td>
                     <td>{{ $d->created_at->format('Y-m-d') }}</td>
                     <td>
@@ -180,8 +180,8 @@
                             </select>
                         </div>
                         <div class="form-group col-md-4">
-                            <label>Total Fee ($)</label>
-                            <input type="number" name="fee" id="f-fee" class="form-control" min="0" step="0.01">
+                            <label>Total Fee (KHR ៛)</label>
+                            <input type="number" name="fee" id="f-fee" class="form-control" min="0" step="100">
                         </div>
                         <div class="form-group col-md-4">
                             <label>Scheduled Date</label>

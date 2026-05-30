@@ -33,7 +33,7 @@ class Delivery extends Model
 
     protected $casts = [
         'scheduled_at' => 'datetime',
-        'fee'          => 'decimal:2',
+        'fee'          => 'integer',
         'rating'       => 'float',
         'pickup_lat'   => 'float',
         'pickup_lng'   => 'float',

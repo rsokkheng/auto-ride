@@ -23,8 +23,8 @@ class MarketplaceItem extends Model
     ];
 
     protected $casts = [
-        'price' => 'decimal:2',
-        'rent_rate' => 'decimal:2',
+        'price'     => 'integer',
+        'rent_rate' => 'integer',
         'available' => 'boolean',
     ];
 
