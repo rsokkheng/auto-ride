@@ -28,6 +28,7 @@ Route::prefix('v1')->group(function () {
     Route::post('auth/logout', [AuthController::class, 'logout']);
     Route::post('auth/refresh', [AuthController::class, 'refreshToken']);
     Route::get('auth/me', [AuthController::class, 'me']);
+    Route::get('auth/avatar', [AuthController::class, 'getAvatar']);
     Route::put('auth/profile', [AuthController::class, 'updateProfile']);
     Route::post('auth/otp/send', [AuthController::class, 'sendOTP']);
     Route::post('auth/otp/verify', [AuthController::class, 'verifyOTP']);

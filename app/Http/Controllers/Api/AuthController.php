@@ -109,6 +109,26 @@ class AuthController extends ApiController
         return $this->getProfile($request);
     }
 
+    /**
+     * GET /v1/auth/avatar
+     *
+     * Returns the authenticated user's profile photo URL.
+     * avatar_url is null when no photo has been uploaded.
+     */
+    public function getAvatar(Request $request)
+    {
+        $user = $this->authUser($request);
+
+        if (! $user) {
+            return $this->unauthorized();
+        }
+
+        return $this->success([
+            'avatar_url' => $user->avatar_url,
+            'has_avatar' => ! is_null($user->avatar_url),
+        ]);
+    }
+
     public function getProfile(Request $request)
     {
         $user = $this->authUser($request);

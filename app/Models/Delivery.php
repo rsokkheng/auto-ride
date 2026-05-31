@@ -32,10 +32,12 @@ class Delivery extends Model
         'notes',
         'rating',
         'rating_comment',
+        'assigned_at',
     ];
 
     protected $casts = [
         'scheduled_at' => 'datetime',
+        'assigned_at'  => 'datetime',
         'fee'          => 'integer',
         'rating'       => 'float',
         'pickup_lat'   => 'float',

@@ -137,6 +137,7 @@ class DeliveryController extends ApiController
                 'payment_method'  => $data['payment_method'] ?? 'cash',
                 'payment_status'  => 'unpaid',
                 'package_details' => $data['package_details'] ?? '',
+                'assigned_at'     => $driverId ? now() : null,
             ]
         ));
 
@@ -158,8 +159,9 @@ class DeliveryController extends ApiController
         }
 
         $delivery->update([
-            'driver_id' => $user->id,
-            'status'    => 'accepted',
+            'driver_id'   => $user->id,
+            'status'      => 'accepted',
+            'assigned_at' => $delivery->assigned_at ?? now(),
         ]);
 
         return $this->success(['delivery' => $delivery->fresh()->load('sender', 'vehicle')]);
