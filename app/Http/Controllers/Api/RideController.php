@@ -3,15 +3,20 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Ride;
+use App\Models\SurgeZone;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\FirestoreService;
 use App\Services\PaymentService;
 use App\Services\SurgeZoneService;
 use Illuminate\Http\Request;
 
 class RideController extends ApiController
 {
-    public function __construct(private SurgeZoneService $surge) {}
+    public function __construct(
+        private SurgeZoneService $surge,
+        private FirestoreService $firestore,
+    ) {}
 
     public function index(Request $request)
     {
@@ -68,9 +73,12 @@ class RideController extends ApiController
             'surge_zone_id'   => $fareResult['zone']?->id,
         ]));
 
+        $ride->load('driver', 'vehicle');
+        $this->firestore->syncRide($ride);
+
         return $this->success([
-            'ride'     => $ride->load('driver', 'vehicle'),
-            'fare'     => $fareResult,
+            'ride' => $ride,
+            'fare' => $fareResult,
         ], 201);
     }
 
@@ -99,7 +107,10 @@ class RideController extends ApiController
 
         $ride->update(['driver_id' => $user->id, 'status' => 'accepted']);
 
-        return $this->success(['ride' => $ride->fresh()->load('driver', 'vehicle')]);
+        $fresh = $ride->fresh()->load('driver', 'vehicle');
+        $this->firestore->syncRide($fresh);
+
+        return $this->success(['ride' => $fresh]);
     }
 
     public function complete(Request $request, Ride $ride)
@@ -120,8 +131,11 @@ class RideController extends ApiController
             $transaction = app(PaymentService::class)->processRide($ride->fresh());
         }
 
+        $fresh = $ride->fresh()->load('driver', 'vehicle');
+        $this->firestore->syncRide($fresh);
+
         return $this->success([
-            'ride'        => $ride->fresh()->load('driver', 'vehicle'),
+            'ride'        => $fresh,
             'transaction' => $transaction,
         ]);
     }
@@ -175,6 +189,8 @@ class RideController extends ApiController
         }
 
         $ride->update(['status' => 'cancelled']);
+        $this->firestore->syncRide($ride->fresh()->load('driver', 'vehicle'));
+
         return $this->success(['ride' => $ride]);
     }
 

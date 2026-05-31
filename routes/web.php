@@ -47,6 +47,12 @@ Route::prefix('admin')->group(function () {
     Route::put('marketplace/{item}', [AdminController::class, 'updateMarketplace'])->name('admin.marketplace.update');
     Route::delete('marketplace/{item}', [AdminController::class, 'destroyMarketplace'])->name('admin.marketplace.destroy');
 
+    // Admin Chat
+    Route::get('chat', [AdminController::class, 'adminChat'])->name('admin.chat');
+    Route::get('chat/{conversation}/messages', [AdminController::class, 'adminChatMessages'])->name('admin.chat.messages');
+    Route::post('chat/start', [AdminController::class, 'adminChatStart'])->name('admin.chat.start');
+    Route::post('chat/{conversation}/send', [AdminController::class, 'adminChatSend'])->name('admin.chat.send');
+
     // Surge Zones
     Route::get('surge-zones', [AdminController::class, 'surgeZones'])->name('admin.surge-zones');
     Route::post('surge-zones', [AdminController::class, 'storeSurgeZone'])->name('admin.surge-zones.store');

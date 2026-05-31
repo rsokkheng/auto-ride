@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\ChatConversation;
+use App\Models\ChatMessage;
 use App\Models\ChargingStation;
 use App\Models\Company;
 use App\Models\Delivery;
@@ -525,6 +527,120 @@ class AdminController extends Controller
     {
         $item->delete();
         return redirect()->route('admin.marketplace')->with('success', 'Item deleted.');
+    }
+
+    // ─── Admin Chat ──────────────────────────────────────────────────────────
+
+    public function adminChat()
+    {
+        $admin = Auth::user();
+
+        $conversations = ChatConversation::with(['passenger', 'driver', 'messages' => fn($q) => $q->latest()->limit(1)])
+            ->where('passenger_id', $admin->id)
+            ->orWhere('driver_id', $admin->id)
+            ->orderBy('updated_at', 'desc')
+            ->get();
+
+        return view('admin.chat', [
+            'conversations' => $conversations,
+            'users'         => User::whereIn('role', ['driver', 'passenger'])->orderBy('name')->get(),
+            'admin'         => $admin,
+        ]);
+    }
+
+    public function adminChatMessages(ChatConversation $conversation)
+    {
+        $admin = Auth::user();
+
+        if (! in_array($admin->id, [$conversation->passenger_id, $conversation->driver_id])) {
+            abort(403);
+        }
+
+        $messages = $conversation->messages()
+            ->with('sender')
+            ->orderBy('created_at')
+            ->get()
+            ->map(fn($m) => [
+                'id'         => $m->id,
+                'message'    => $m->message,
+                'sender_id'  => $m->sender_id,
+                'sender'     => $m->sender?->name,
+                'is_admin'   => $m->sender_id === $admin->id,
+                'time'       => $m->created_at->format('H:i'),
+                'created_at' => $m->created_at->toIso8601String(),
+            ]);
+
+        // Mark messages from the other party as read.
+        $conversation->messages()
+            ->where('sender_id', '!=', $admin->id)
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        return response()->json(['messages' => $messages]);
+    }
+
+    public function adminChatStart(Request $request)
+    {
+        $admin = Auth::user();
+
+        $data = $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'message' => 'required|string|max:2000',
+        ]);
+
+        $target = User::findOrFail($data['user_id']);
+
+        // Admin always occupies the passenger slot; target occupies driver slot.
+        // For passengers with no driver slot, we still use this convention.
+        $existing = ChatConversation::where('passenger_id', $admin->id)
+            ->where('driver_id', $target->id)
+            ->first();
+
+        if (! $existing) {
+            $existing = ChatConversation::create([
+                'passenger_id' => $admin->id,
+                'driver_id'    => $target->id,
+                'topic'        => 'admin_support',
+                'status'       => 'open',
+            ]);
+        }
+
+        ChatMessage::create([
+            'conversation_id' => $existing->id,
+            'sender_id'       => $admin->id,
+            'message'         => $data['message'],
+        ]);
+
+        $existing->touch();
+
+        return redirect()->route('admin.chat', ['open' => $existing->id]);
+    }
+
+    public function adminChatSend(Request $request, ChatConversation $conversation)
+    {
+        $admin = Auth::user();
+
+        if (! in_array($admin->id, [$conversation->passenger_id, $conversation->driver_id])) {
+            abort(403);
+        }
+
+        $data = $request->validate(['message' => 'required|string|max:2000']);
+
+        $message = ChatMessage::create([
+            'conversation_id' => $conversation->id,
+            'sender_id'       => $admin->id,
+            'message'         => $data['message'],
+        ]);
+
+        $conversation->touch();
+
+        return response()->json([
+            'id'        => $message->id,
+            'message'   => $message->message,
+            'sender_id' => $message->sender_id,
+            'is_admin'  => true,
+            'time'      => $message->created_at->format('H:i'),
+        ]);
     }
 
     // ─── Surge Zones ─────────────────────────────────────────────────────────

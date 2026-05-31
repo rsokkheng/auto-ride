@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Dashboard') | AutoRide Admin</title>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
@@ -210,6 +211,12 @@
                         <a href="{{ route('admin.surge-zones') }}" class="nav-link {{ request()->routeIs('admin.surge-zones') ? 'active' : '' }}">
                             <i class="nav-icon fas fa-bolt"></i>
                             <p>Surge Zones</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ route('admin.chat') }}" class="nav-link {{ request()->routeIs('admin.chat') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-comments"></i>
+                            <p>Chat Testing</p>
                         </a>
                     </li>
                     <li class="nav-item">

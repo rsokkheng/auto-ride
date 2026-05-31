@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Models\Delivery;
 use App\Models\Vehicle;
 use App\Services\DriverMatchingService;
+use App\Services\FirestoreService;
 use App\Services\PaymentService;
 use App\Services\SurgeZoneService;
 use Illuminate\Http\Request;
@@ -14,6 +15,7 @@ class DeliveryController extends ApiController
     public function __construct(
         private DriverMatchingService $matcher,
         private SurgeZoneService $surge,
+        private FirestoreService $firestore,
     ) {}
 
     // ── List / History ──────────────────────────────────────────────────────
@@ -163,7 +165,10 @@ class DeliveryController extends ApiController
             ]
         ));
 
-        return $this->success(['delivery' => $delivery->load('driver', 'vehicle')], 201);
+        $delivery->load('driver', 'vehicle');
+        $this->firestore->syncDelivery($delivery);
+
+        return $this->success(['delivery' => $delivery], 201);
     }
 
     // ── Accept ──────────────────────────────────────────────────────────────
@@ -186,7 +191,10 @@ class DeliveryController extends ApiController
             'assigned_at' => $delivery->assigned_at ?? now(),
         ]);
 
-        return $this->success(['delivery' => $delivery->fresh()->load('sender', 'vehicle')]);
+        $fresh = $delivery->fresh()->load('sender', 'driver', 'vehicle');
+        $this->firestore->syncDelivery($fresh);
+
+        return $this->success(['delivery' => $fresh]);
     }
 
     // ── Fee Estimate ────────────────────────────────────────────────────────
@@ -292,6 +300,7 @@ class DeliveryController extends ApiController
         }
 
         $delivery->update(['status' => 'cancelled']);
+        $this->firestore->syncDelivery($delivery->fresh()->load('driver'));
 
         return $this->success(['delivery' => $delivery]);
     }
@@ -314,8 +323,11 @@ class DeliveryController extends ApiController
             $transaction = app(PaymentService::class)->processDelivery($delivery->fresh());
         }
 
+        $fresh = $delivery->fresh()->load('driver');
+        $this->firestore->syncDelivery($fresh);
+
         return $this->success([
-            'delivery'    => $delivery->fresh(),
+            'delivery'    => $fresh,
             'transaction' => $transaction,
         ]);
     }

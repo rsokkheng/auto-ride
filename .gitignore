@@ -25,3 +25,7 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Firebase service account (never commit this)
+storage/app/auto-ride-supperapp-firebase.json
+*service-account*.json
