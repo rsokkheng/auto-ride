@@ -39,6 +39,7 @@ Route::prefix('admin')->group(function () {
     Route::post('deliveries', [AdminController::class, 'storeDelivery'])->name('admin.deliveries.store');
     Route::put('deliveries/{delivery}', [AdminController::class, 'updateDelivery'])->name('admin.deliveries.update');
     Route::delete('deliveries/{delivery}', [AdminController::class, 'destroyDelivery'])->name('admin.deliveries.destroy');
+    Route::post('deliveries/{delivery}/assign', [AdminController::class, 'assignDelivery'])->name('admin.deliveries.assign');
 
     // Marketplace
     Route::get('marketplace', [AdminController::class, 'marketplace'])->name('admin.marketplace');

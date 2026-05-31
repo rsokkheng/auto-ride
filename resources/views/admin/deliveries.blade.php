@@ -28,6 +28,7 @@
                     <th>Method</th>
                     <th>Pay Status</th>
                     <th>Scheduled</th>
+                    <th>Assigned At</th>
                     <th>Date</th>
                     <th>Actions</th>
                 </tr>
@@ -51,7 +52,24 @@
                             {{ ucfirst($d->package_size ?? '—') }}
                         </span>
                     </td>
-                    <td>{{ $d->driver?->name ?? 'Unassigned' }}</td>
+                    <td>
+                        @if($d->driver)
+                            <div><i class="fas fa-user-check text-success mr-1"></i>{{ $d->driver->name }}</div>
+                            @if($d->driver->phone)
+                                <small class="text-muted">{{ $d->driver->phone }}</small>
+                            @endif
+                        @else
+                            <span class="text-muted mr-1">Unassigned</span>
+                            <button class="btn btn-xs btn-success"
+                                data-id="{{ $d->id }}"
+                                data-driver=""
+                                data-label="#{{ $d->id }} — {{ Str::limit($d->pickup_address, 22) }}"
+                                onclick="openAssign(this)"
+                                title="Assign Driver">
+                                <i class="fas fa-user-plus mr-1"></i> Assign
+                            </button>
+                        @endif
+                    </td>
                     <td>{{ \Illuminate\Support\Str::limit($d->pickup_address, 20) }}</td>
                     <td>{{ \Illuminate\Support\Str::limit($d->dropoff_address, 20) }}</td>
                     <td>
@@ -85,6 +103,13 @@
                         </span>
                     </td>
                     <td>{{ $d->scheduled_at ? $d->scheduled_at->format('Y-m-d H:i') : '—' }}</td>
+                    <td>
+                        @if($d->assigned_at)
+                            <span class="text-success"><i class="fas fa-check-circle mr-1"></i>{{ $d->assigned_at->format('Y-m-d H:i') }}</span>
+                        @else
+                            <span class="text-muted">—</span>
+                        @endif
+                    </td>
                     <td>{{ $d->created_at->format('Y-m-d') }}</td>
                     <td>
                         <button class="btn btn-xs btn-info mr-1"
@@ -117,7 +142,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="16" class="text-center text-muted py-4">No deliveries found.</td></tr>
+                <tr><td colspan="17" class="text-center text-muted py-4">No deliveries found.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -259,12 +284,60 @@
         </div>
     </div>
 </div>
+{{-- Assign Driver Modal --}}
+<div class="modal fade" id="assignModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-user-plus mr-2"></i> Assign Driver</h5>
+                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <form id="assignForm" method="POST" action="">
+                @csrf
+                <div class="modal-body">
+                    <p class="text-muted mb-3" id="assign-delivery-label"></p>
+                    <div class="form-group mb-0">
+                        <label class="font-weight-bold">Select Driver <span class="text-danger">*</span></label>
+                        <select name="driver_id" id="assign-driver" class="form-control" required>
+                            <option value="">— Choose a driver —</option>
+                            @foreach($drivers as $dr)
+                                <option value="{{ $dr->id }}">{{ $dr->name }}
+                                    @if($dr->phone) — {{ $dr->phone }}@endif
+                                </option>
+                            @endforeach
+                        </select>
+                        <small class="text-muted">
+                            Status will automatically change to <strong>Accepted</strong>
+                            if delivery is currently Requested or Pending.
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-user-check mr-1"></i> Assign
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 @endsection
 
 @push('scripts')
 <script>
 const storeUrl = "{{ route('admin.deliveries.store') }}";
 const updateBase = '/admin/deliveries/';
+
+function openAssign(btn) {
+    var id     = btn.dataset.id;
+    var driver = btn.dataset.driver;
+    var label  = btn.dataset.label;
+    document.getElementById('assignForm').action        = '/admin/deliveries/' + id + '/assign';
+    document.getElementById('assign-delivery-label').textContent = 'Delivery ' + label;
+    document.getElementById('assign-driver').value      = driver || '';
+    $('#assignModal').modal('show');
+}
 
 function openCreate() {
     document.getElementById('modalTitle').textContent = 'Add Delivery';

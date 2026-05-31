@@ -407,6 +407,7 @@ class AdminController extends Controller
         $data['payment_by']      = $data['payment_by'] ?? 'sender';
         $data['payment_method']  = $data['payment_method'] ?? 'cash';
         $data['payment_status']  = 'unpaid';
+        $data['assigned_at']     = ! empty($data['driver_id']) ? now() : null;
 
         Delivery::create($data);
 
@@ -432,9 +433,32 @@ class AdminController extends Controller
             'notes'           => 'nullable|string',
         ]);
 
+        // Stamp assigned_at when a driver is set for the first time.
+        if (! empty($data['driver_id']) && ! $delivery->assigned_at) {
+            $data['assigned_at'] = now();
+        }
+
         $delivery->update($data);
 
         return redirect()->route('admin.deliveries')->with('success', 'Delivery updated successfully.');
+    }
+
+    public function assignDelivery(Request $request, Delivery $delivery)
+    {
+        $data = $request->validate([
+            'driver_id' => 'required|exists:users,id',
+        ]);
+
+        $delivery->update([
+            'driver_id'   => $data['driver_id'],
+            'status'      => in_array($delivery->status, ['requested', 'pending']) ? 'accepted' : $delivery->status,
+            'assigned_at' => $delivery->assigned_at ?? now(),
+        ]);
+
+        $driver = User::find($data['driver_id']);
+
+        return redirect()->route('admin.deliveries')
+            ->with('success', "Delivery #{$delivery->id} assigned to {$driver->name}.");
     }
 
     public function destroyDelivery(Delivery $delivery)
