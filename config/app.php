@@ -41,6 +41,10 @@ return [
 
     'debug' => (bool) env('APP_DEBUG', false),
 
+    // Allow drivers & passengers to log in to the admin panel for testing.
+    // Set to false (or remove) before going to production.
+    'admin_test_mode' => (bool) env('ADMIN_TEST_MODE', false),
+
     /*
     |--------------------------------------------------------------------------
     | Application URL

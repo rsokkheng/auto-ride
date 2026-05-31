@@ -256,6 +256,30 @@
 
         <section class="content">
             <div class="container-fluid">
+
+                {{-- Test-mode banner shown to non-admin users --}}
+                @if(config('app.admin_test_mode') && Auth::check() && Auth::user()->role !== 'admin')
+                @php $roleColor = Auth::user()->role === 'driver' ? '#d97706' : '#7c3aed'; $roleIcon = Auth::user()->role === 'driver' ? 'fa-car' : 'fa-user'; @endphp
+                <div class="alert mb-3 d-flex align-items-center justify-content-between"
+                     style="background:{{ $roleColor }}15;border:1.5px solid {{ $roleColor }};border-radius:10px;padding:10px 16px;">
+                    <div>
+                        <i class="fas {{ $roleIcon }} mr-2" style="color:{{ $roleColor }};"></i>
+                        <strong style="color:{{ $roleColor }};">TEST MODE</strong>
+                        <span class="ml-2" style="font-size:.875rem;">
+                            Logged in as <strong>{{ Auth::user()->name }}</strong>
+                            (<span style="color:{{ $roleColor }};">{{ ucfirst(Auth::user()->role) }}</span>)
+                            — Admin panel access is for testing only.
+                        </span>
+                    </div>
+                    <form method="POST" action="{{ route('admin.logout') }}" class="mb-0">
+                        @csrf
+                        <button class="btn btn-sm" style="border:1px solid {{ $roleColor }};color:{{ $roleColor }};background:transparent;">
+                            <i class="fas fa-sign-out-alt mr-1"></i> Exit
+                        </button>
+                    </form>
+                </div>
+                @endif
+
                 @if(session('success'))
                     <div class="alert alert-success alert-dismissible fade show">
                         <i class="fas fa-check-circle mr-2"></i>{{ session('success') }}

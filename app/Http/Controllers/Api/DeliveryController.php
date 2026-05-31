@@ -42,6 +42,18 @@ class DeliveryController extends ApiController
         return $this->index($request);
     }
 
+    public function show(Request $request, Delivery $delivery)
+    {
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
+        if (! in_array($user->id, [$delivery->sender_id, $delivery->driver_id], true)) {
+            return $this->unauthorized();
+        }
+
+        return $this->success(['delivery' => $delivery->load('sender', 'driver', 'vehicle')]);
+    }
+
     // ── Nearby Drivers ──────────────────────────────────────────────────────
 
     /**

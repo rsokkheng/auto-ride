@@ -82,6 +82,18 @@ class RideController extends ApiController
         ], 201);
     }
 
+    public function show(Request $request, Ride $ride)
+    {
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
+        if (! in_array($user->id, [$ride->passenger_id, $ride->driver_id], true)) {
+            return $this->unauthorized();
+        }
+
+        return $this->success(['ride' => $ride->load('passenger', 'driver', 'vehicle')]);
+    }
+
     public function available(Request $request)
     {
         $user = $this->authUser($request);

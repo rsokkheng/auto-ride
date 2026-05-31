@@ -198,8 +198,23 @@
         {{-- Heading --}}
         <div class="mb-8">
             <h1 class="text-slate-800 text-2xl font-extrabold mb-1">Welcome back 👋</h1>
-            <p class="text-slate-500 text-sm">Sign in to your admin account to continue.</p>
+            <p class="text-slate-500 text-sm">Sign in to your account to continue.</p>
         </div>
+
+        {{-- Test-mode notice --}}
+        @if(!empty($testMode) && $testMode)
+        <div class="mb-5 flex items-start gap-3 rounded-xl p-4 text-sm"
+             style="background:#fefce8;border:1.5px solid #fde68a;color:#92400e;">
+            <i class="fas fa-flask mt-0.5 shrink-0" style="color:#d97706;"></i>
+            <div>
+                <div class="font-semibold mb-1" style="color:#92400e;">Test Mode Active</div>
+                <div style="color:#78350f;">
+                    Drivers and passengers can log in with their app credentials.<br>
+                    <span style="color:#b45309;">Set <code>ADMIN_TEST_MODE=false</code> before production.</span>
+                </div>
+            </div>
+        </div>
+        @endif
 
         {{-- Errors --}}
         @if ($errors->any())
@@ -291,7 +306,11 @@
             <div class="flex items-center justify-center gap-5 flex-wrap">
                 <span class="pill"><i class="fas fa-shield-halved" style="color:#4ade80;"></i> SSL Encrypted</span>
                 <span class="pill"><i class="fas fa-lock" style="color:#60a5fa;"></i> Role‑Protected</span>
+                @if(!empty($testMode) && $testMode)
+                <span class="pill"><i class="fas fa-flask" style="color:#f59e0b;"></i> Test Mode</span>
+                @else
                 <span class="pill"><i class="fas fa-user-shield" style="color:#a78bfa;"></i> Admin Only</span>
+                @endif
             </div>
         </form>
 

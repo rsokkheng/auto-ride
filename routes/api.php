@@ -46,6 +46,7 @@ Route::prefix('v1')->group(function () {
     Route::get('rides', [RideController::class, 'index']);
     Route::get('rides/available', [RideController::class, 'available']);
     Route::post('rides', [RideController::class, 'store']);
+    Route::get('rides/{ride}', [RideController::class, 'show']);
     Route::post('rides/{ride}/accept', [RideController::class, 'accept']);
     Route::post('rides/{ride}/complete', [RideController::class, 'complete']);
     Route::post('rides/{ride}/cancel', [RideController::class, 'cancel']);
@@ -58,6 +59,7 @@ Route::prefix('v1')->group(function () {
 
     Route::get('deliveries', [DeliveryController::class, 'index']);
     Route::post('deliveries', [DeliveryController::class, 'store']);
+    Route::get('deliveries/{delivery}', [DeliveryController::class, 'show']);
     Route::post('deliveries/{delivery}/accept', [DeliveryController::class, 'accept']);
     Route::post('deliveries/{delivery}/cancel', [DeliveryController::class, 'cancel']);
     Route::post('deliveries/{delivery}/track', [DeliveryController::class, 'track']);

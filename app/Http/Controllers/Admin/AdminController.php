@@ -28,13 +28,26 @@ use Illuminate\Support\Str;
 
 class AdminController extends Controller
 {
+    /** Roles allowed to access the admin panel. */
+    private static function allowedRoles(): array
+    {
+        $roles = ['admin'];
+
+        if (config('app.admin_test_mode')) {
+            $roles[] = 'driver';
+            $roles[] = 'passenger';
+        }
+
+        return $roles;
+    }
+
     public function __construct()
     {
         $this->middleware(function (Request $request, $next) {
             if (! Auth::check()) {
                 return redirect()->route('admin.login');
             }
-            if (Auth::user()->role !== 'admin') {
+            if (! in_array(Auth::user()->role, self::allowedRoles(), true)) {
                 return redirect()->route('admin.login');
             }
             return $next($request);
@@ -45,10 +58,12 @@ class AdminController extends Controller
 
     public function showLogin()
     {
-        if (Auth::check() && Auth::user()->role === 'admin') {
+        if (Auth::check() && in_array(Auth::user()->role, self::allowedRoles(), true)) {
             return redirect()->route('admin.dashboard');
         }
-        return view('admin.login');
+        return view('admin.login', [
+            'testMode' => config('app.admin_test_mode', false),
+        ]);
     }
 
     public function login(Request $request)
@@ -60,8 +75,15 @@ class AdminController extends Controller
 
         $user = User::where('email', $data['email'])->first();
 
-        if (! $user || ! Hash::check($data['password'], $user->password) || $user->role !== 'admin') {
-            return back()->withErrors(['email' => 'Invalid credentials or not an admin'])->withInput();
+        if (! $user || ! Hash::check($data['password'], $user->password)) {
+            return back()->withErrors(['email' => 'Invalid credentials.'])->withInput();
+        }
+
+        if (! in_array($user->role, self::allowedRoles(), true)) {
+            $hint = config('app.admin_test_mode')
+                ? 'Only admin, driver, and passenger accounts are allowed.'
+                : 'Only admin accounts can access this panel.';
+            return back()->withErrors(['email' => $hint])->withInput();
         }
 
         Auth::login($user, $request->boolean('remember'));
@@ -662,12 +684,17 @@ class AdminController extends Controller
             'radius_km'   => 'required|numeric|min:0.1|max:100',
             'multiplier'  => 'required|numeric|min:1.1|max:5.0',
             'type'        => 'required|in:rides,deliveries,both',
-            'active'      => 'boolean',
-            'starts_at'   => 'nullable|date',
-            'ends_at'     => 'nullable|date|after_or_equal:starts_at',
+            'active'               => 'boolean',
+            'starts_at'            => 'nullable|date',
+            'ends_at'              => 'nullable|date|after_or_equal:starts_at',
+            'schedule_days'        => 'nullable|array',
+            'schedule_days.*'      => 'integer|between:0,6',
+            'schedule_start_time'  => 'nullable|date_format:H:i',
+            'schedule_end_time'    => 'nullable|date_format:H:i|after:schedule_start_time',
         ]);
 
-        $data['active'] = $request->boolean('active', true);
+        $data['active']        = $request->boolean('active', true);
+        $data['schedule_days'] = ! empty($data['schedule_days']) ? array_map('intval', $data['schedule_days']) : null;
         SurgeZone::create($data);
 
         return redirect()->route('admin.surge-zones')->with('success', 'Surge zone created.');
@@ -688,7 +715,8 @@ class AdminController extends Controller
             'ends_at'     => 'nullable|date|after_or_equal:starts_at',
         ]);
 
-        $data['active'] = $request->boolean('active');
+        $data['active']        = $request->boolean('active');
+        $data['schedule_days'] = ! empty($data['schedule_days']) ? array_map('intval', $data['schedule_days']) : null;
         $surgeZone->update($data);
 
         return redirect()->route('admin.surge-zones')->with('success', 'Surge zone updated.');
