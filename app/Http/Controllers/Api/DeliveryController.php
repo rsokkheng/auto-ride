@@ -42,6 +42,26 @@ class DeliveryController extends ApiController
         return $this->index($request);
     }
 
+    /**
+     * GET /v1/deliveries/available
+     *
+     * Unassigned deliveries a driver can pick up.
+     * Mirrors GET /v1/rides/available.
+     */
+    public function available(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user || $user->role !== 'driver') return $this->unauthorized();
+
+        $deliveries = Delivery::with(['sender', 'vehicle'])
+            ->whereIn('status', ['requested', 'pending'])
+            ->whereNull('driver_id')
+            ->orderBy('created_at')
+            ->paginate(20);
+
+        return $this->success(['deliveries' => $deliveries]);
+    }
+
     public function show(Request $request, Delivery $delivery)
     {
         $user = $this->authUser($request);

@@ -53,6 +53,7 @@ Route::prefix('v1')->group(function () {
     Route::post('rides/{ride}/rate', [RideController::class, 'rate']);
 
     // Static delivery routes must come before {delivery} wildcard routes.
+    Route::get('deliveries/available', [DeliveryController::class, 'available']);
     Route::get('deliveries/nearby-drivers', [DeliveryController::class, 'nearbyDrivers']);
     Route::get('deliveries/history', [DeliveryController::class, 'history']);
     Route::post('deliveries/estimate', [DeliveryController::class, 'estimate']);
