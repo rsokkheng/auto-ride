@@ -72,6 +72,7 @@ Route::prefix('v1')->group(function () {
     Route::post('tracking/rides/{ride}', [RideTrackingController::class, 'update']);
 
     Route::get('chats', [ChatController::class, 'index']);
+    Route::post('chats', [ChatController::class, 'create']);
     Route::get('chats/{conversation}', [ChatController::class, 'show']);
     Route::post('chats/{conversation}/messages', [ChatController::class, 'store']);
 

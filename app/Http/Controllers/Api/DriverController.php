@@ -110,15 +110,15 @@ class DriverController extends ApiController
             ]);
         }
 
-        // 2. Push driver doc to Firestore (for map markers).
-        $this->firestore->syncDriver($user, $lat, $lng, $speed, $heading);
+        // 2. Push to drivers_live (raw GPS tick for smooth map animation).
+        $this->firestore->syncDriverLive($user, $lat, $lng, $speed, $heading);
 
-        // 3. Patch driver location inside active ride document.
+        // 3. Patch driver location inside active ride booking document.
         if (! empty($data['ride_id'])) {
             $this->firestore->updateRideDriverLocation((int) $data['ride_id'], $lat, $lng, $heading);
         }
 
-        // 4. Patch driver location inside active delivery document.
+        // 4. Patch driver location inside active delivery booking document.
         if (! empty($data['delivery_id'])) {
             $this->firestore->updateDeliveryDriverLocation((int) $data['delivery_id'], $lat, $lng, $heading);
         }
