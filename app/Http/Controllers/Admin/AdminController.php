@@ -10,6 +10,7 @@ use App\Models\MarketplaceItem;
 use App\Models\Ride;
 use App\Models\SafetyIncident;
 use App\Models\SupportTicket;
+use App\Models\SurgeZone;
 use App\Models\TopUpRequest;
 use App\Models\TransactionRecord;
 use App\Models\User;
@@ -524,6 +525,71 @@ class AdminController extends Controller
     {
         $item->delete();
         return redirect()->route('admin.marketplace')->with('success', 'Item deleted.');
+    }
+
+    // ─── Surge Zones ─────────────────────────────────────────────────────────
+
+    public function surgeZones()
+    {
+        return view('admin.surge-zones', [
+            'zones' => SurgeZone::orderByDesc('active')->orderByDesc('multiplier')->paginate(20),
+        ]);
+    }
+
+    public function storeSurgeZone(Request $request)
+    {
+        $data = $request->validate([
+            'name'        => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'center_lat'  => 'required|numeric|between:-90,90',
+            'center_lng'  => 'required|numeric|between:-180,180',
+            'radius_km'   => 'required|numeric|min:0.1|max:100',
+            'multiplier'  => 'required|numeric|min:1.1|max:5.0',
+            'type'        => 'required|in:rides,deliveries,both',
+            'active'      => 'boolean',
+            'starts_at'   => 'nullable|date',
+            'ends_at'     => 'nullable|date|after_or_equal:starts_at',
+        ]);
+
+        $data['active'] = $request->boolean('active', true);
+        SurgeZone::create($data);
+
+        return redirect()->route('admin.surge-zones')->with('success', 'Surge zone created.');
+    }
+
+    public function updateSurgeZone(Request $request, SurgeZone $surgeZone)
+    {
+        $data = $request->validate([
+            'name'        => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'center_lat'  => 'required|numeric|between:-90,90',
+            'center_lng'  => 'required|numeric|between:-180,180',
+            'radius_km'   => 'required|numeric|min:0.1|max:100',
+            'multiplier'  => 'required|numeric|min:1.1|max:5.0',
+            'type'        => 'required|in:rides,deliveries,both',
+            'active'      => 'boolean',
+            'starts_at'   => 'nullable|date',
+            'ends_at'     => 'nullable|date|after_or_equal:starts_at',
+        ]);
+
+        $data['active'] = $request->boolean('active');
+        $surgeZone->update($data);
+
+        return redirect()->route('admin.surge-zones')->with('success', 'Surge zone updated.');
+    }
+
+    public function toggleSurgeZone(SurgeZone $surgeZone)
+    {
+        $surgeZone->update(['active' => ! $surgeZone->active]);
+
+        return redirect()->route('admin.surge-zones')
+            ->with('success', "Surge zone \"{$surgeZone->name}\" " . ($surgeZone->active ? 'deactivated' : 'activated') . '.');
+    }
+
+    public function destroySurgeZone(SurgeZone $surgeZone)
+    {
+        $surgeZone->delete();
+        return redirect()->route('admin.surge-zones')->with('success', 'Surge zone deleted.');
     }
 
     // ─── Charging Stations ───────────────────────────────────────────────────

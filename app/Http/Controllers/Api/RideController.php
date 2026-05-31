@@ -5,26 +5,22 @@ namespace App\Http\Controllers\Api;
 use App\Models\Ride;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Services\CommissionService;
 use App\Services\PaymentService;
-use App\Services\WalletService;
+use App\Services\SurgeZoneService;
 use Illuminate\Http\Request;
 
 class RideController extends ApiController
 {
+    public function __construct(private SurgeZoneService $surge) {}
+
     public function index(Request $request)
     {
         $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
 
-        if (! $user) {
-            return $this->unauthorized();
-        }
-
-        if ($user->role === 'driver') {
-            $rides = Ride::with(['passenger', 'vehicle'])->where('driver_id', $user->id)->paginate(20);
-        } else {
-            $rides = Ride::with(['driver', 'vehicle'])->where('passenger_id', $user->id)->paginate(20);
-        }
+        $rides = $user->role === 'driver'
+            ? Ride::with(['passenger', 'vehicle'])->where('driver_id', $user->id)->paginate(20)
+            : Ride::with(['driver', 'vehicle'])->where('passenger_id', $user->id)->paginate(20);
 
         return $this->success(['rides' => $rides]);
     }
@@ -37,18 +33,18 @@ class RideController extends ApiController
     public function store(Request $request)
     {
         $user = $this->authUser($request);
-
-        if (! $user) {
-            return $this->unauthorized();
-        }
+        if (! $user) return $this->unauthorized();
 
         $data = $request->validate([
-            'pickup_address' => 'required|string|max:255',
+            'pickup_address'  => 'required|string|max:255',
             'dropoff_address' => 'required|string|max:255',
-            'scheduled_at' => 'nullable|date',
-            'service_type' => 'required|string|in:standard,premium,shared',
-            'notes' => 'nullable|string',
-            'vehicle_id' => 'nullable|exists:vehicles,id',
+            'pickup_lat'      => 'nullable|numeric|between:-90,90',
+            'pickup_lng'      => 'nullable|numeric|between:-180,180',
+            'distance'        => 'nullable|numeric|min:0',
+            'scheduled_at'    => 'nullable|date',
+            'service_type'    => 'required|string|in:standard,premium,shared',
+            'notes'           => 'nullable|string',
+            'vehicle_id'      => 'nullable|exists:vehicles,id',
         ]);
 
         if (! empty($data['vehicle_id'])) {
@@ -56,24 +52,32 @@ class RideController extends ApiController
             $data['driver_id'] = $vehicle?->user_id;
         }
 
-        $fare = $this->calculateFare($data['pickup_address'], $data['dropoff_address'], $data['service_type']);
+        $fareResult = $this->calculateFare(
+            $data['service_type'],
+            (float) ($data['distance'] ?? 5),
+            isset($data['pickup_lat'], $data['pickup_lng'])
+                ? [(float) $data['pickup_lat'], (float) $data['pickup_lng']]
+                : null
+        );
 
         $ride = Ride::create(array_merge($data, [
-            'passenger_id' => $user->id,
-            'status' => 'requested',
-            'fare' => $fare,
+            'passenger_id'    => $user->id,
+            'status'          => 'requested',
+            'fare'            => $fareResult['total'],
+            'surge_multiplier'=> $fareResult['multiplier'],
+            'surge_zone_id'   => $fareResult['zone']?->id,
         ]));
 
-        return $this->success(['ride' => $ride->load('driver', 'vehicle')], 201);
+        return $this->success([
+            'ride'     => $ride->load('driver', 'vehicle'),
+            'fare'     => $fareResult,
+        ], 201);
     }
 
     public function available(Request $request)
     {
         $user = $this->authUser($request);
-
-        if (! $user || $user->role !== 'driver') {
-            return $this->unauthorized();
-        }
+        if (! $user || $user->role !== 'driver') return $this->unauthorized();
 
         $rides = Ride::with(['passenger', 'vehicle'])
             ->where('status', 'requested')
@@ -87,19 +91,13 @@ class RideController extends ApiController
     public function accept(Request $request, Ride $ride)
     {
         $user = $this->authUser($request);
-
-        if (! $user || $user->role !== 'driver') {
-            return $this->unauthorized();
-        }
+        if (! $user || $user->role !== 'driver') return $this->unauthorized();
 
         if ($ride->driver_id && $ride->driver_id !== $user->id) {
             return response()->json(['message' => 'Ride already claimed'], 422);
         }
 
-        $ride->update([
-            'driver_id' => $user->id,
-            'status' => 'accepted',
-        ]);
+        $ride->update(['driver_id' => $user->id, 'status' => 'accepted']);
 
         return $this->success(['ride' => $ride->fresh()->load('driver', 'vehicle')]);
     }
@@ -107,7 +105,6 @@ class RideController extends ApiController
     public function complete(Request $request, Ride $ride)
     {
         $user = $this->authUser($request);
-
         if (! $user || $user->role !== 'driver' || $ride->driver_id !== $user->id) {
             return $this->unauthorized();
         }
@@ -129,16 +126,29 @@ class RideController extends ApiController
         ]);
     }
 
+    /**
+     * POST /v1/rides/estimate
+     *
+     * Body: distance?, service_type?, pickup_lat?, pickup_lng?
+     */
     public function estimate(Request $request)
     {
         $data = $request->validate([
-            'distance' => 'nullable|numeric|min:0',
+            'distance'     => 'nullable|numeric|min:0',
             'service_type' => 'nullable|in:standard,premium,shared',
+            'pickup_lat'   => 'nullable|numeric|between:-90,90',
+            'pickup_lng'   => 'nullable|numeric|between:-180,180',
         ]);
 
-        $fare = $this->calculateFare(null, null, $data['service_type'] ?? 'standard', $data['distance'] ?? 5);
+        $fareResult = $this->calculateFare(
+            $data['service_type'] ?? 'standard',
+            (float) ($data['distance'] ?? 5),
+            isset($data['pickup_lat'], $data['pickup_lng'])
+                ? [(float) $data['pickup_lat'], (float) $data['pickup_lng']]
+                : null
+        );
 
-        return $this->success(['estimate' => $fare]);
+        return $this->success(['estimate' => $fareResult]);
     }
 
     public function nearbyDrivers(Request $request)
@@ -156,78 +166,95 @@ class RideController extends ApiController
     public function cancel(Request $request, Ride $ride)
     {
         $user = $this->authUser($request);
-
         if (! $user || ! in_array($user->id, [$ride->passenger_id, $ride->driver_id], true)) {
             return $this->unauthorized();
         }
 
-        if (in_array($ride->status, ['completed', 'cancelled', 'canceled'], true)) {
+        if (in_array($ride->status, ['completed', 'cancelled'], true)) {
             return response()->json(['message' => 'Ride cannot be cancelled'], 422);
         }
 
         $ride->update(['status' => 'cancelled']);
-
         return $this->success(['ride' => $ride]);
     }
 
     public function rate(Request $request, Ride $ride)
     {
         $user = $this->authUser($request);
-
         if (! $user || ! in_array($user->id, [$ride->passenger_id, $ride->driver_id], true)) {
             return $this->unauthorized();
         }
 
         $data = $request->validate([
-            'rating' => 'required|numeric|min:1|max:5',
+            'rating'  => 'required|numeric|min:1|max:5',
             'comment' => 'nullable|string|max:500',
         ]);
 
         $ride->update([
-            'rating' => $data['rating'],
+            'rating'         => $data['rating'],
             'rating_comment' => $data['comment'] ?? null,
         ]);
 
         return $this->success(['ride' => $ride]);
     }
 
-    /**
-     * Calculate ride fare in Khmer Riel (KHR ៛).
-     *
-     * Rates (Cambodia market):
-     *   Standard : 4,000 base + 1,500/km
-     *   Premium  : 8,000 base + 3,000/km
-     *   Shared   : 2,500 base + 1,000/km
-     *
-     * Result is rounded up to the nearest 100 ៛.
-     */
-    protected function calculateFare(?string $pickup, ?string $dropoff, string $serviceType = 'standard', float $distance = 5): int
-    {
-        $base  = config('delivery.ride_base_standard',  4000);
-        $perKm = config('delivery.ride_perkm_standard', 1500);
+    // ── Fare Calculation ──────────────────────────────────────────────────────
 
-        if ($serviceType === 'premium') {
-            $base  = config('delivery.ride_base_premium',  8000);
-            $perKm = config('delivery.ride_perkm_premium', 3000);
-        } elseif ($serviceType === 'shared') {
-            $base  = config('delivery.ride_base_shared',  2500);
-            $perKm = config('delivery.ride_perkm_shared', 1000);
+    /**
+     * Calculate ride fare with optional surge zone pricing.
+     *
+     * Formula: (base + per_km × max(1, distance)) × surge_multiplier
+     * Rounded up to nearest 100 ៛.
+     *
+     * @param  array<float>|null  $latLng  [lat, lng] of pickup; null = no surge check
+     * @return array{base: int, multiplier: float, surge_amount: int, total: int, zone: ?SurgeZone, breakdown: array}
+     */
+    protected function calculateFare(string $serviceType, float $distance = 5, ?array $latLng = null): array
+    {
+        [$base, $perKm] = match ($serviceType) {
+            'premium' => [
+                config('delivery.ride_base_premium',  8000),
+                config('delivery.ride_perkm_premium', 3000),
+            ],
+            'shared'  => [
+                config('delivery.ride_base_shared',  2500),
+                config('delivery.ride_perkm_shared', 1000),
+            ],
+            default   => [
+                config('delivery.ride_base_standard',  4000),
+                config('delivery.ride_perkm_standard', 1500),
+            ],
+        };
+
+        $baseFare = (int) ($base + ($perKm * max(1, $distance)));
+
+        if ($latLng) {
+            $result = $this->surge->applyTo($baseFare, $latLng[0], $latLng[1], 'rides');
+        } else {
+            $result = [
+                'base'         => $baseFare,
+                'multiplier'   => 1.0,
+                'surge_amount' => 0,
+                'total'        => (int) (ceil($baseFare / 100) * 100),
+                'zone'         => null,
+            ];
         }
 
-        $raw = $base + ($perKm * max(1, $distance));
+        $result['breakdown'] = [
+            'service_type' => $serviceType,
+            'base_fee'     => $base,
+            'distance_km'  => $distance,
+            'per_km_rate'  => $perKm,
+            'fare_before_surge' => $baseFare,
+        ];
 
-        // Round up to nearest 100 ៛ — standard practice in Cambodia.
-        return (int) (ceil($raw / 100) * 100);
+        return $result;
     }
 
     protected function authUserOrFail(Request $request)
     {
         $user = $this->authUser($request);
-
-        if (! $user) {
-            abort(401, 'Unauthorized');
-        }
-
+        if (! $user) abort(401, 'Unauthorized');
         return $user;
     }
 }

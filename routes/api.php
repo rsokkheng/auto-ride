@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\SurgeZoneController;
 use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\UploadController;
 use App\Http\Controllers\Api\WalletController;
@@ -85,6 +86,10 @@ Route::prefix('v1')->group(function () {
     Route::get('safety-incidents', [SafetyController::class, 'index']);
     Route::post('safety-incidents', [SafetyController::class, 'store']);
     Route::post('sos/alert', [SafetyController::class, 'sos']);
+
+    // Surge Zones
+    Route::get('surge/zones', [SurgeZoneController::class, 'index']);
+    Route::get('surge/check', [SurgeZoneController::class, 'check']);
 
     // Upload — profile avatar & vehicle images
     Route::post('upload/avatar',                              [UploadController::class, 'avatar']);

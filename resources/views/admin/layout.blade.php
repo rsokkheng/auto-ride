@@ -207,6 +207,12 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ route('admin.surge-zones') }}" class="nav-link {{ request()->routeIs('admin.surge-zones') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-bolt"></i>
+                            <p>Surge Zones</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ route('admin.support') }}" class="nav-link {{ request()->routeIs('admin.support') ? 'active' : '' }}">
                             <i class="nav-icon fas fa-headset"></i>
                             <p>Support</p>

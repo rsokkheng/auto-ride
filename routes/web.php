@@ -47,6 +47,13 @@ Route::prefix('admin')->group(function () {
     Route::put('marketplace/{item}', [AdminController::class, 'updateMarketplace'])->name('admin.marketplace.update');
     Route::delete('marketplace/{item}', [AdminController::class, 'destroyMarketplace'])->name('admin.marketplace.destroy');
 
+    // Surge Zones
+    Route::get('surge-zones', [AdminController::class, 'surgeZones'])->name('admin.surge-zones');
+    Route::post('surge-zones', [AdminController::class, 'storeSurgeZone'])->name('admin.surge-zones.store');
+    Route::put('surge-zones/{surgeZone}', [AdminController::class, 'updateSurgeZone'])->name('admin.surge-zones.update');
+    Route::post('surge-zones/{surgeZone}/toggle', [AdminController::class, 'toggleSurgeZone'])->name('admin.surge-zones.toggle');
+    Route::delete('surge-zones/{surgeZone}', [AdminController::class, 'destroySurgeZone'])->name('admin.surge-zones.destroy');
+
     // Charging Stations
     Route::get('charging-stations', [AdminController::class, 'chargingStations'])->name('admin.charging-stations');
     Route::post('charging-stations', [AdminController::class, 'storeChargingStation'])->name('admin.charging-stations.store');

@@ -33,11 +33,14 @@ class Delivery extends Model
         'rating',
         'rating_comment',
         'assigned_at',
+        'surge_multiplier',
+        'surge_zone_id',
     ];
 
     protected $casts = [
-        'scheduled_at' => 'datetime',
-        'assigned_at'  => 'datetime',
+        'scheduled_at'    => 'datetime',
+        'assigned_at'     => 'datetime',
+        'surge_multiplier'=> 'float',
         'fee'          => 'integer',
         'rating'       => 'float',
         'pickup_lat'   => 'float',
