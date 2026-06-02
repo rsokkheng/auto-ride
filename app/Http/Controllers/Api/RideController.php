@@ -3,18 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Ride;
-use App\Models\SurgeZone;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\FareService;
 use App\Services\FirestoreService;
 use App\Services\PaymentService;
-use App\Services\SurgeZoneService;
 use Illuminate\Http\Request;
 
 class RideController extends ApiController
 {
     public function __construct(
-        private SurgeZoneService $surge,
+        private FareService $fare,
         private FirestoreService $firestore,
     ) {}
 
@@ -43,11 +42,12 @@ class RideController extends ApiController
         $data = $request->validate([
             'pickup_address'  => 'required|string|max:255',
             'dropoff_address' => 'required|string|max:255',
-            'pickup_lat'      => 'nullable|numeric|between:-90,90',
-            'pickup_lng'      => 'nullable|numeric|between:-180,180',
-            'distance'        => 'nullable|numeric|min:0',
+            'pickup_lat'      => 'required|numeric|between:-90,90',
+            'pickup_lng'      => 'required|numeric|between:-180,180',
+            'dropoff_lat'     => 'required|numeric|between:-90,90',
+            'dropoff_lng'     => 'required|numeric|between:-180,180',
+            'service_type'    => 'required|in:motorcycle,tuk_tuk,standard,premium,shared,van',
             'scheduled_at'    => 'nullable|date',
-            'service_type'    => 'required|string|in:standard,premium,shared',
             'notes'           => 'nullable|string',
             'vehicle_id'      => 'nullable|exists:vehicles,id',
         ]);
@@ -57,20 +57,24 @@ class RideController extends ApiController
             $data['driver_id'] = $vehicle?->user_id;
         }
 
-        $fareResult = $this->calculateFare(
+        // Calculate fare using real road distance.
+        $route      = $this->fare->getRoute(
+            (float) $data['pickup_lat'],  (float) $data['pickup_lng'],
+            (float) $data['dropoff_lat'], (float) $data['dropoff_lng'],
+        );
+        $fareResult = $this->fare->calculateRideFare(
             $data['service_type'],
-            (float) ($data['distance'] ?? 5),
-            isset($data['pickup_lat'], $data['pickup_lng'])
-                ? [(float) $data['pickup_lat'], (float) $data['pickup_lng']]
-                : null
+            $route,
+            (float) $data['pickup_lat'],
+            (float) $data['pickup_lng'],
         );
 
         $ride = Ride::create(array_merge($data, [
             'passenger_id'    => $user->id,
             'status'          => 'requested',
             'fare'            => $fareResult['total'],
-            'surge_multiplier'=> $fareResult['multiplier'],
-            'surge_zone_id'   => $fareResult['zone']?->id,
+            'surge_multiplier'=> $fareResult['surge_multiplier'],
+            'surge_zone_id'   => $fareResult['surge_zone']['id'] ?? null,
         ]));
 
         $ride->load('driver', 'vehicle');
@@ -171,26 +175,53 @@ class RideController extends ApiController
     /**
      * POST /v1/rides/estimate
      *
-     * Body: distance?, service_type?, pickup_lat?, pickup_lng?
+     * Returns fare estimates for ALL service types (like Grab's bottom sheet).
+     *
+     * Body:
+     *   pickup_lat, pickup_lng   required  Pickup coordinates
+     *   dropoff_lat, dropoff_lng required  Dropoff coordinates
+     *   service_type             optional  Return single type only
      */
     public function estimate(Request $request)
     {
         $data = $request->validate([
-            'distance'     => 'nullable|numeric|min:0',
-            'service_type' => 'nullable|in:standard,premium,shared',
-            'pickup_lat'   => 'nullable|numeric|between:-90,90',
-            'pickup_lng'   => 'nullable|numeric|between:-180,180',
+            'pickup_lat'   => 'required|numeric|between:-90,90',
+            'pickup_lng'   => 'required|numeric|between:-180,180',
+            'dropoff_lat'  => 'required|numeric|between:-90,90',
+            'dropoff_lng'  => 'required|numeric|between:-180,180',
+            'service_type' => 'nullable|in:motorcycle,tuk_tuk,standard,premium,shared,van',
         ]);
 
-        $fareResult = $this->calculateFare(
-            $data['service_type'] ?? 'standard',
-            (float) ($data['distance'] ?? 5),
-            isset($data['pickup_lat'], $data['pickup_lng'])
-                ? [(float) $data['pickup_lat'], (float) $data['pickup_lng']]
-                : null
+        $route = $this->fare->getRoute(
+            (float) $data['pickup_lat'],  (float) $data['pickup_lng'],
+            (float) $data['dropoff_lat'], (float) $data['dropoff_lng'],
         );
 
-        return $this->success(['estimate' => $fareResult]);
+        // Single type or all types.
+        if (! empty($data['service_type'])) {
+            $fares = $this->fare->calculateRideFare(
+                $data['service_type'], $route,
+                (float) $data['pickup_lat'], (float) $data['pickup_lng'],
+            );
+        } else {
+            $fares = $this->fare->allRideFares(
+                $route,
+                (float) $data['pickup_lat'],
+                (float) $data['pickup_lng'],
+            );
+        }
+
+        return $this->success([
+            'route'  => [
+                'distance_km'   => $route['distance_km'],
+                'duration_min'  => $route['duration_min'],
+                'distance_text' => $route['distance_text'],
+                'duration_text' => $route['duration_text'],
+                'source'        => $route['source'],
+            ],
+            'fares'  => $fares,
+            'currency' => 'KHR',
+        ]);
     }
 
     public function nearbyDrivers(Request $request)
@@ -243,57 +274,6 @@ class RideController extends ApiController
     }
 
     // ── Fare Calculation ──────────────────────────────────────────────────────
-
-    /**
-     * Calculate ride fare with optional surge zone pricing.
-     *
-     * Formula: (base + per_km × max(1, distance)) × surge_multiplier
-     * Rounded up to nearest 100 ៛.
-     *
-     * @param  array<float>|null  $latLng  [lat, lng] of pickup; null = no surge check
-     * @return array{base: int, multiplier: float, surge_amount: int, total: int, zone: ?SurgeZone, breakdown: array}
-     */
-    protected function calculateFare(string $serviceType, float $distance = 5, ?array $latLng = null): array
-    {
-        [$base, $perKm] = match ($serviceType) {
-            'premium' => [
-                config('delivery.ride_base_premium',  8000),
-                config('delivery.ride_perkm_premium', 3000),
-            ],
-            'shared'  => [
-                config('delivery.ride_base_shared',  2500),
-                config('delivery.ride_perkm_shared', 1000),
-            ],
-            default   => [
-                config('delivery.ride_base_standard',  4000),
-                config('delivery.ride_perkm_standard', 1500),
-            ],
-        };
-
-        $baseFare = (int) ($base + ($perKm * max(1, $distance)));
-
-        if ($latLng) {
-            $result = $this->surge->applyTo($baseFare, $latLng[0], $latLng[1], 'rides');
-        } else {
-            $result = [
-                'base'         => $baseFare,
-                'multiplier'   => 1.0,
-                'surge_amount' => 0,
-                'total'        => (int) (ceil($baseFare / 100) * 100),
-                'zone'         => null,
-            ];
-        }
-
-        $result['breakdown'] = [
-            'service_type' => $serviceType,
-            'base_fee'     => $base,
-            'distance_km'  => $distance,
-            'per_km_rate'  => $perKm,
-            'fare_before_surge' => $baseFare,
-        ];
-
-        return $result;
-    }
 
     protected function authUserOrFail(Request $request)
     {

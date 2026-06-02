@@ -214,6 +214,12 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ route('admin.ride-pricing') }}" class="nav-link {{ request()->routeIs('admin.ride-pricing') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-tags"></i>
+                            <p>Ride Pricing</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ route('admin.chat') }}" class="nav-link {{ request()->routeIs('admin.chat') ? 'active' : '' }}">
                             <i class="nav-icon fas fa-comments"></i>
                             <p>Chat Testing</p>

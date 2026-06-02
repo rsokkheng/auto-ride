@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
 use App\Models\ChargingStation;
+use App\Models\PricingSetting;
+use App\Models\RidePricing;
+use App\Services\FareService;
 use App\Models\Company;
 use App\Models\Delivery;
 use App\Models\MarketplaceItem;
@@ -549,6 +552,58 @@ class AdminController extends Controller
     {
         $item->delete();
         return redirect()->route('admin.marketplace')->with('success', 'Item deleted.');
+    }
+
+    // ─── Ride Pricing ────────────────────────────────────────────────────────
+
+    public function ridePricing()
+    {
+        return view('admin.ride-pricing', [
+            'pricing'  => RidePricing::orderBy('id')->get(),
+            'settings' => PricingSetting::orderBy('key')->get()->keyBy('key'),
+        ]);
+    }
+
+    public function updateRidePricing(Request $request, RidePricing $pricing)
+    {
+        $data = $request->validate([
+            'label'       => 'required|string|max:100',
+            'icon'        => 'required|string|max:50',
+            'base'        => 'required|integer|min:0',
+            'per_km'      => 'required|integer|min:0',
+            'per_min'     => 'required|integer|min:0',
+            'booking_fee' => 'required|integer|min:0',
+            'minimum'     => 'required|integer|min:0',
+            'capacity'    => 'required|integer|min:1|max:20',
+            'active'      => 'boolean',
+        ]);
+
+        $data['active'] = $request->boolean('active');
+        $pricing->update($data);
+
+        FareService::clearCache();
+
+        return redirect()->route('admin.ride-pricing')
+            ->with('success', "Pricing for \"{$pricing->label}\" updated.");
+    }
+
+    public function updatePricingSettings(Request $request)
+    {
+        $data = $request->validate([
+            'night_surcharge_rate'           => 'required|numeric|min:0|max:1',
+            'delivery_night_surcharge_rate'  => 'required|numeric|min:0|max:1',
+            'avg_city_speed_kmh'             => 'required|integer|min:5|max:120',
+            'traffic_speed_threshold_kmh'    => 'required|integer|min:5|max:60',
+        ]);
+
+        foreach ($data as $key => $value) {
+            PricingSetting::set($key, $value);
+        }
+
+        FareService::clearCache();
+
+        return redirect()->route('admin.ride-pricing')
+            ->with('success', 'Global pricing settings saved.');
     }
 
     // ─── Admin Chat ──────────────────────────────────────────────────────────

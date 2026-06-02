@@ -45,6 +45,7 @@ Route::prefix('v1')->group(function () {
 
     Route::get('rides', [RideController::class, 'index']);
     Route::get('rides/available', [RideController::class, 'available']);
+    Route::post('rides/estimate', [RideController::class, 'estimate']);
     Route::post('rides', [RideController::class, 'store']);
     Route::get('rides/{ride}', [RideController::class, 'show']);
     Route::post('rides/{ride}/accept', [RideController::class, 'accept']);

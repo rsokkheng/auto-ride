@@ -47,6 +47,11 @@ Route::prefix('admin')->group(function () {
     Route::put('marketplace/{item}', [AdminController::class, 'updateMarketplace'])->name('admin.marketplace.update');
     Route::delete('marketplace/{item}', [AdminController::class, 'destroyMarketplace'])->name('admin.marketplace.destroy');
 
+    // Ride Pricing
+    Route::get('ride-pricing', [AdminController::class, 'ridePricing'])->name('admin.ride-pricing');
+    Route::put('ride-pricing/{pricing}', [AdminController::class, 'updateRidePricing'])->name('admin.ride-pricing.update');
+    Route::post('ride-pricing/settings', [AdminController::class, 'updatePricingSettings'])->name('admin.ride-pricing.settings');
+
     // Admin Chat
     Route::get('chat', [AdminController::class, 'adminChat'])->name('admin.chat');
     Route::get('chat/{conversation}/messages', [AdminController::class, 'adminChatMessages'])->name('admin.chat.messages');

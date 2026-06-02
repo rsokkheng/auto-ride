@@ -5,16 +5,16 @@ namespace App\Http\Controllers\Api;
 use App\Models\Delivery;
 use App\Models\Vehicle;
 use App\Services\DriverMatchingService;
+use App\Services\FareService;
 use App\Services\FirestoreService;
 use App\Services\PaymentService;
-use App\Services\SurgeZoneService;
 use Illuminate\Http\Request;
 
 class DeliveryController extends ApiController
 {
     public function __construct(
         private DriverMatchingService $matcher,
-        private SurgeZoneService $surge,
+        private FareService $fare,
         private FirestoreService $firestore,
     ) {}
 
@@ -259,51 +259,41 @@ class DeliveryController extends ApiController
     /**
      * POST /v1/deliveries/estimate
      *
-     * Body: distance?, package_size?, pickup_lat?, pickup_lng?
-     * Returns fee breakdown including any active surge multiplier.
+     * Body:
+     *   pickup_lat, pickup_lng   required
+     *   dropoff_lat, dropoff_lng required
+     *   package_size             optional (small|medium|large, default: small)
      */
     public function estimate(Request $request)
     {
         $data = $request->validate([
-            'distance'     => 'nullable|numeric|min:0',
+            'pickup_lat'   => 'required|numeric|between:-90,90',
+            'pickup_lng'   => 'required|numeric|between:-180,180',
+            'dropoff_lat'  => 'required|numeric|between:-90,90',
+            'dropoff_lng'  => 'required|numeric|between:-180,180',
             'package_size' => 'nullable|in:small,medium,large',
-            'pickup_lat'   => 'nullable|numeric|between:-90,90',
-            'pickup_lng'   => 'nullable|numeric|between:-180,180',
         ]);
 
-        $distance  = (float) ($data['distance'] ?? 5);
-        $size      = $data['package_size'] ?? 'small';
-        $base      = config('delivery.fee_base', 3000);
-        $perKm     = config('delivery.fee_per_km', 1200);
-        $surcharge = config("delivery.fee_surcharge_{$size}", 0);
-        $baseFee   = (int) ($base + ($perKm * max(1, $distance)) + $surcharge);
-
-        if (isset($data['pickup_lat'], $data['pickup_lng'])) {
-            $result = $this->surge->applyTo($baseFee, (float) $data['pickup_lat'], (float) $data['pickup_lng'], 'deliveries');
-        } else {
-            $result = [
-                'base'         => $baseFee,
-                'multiplier'   => 1.0,
-                'surge_amount' => 0,
-                'total'        => (int) (ceil($baseFee / 100) * 100),
-                'zone'         => null,
-            ];
-        }
+        $route  = $this->fare->getRoute(
+            (float) $data['pickup_lat'],  (float) $data['pickup_lng'],
+            (float) $data['dropoff_lat'], (float) $data['dropoff_lng'],
+        );
+        $result = $this->fare->calculateDeliveryFare(
+            $data['package_size'] ?? 'small',
+            $route,
+            (float) $data['pickup_lat'],
+            (float) $data['pickup_lng'],
+        );
 
         return $this->success([
-            'estimated_fee' => $result['total'],
-            'currency'      => 'KHR',
-            'surge_active'  => $result['multiplier'] > 1.0,
-            'multiplier'    => $result['multiplier'],
-            'surge_amount'  => $result['surge_amount'],
-            'surge_zone'    => $result['zone'] ? ['id' => $result['zone']->id, 'name' => $result['zone']->name] : null,
-            'breakdown'     => [
-                'base_fee'          => $base,
-                'distance_km'       => $distance,
-                'per_km_rate'       => $perKm,
-                'surcharge'         => $surcharge,
-                'fee_before_surge'  => $baseFee,
+            'route' => [
+                'distance_km'   => $route['distance_km'],
+                'duration_min'  => $route['duration_min'],
+                'distance_text' => $route['distance_text'],
+                'duration_text' => $route['duration_text'],
+                'source'        => $route['source'],
             ],
+            'fare' => $result,
         ]);
     }
 
