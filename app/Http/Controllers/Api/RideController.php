@@ -113,16 +113,32 @@ class RideController extends ApiController
         $user = $this->authUser($request);
         if (! $user || $user->role !== 'driver') return $this->unauthorized();
 
-        if ($ride->driver_id && $ride->driver_id !== $user->id) {
-            return response()->json(['message' => 'Ride already claimed'], 422);
+        // Only accept rides that are still open.
+        if (! in_array($ride->status, ['requested', 'pending'], true)) {
+            return response()->json([
+                'message' => "Ride cannot be accepted — current status is \"{$ride->status}\".",
+            ], 422);
         }
 
-        $ride->update(['driver_id' => $user->id, 'status' => 'accepted']);
+        // Block if another driver already claimed it.
+        if ($ride->driver_id && $ride->driver_id !== $user->id) {
+            return response()->json(['message' => 'Ride already claimed by another driver.'], 422);
+        }
 
-        $fresh = $ride->fresh()->load('driver', 'vehicle');
+        $ride->update([
+            'driver_id' => $user->id,
+            'status'    => 'accepted',
+        ]);
+
+        $fresh = $ride->fresh()->load('passenger', 'driver', 'vehicle');
+
+        // Sync booking + driver location to Firestore — Flutter passenger listens here.
         $this->firestore->syncRide($fresh);
 
-        return $this->success(['ride' => $fresh]);
+        return $this->success([
+            'ride'    => $fresh,
+            'message' => 'Ride accepted. Head to pickup location.',
+        ]);
     }
 
     public function complete(Request $request, Ride $ride)

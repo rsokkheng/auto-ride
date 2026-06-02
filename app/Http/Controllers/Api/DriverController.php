@@ -6,12 +6,90 @@ use App\Models\Delivery;
 use App\Models\Ride;
 use App\Models\RideLocation;
 use App\Models\Vehicle;
+use App\Services\DriverMatchingService;
 use App\Services\FirestoreService;
+use App\Services\SurgeZoneService;
 use Illuminate\Http\Request;
 
 class DriverController extends ApiController
 {
-    public function __construct(private FirestoreService $firestore) {}
+    public function __construct(
+        private FirestoreService $firestore,
+        private DriverMatchingService $matcher,
+        private SurgeZoneService $surge,
+    ) {}
+
+    /**
+     * GET /v1/drivers/nearby
+     *
+     * Returns available drivers near a location for map display.
+     *
+     * Query params:
+     *   lat      float  required  Passenger/user latitude
+     *   lng      float  required  Passenger/user longitude
+     *   type     string optional  rides | deliveries | both  (default: both)
+     *   radius   float  optional  Search radius in km (default: config)
+     *   limit    int    optional  Max results (default: 20, max: 50)
+     */
+    public function nearby(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
+        $data = $request->validate([
+            'lat'    => 'required|numeric|between:-90,90',
+            'lng'    => 'required|numeric|between:-180,180',
+            'type'   => 'nullable|in:rides,deliveries,both',
+            'radius' => 'nullable|numeric|min:0.5|max:100',
+            'limit'  => 'nullable|integer|min:1|max:50',
+        ]);
+
+        $lat    = (float) $data['lat'];
+        $lng    = (float) $data['lng'];
+        $type   = $data['type'] ?? 'both';
+        $radius = isset($data['radius']) ? (float) $data['radius'] : null;
+        $limit  = (int) ($data['limit'] ?? 20);
+
+        // Check if pickup location is in a surge zone.
+        $surgeZone       = $this->surge->getActiveZone($lat, $lng, $type === 'both' ? 'both' : $type);
+        $surgeMultiplier = $surgeZone ? $surgeZone->multiplier : 1.0;
+
+        $drivers = $this->matcher->findDrivers($lat, $lng, $limit, $radius);
+
+        $result = $drivers->map(fn($driver) => [
+            'id'              => $driver->id,
+            'name'            => $driver->name,
+            'phone'           => $driver->phone,
+            'avatar_url'      => $driver->avatar_url,
+            'rating'          => round((float) $driver->rating, 1),
+            'total_ratings'   => (int) $driver->total_ratings,
+            'distance_km'     => $driver->distance_km,
+            'eta_minutes'     => $driver->eta_minutes,
+            'distance_source' => $driver->distance_source,
+            'lat'             => $driver->current_latitude  ? (float) $driver->current_latitude  : null,
+            'lng'             => $driver->current_longitude ? (float) $driver->current_longitude : null,
+            'vehicle'         => $driver->vehicles->first() ? [
+                'id'            => $driver->vehicles->first()->id,
+                'make'          => $driver->vehicles->first()->make,
+                'model'         => $driver->vehicles->first()->model,
+                'year'          => $driver->vehicles->first()->year,
+                'type'          => $driver->vehicles->first()->type,
+                'license_plate' => $driver->vehicles->first()->license_plate,
+                'primary_image' => $driver->vehicles->first()->primary_image_url,
+            ] : null,
+        ]);
+
+        return $this->success([
+            'drivers'          => $result,
+            'total'            => $result->count(),
+            'search_radius_km' => $radius ?? config('delivery.match_radius_km', 30),
+            'surge'            => [
+                'active'     => $surgeMultiplier > 1.0,
+                'multiplier' => $surgeMultiplier,
+                'zone'       => $surgeZone ? ['id' => $surgeZone->id, 'name' => $surgeZone->name] : null,
+            ],
+        ]);
+    }
 
     public function status(Request $request)
     {

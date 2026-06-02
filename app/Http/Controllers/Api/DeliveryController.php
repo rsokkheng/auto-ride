@@ -208,13 +208,18 @@ class DeliveryController extends ApiController
     public function accept(Request $request, Delivery $delivery)
     {
         $user = $this->authUser($request);
+        if (! $user || $user->role !== 'driver') return $this->unauthorized();
 
-        if (! $user || $user->role !== 'driver') {
-            return $this->unauthorized();
+        // Only accept deliveries that are still open.
+        if (! in_array($delivery->status, ['requested', 'pending'], true)) {
+            return response()->json([
+                'message' => "Delivery cannot be accepted — current status is \"{$delivery->status}\".",
+            ], 422);
         }
 
+        // Block if another driver already claimed it.
         if ($delivery->driver_id && $delivery->driver_id !== $user->id) {
-            return response()->json(['message' => 'Delivery already claimed'], 422);
+            return response()->json(['message' => 'Delivery already claimed by another driver.'], 422);
         }
 
         $delivery->update([
@@ -224,9 +229,14 @@ class DeliveryController extends ApiController
         ]);
 
         $fresh = $delivery->fresh()->load('sender', 'driver', 'vehicle');
+
+        // Sync booking to Firestore — Flutter sender listens here.
         $this->firestore->syncDelivery($fresh);
 
-        return $this->success(['delivery' => $fresh]);
+        return $this->success([
+            'delivery' => $fresh,
+            'message'  => 'Delivery accepted. Head to pickup location.',
+        ]);
     }
 
     // ── Fee Estimate ────────────────────────────────────────────────────────

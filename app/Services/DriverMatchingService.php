@@ -26,13 +26,15 @@ class DriverMatchingService
      * Score = distance_km * distanceWeight + (5.0 - rating) * ratingWeight
      * Lower score = better match.
      */
-    public function findDrivers(float $pickupLat, float $pickupLng, int $limit = 10): Collection
+    public function findDrivers(float $pickupLat, float $pickupLng, int $limit = 10, ?float $radiusKm = null): Collection
     {
+        $radius = $radiusKm ?? $this->radiusKm;
+
         $drivers = User::where('role', 'driver')
             ->where('available', true)
             ->whereNotNull('current_latitude')
             ->whereNotNull('current_longitude')
-            ->with(['vehicles' => fn($q) => $q->where('status', 'active')])
+            ->with(['vehicles' => fn($q) => $q->where('status', 'active')->latest()->limit(1)])
             ->get();
 
         if ($drivers->isEmpty()) {
@@ -51,8 +53,9 @@ class DriverMatchingService
                         $pickupLng
                     );
 
-                $driver->distance_km   = round($distanceKm, 2);
-                $driver->score         = round(
+                $driver->distance_km     = round($distanceKm, 2);
+                $driver->eta_minutes     = (int) ceil(($distanceKm / 30) * 60); // avg 30 km/h city speed
+                $driver->score           = round(
                     $distanceKm * $this->distanceWeight + (5.0 - (float) $driver->rating) * $this->ratingWeight,
                     4
                 );
@@ -60,7 +63,7 @@ class DriverMatchingService
 
                 return $driver;
             })
-            ->filter(fn(User $d) => $d->distance_km <= $this->radiusKm)
+            ->filter(fn(User $d) => $d->distance_km <= $radius)
             ->sortBy('score')
             ->take($limit)
             ->values();

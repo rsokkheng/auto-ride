@@ -109,6 +109,8 @@ Route::prefix('v1')->group(function () {
     Route::get('wallet/topup/{topup}', [WalletController::class, 'topUpStatus']);
     Route::post('wallet/withdraw', [WalletController::class, 'requestWithdrawal']);
 
+    Route::get('drivers/nearby', [DriverController::class, 'nearby']);
+
     Route::get('driver/status', [DriverController::class, 'status']);
     Route::post('driver/availability', [DriverController::class, 'setAvailability']);
     Route::post('driver/go-online', [DriverController::class, 'goOnline']);
