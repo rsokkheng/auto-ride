@@ -300,15 +300,24 @@ class FirestoreService
         }
     }
 
+    /**
+     * Partial field update using Firestore updateMask.
+     * Each field path must be a separate query param — NOT comma-joined.
+     * e.g. ?updateMask.fieldPaths=driver.lat&updateMask.fieldPaths=driver.lng
+     */
     private function patch(string $collection, string $docId, array $data): void
     {
         $projectId = $this->projectId();
         $token     = $this->token();
         if (! $projectId || ! $token) return;
 
-        $fieldPaths = implode(',', array_map(fn($k) => urlencode($k), array_keys($data)));
+        // Build query string with one updateMask.fieldPaths param per field.
+        $query = collect(array_keys($data))
+            ->map(fn($k) => 'updateMask.fieldPaths=' . rawurlencode($k))
+            ->implode('&');
+
         $url = "https://firestore.googleapis.com/v1/projects/{$projectId}/databases/(default)/documents"
-             . "/{$collection}/{$docId}?updateMask.fieldPaths={$fieldPaths}";
+             . "/{$collection}/{$docId}?{$query}";
 
         try {
             Http::withToken($token)
@@ -334,9 +343,23 @@ class FirestoreService
             is_bool($value)   => ['booleanValue' => $value],
             is_int($value)    => ['integerValue'  => (string) $value],
             is_float($value)  => ['doubleValue'   => $value],
-            is_string($value) => ['stringValue'   => $value],
+            is_string($value) => ['stringValue'   => $this->sanitizeString($value)],
             is_array($value)  => ['mapValue'      => ['fields' => $this->toFirestoreFields($value)]],
-            default           => ['stringValue'   => (string) $value],
+            default           => ['stringValue'   => $this->sanitizeString((string) $value)],
         };
+    }
+
+    /**
+     * Strip control characters and ensure valid UTF-8.
+     * Firestore REST API rejects strings with ASCII control chars (0x00–0x1F)
+     * except tab (0x09), newline (0x0A), and carriage return (0x0D).
+     */
+    private function sanitizeString(string $value): string
+    {
+        // Remove disallowed control characters.
+        $value = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $value);
+
+        // Ensure the string is valid UTF-8 (replace invalid sequences with ?).
+        return mb_convert_encoding($value, 'UTF-8', 'UTF-8') ?: '';
     }
 }
