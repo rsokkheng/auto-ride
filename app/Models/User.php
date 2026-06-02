@@ -36,10 +36,18 @@ class User extends Authenticatable
         ];
     }
 
+    protected $appends = ['avatar_url', 'photo_url'];
+
     /** Full public URL for the profile avatar, or null if not set. */
     public function getAvatarUrlAttribute(): ?string
     {
         return $this->avatar ? asset('storage/' . $this->avatar) : null;
+    }
+
+    /** Alias for avatar_url — used by driver profile responses. */
+    public function getPhotoUrlAttribute(): ?string
+    {
+        return $this->avatar_url;
     }
 
     public function vehicles(): HasMany

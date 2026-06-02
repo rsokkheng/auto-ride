@@ -110,29 +110,45 @@ class FirestoreService
     {
         $driver = $ride->driver;
 
-        // Note: address strings are intentionally excluded — they may contain
-        // Unicode (Khmer etc.) that trips google/protobuf interceptors.
-        // Flutter fetches full booking details via GET /v1/rides/{id}.
+        // event_type lets Flutter switch screens without polling.
+        $eventType = match ($ride->status) {
+            'accepted'       => 'ride.accepted',
+            'driver_arrived' => 'ride.driver_arrived',
+            'in_progress'    => 'ride.started',
+            'completed'      => 'ride.completed',
+            'cancelled'      => 'ride.cancelled',
+            default          => 'ride.updated',
+        };
+
+        // Note: address strings excluded — may contain Khmer/Unicode that trips
+        // google/protobuf interceptors. Flutter uses GET /v1/rides/{id} for those.
         $this->set(self::C_BOOKINGS, 'ride_' . $ride->id, [
-            'type'             => 'ride',
-            'id'               => $ride->id,
-            'status'           => $ride->status,
-            'passenger_id'     => $ride->passenger_id,
-            'driver_id'        => $ride->driver_id,
-            'pickup_lat'       => $ride->pickup_lat   ? (float) $ride->pickup_lat   : null,
-            'pickup_lng'       => $ride->pickup_lng   ? (float) $ride->pickup_lng   : null,
-            'dropoff_lat'      => $ride->dropoff_lat  ? (float) $ride->dropoff_lat  : null,
-            'dropoff_lng'      => $ride->dropoff_lng  ? (float) $ride->dropoff_lng  : null,
-            'fare'             => $ride->fare,
-            'service_type'     => $ride->service_type,
-            'surge_multiplier' => (float) ($ride->surge_multiplier ?? 1.0),
-            'driver'           => $driver ? [
+            'type'              => 'ride',
+            'event_type'        => $eventType,
+            'id'                => $ride->id,
+            'status'            => $ride->status,
+            'passenger_id'      => $ride->passenger_id,
+            'driver_id'         => $ride->driver_id,
+            'pickup_lat'        => $ride->pickup_lat  ? (float) $ride->pickup_lat  : null,
+            'pickup_lng'        => $ride->pickup_lng  ? (float) $ride->pickup_lng  : null,
+            'dropoff_lat'       => $ride->dropoff_lat ? (float) $ride->dropoff_lat : null,
+            'dropoff_lng'       => $ride->dropoff_lng ? (float) $ride->dropoff_lng : null,
+            'fare'              => $ride->fare,
+            'service_type'      => $ride->service_type,
+            'surge_multiplier'  => (float) ($ride->surge_multiplier ?? 1.0),
+            // Status timestamps — Flutter uses these for UI timeline display.
+            'accepted_at'       => $ride->accepted_at?->toIso8601String(),
+            'driver_arrived_at' => $ride->driver_arrived_at?->toIso8601String(),
+            'started_at'        => $ride->started_at?->toIso8601String(),
+            'completed_at'      => $ride->completed_at?->toIso8601String(),
+            'cancelled_at'      => $ride->cancelled_at?->toIso8601String(),
+            'driver'            => $driver ? [
                 'id'      => $driver->id,
                 'lat'     => $driver->current_latitude  ? (float) $driver->current_latitude  : null,
                 'lng'     => $driver->current_longitude ? (float) $driver->current_longitude : null,
                 'heading' => null,
             ] : null,
-            'updated_at'       => now()->toIso8601String(),
+            'updated_at'        => now()->toIso8601String(),
         ]);
     }
 

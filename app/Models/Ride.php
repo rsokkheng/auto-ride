@@ -11,6 +11,25 @@ class Ride extends Model
 {
     use HasFactory;
 
+    // ── Status constants ───────────────────────────────────────────────────────
+    const STATUS_REQUESTED      = 'requested';
+    const STATUS_ACCEPTED       = 'accepted';
+    const STATUS_DRIVER_ARRIVED = 'driver_arrived';
+    const STATUS_IN_PROGRESS    = 'in_progress';
+    const STATUS_COMPLETED      = 'completed';
+    const STATUS_CANCELLED      = 'cancelled';
+
+    /** Statuses a driver can still accept. */
+    const OPEN_STATUSES = [self::STATUS_REQUESTED, 'pending'];
+
+    /** Statuses that allow cancellation. */
+    const CANCELLABLE_STATUSES = [
+        self::STATUS_REQUESTED,
+        'pending',
+        self::STATUS_ACCEPTED,
+        self::STATUS_DRIVER_ARRIVED,
+    ];
+
     protected $fillable = [
         'passenger_id',
         'driver_id',
@@ -26,23 +45,36 @@ class Ride extends Model
         'fare',
         'surge_multiplier',
         'surge_zone_id',
+        'surge_accepted',
         'payment_method',
         'payment_status',
         'service_type',
         'notes',
         'rating',
         'rating_comment',
+        // Status timestamps
+        'accepted_at',
+        'driver_arrived_at',
+        'started_at',
+        'completed_at',
+        'cancelled_at',
     ];
 
     protected $casts = [
-        'scheduled_at'    => 'datetime',
-        'fare'            => 'integer',
-        'rating'          => 'float',
-        'pickup_lat'      => 'float',
-        'pickup_lng'      => 'float',
-        'dropoff_lat'     => 'float',
-        'dropoff_lng'     => 'float',
-        'surge_multiplier'=> 'float',
+        'scheduled_at'      => 'datetime',
+        'accepted_at'       => 'datetime',
+        'driver_arrived_at' => 'datetime',
+        'started_at'        => 'datetime',
+        'completed_at'      => 'datetime',
+        'cancelled_at'      => 'datetime',
+        'fare'              => 'integer',
+        'rating'            => 'float',
+        'pickup_lat'        => 'float',
+        'pickup_lng'        => 'float',
+        'dropoff_lat'       => 'float',
+        'dropoff_lng'       => 'float',
+        'surge_multiplier'  => 'float',
+        'surge_accepted'    => 'boolean',
     ];
 
     public function passenger(): BelongsTo

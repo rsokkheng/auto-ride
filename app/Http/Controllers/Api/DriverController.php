@@ -263,6 +263,50 @@ class DriverController extends ApiController
         return $this->success(['vehicle' => $vehicle]);
     }
 
+    /**
+     * GET /v1/drivers/{driver}
+     * Public driver profile with stats for the passenger-facing UI.
+     */
+    public function profile(Request $request, \App\Models\User $driver)
+    {
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
+        if ($driver->role !== 'driver') {
+            return response()->json(['data' => null, 'message' => 'User is not a driver.'], 404);
+        }
+
+        $driver->load(['vehicles' => fn($q) => $q->where('status', 'active')->latest()->limit(1)]);
+        $vehicle = $driver->vehicles->first();
+
+        $totalTrips = Ride::where('driver_id', $driver->id)
+            ->where('status', Ride::STATUS_COMPLETED)
+            ->count();
+
+        return $this->success([
+            'driver' => [
+                'id'          => $driver->id,
+                'name'        => $driver->name,
+                'phone'       => $driver->phone,
+                'photo_url'   => $driver->avatar_url,
+                'rating'      => round((float) $driver->rating, 1),
+                'total_trips' => $totalTrips,
+                'available'   => (bool) $driver->available,
+                'lat'         => $driver->current_latitude  ? (float) $driver->current_latitude  : null,
+                'lng'         => $driver->current_longitude ? (float) $driver->current_longitude : null,
+                'vehicle'     => $vehicle ? [
+                    'id'            => $vehicle->id,
+                    'make'          => $vehicle->make,
+                    'model'         => $vehicle->model,
+                    'year'          => $vehicle->year,
+                    'type'          => $vehicle->type,
+                    'license_plate' => $vehicle->license_plate,
+                    'primary_image' => $vehicle->primary_image_url,
+                ] : null,
+            ],
+        ]);
+    }
+
     public function tasks(Request $request)
     {
         $user = $this->authUser($request);

@@ -43,15 +43,22 @@ Route::prefix('v1')->group(function () {
     Route::post('marketplace', [MarketplaceController::class, 'store']);
     Route::post('marketplace/{item}/purchase', [MarketplaceController::class, 'purchase']);
 
+    // Static ride routes — must come before {ride} wildcard.
     Route::get('rides', [RideController::class, 'index']);
     Route::get('rides/available', [RideController::class, 'available']);
+    Route::get('rides/active', [RideController::class, 'active']);
     Route::post('rides/estimate', [RideController::class, 'estimate']);
     Route::post('rides', [RideController::class, 'store']);
+
+    // Parameterised ride routes.
     Route::get('rides/{ride}', [RideController::class, 'show']);
     Route::post('rides/{ride}/accept', [RideController::class, 'accept']);
+    Route::post('rides/{ride}/arrive', [RideController::class, 'arrive']);
+    Route::post('rides/{ride}/start', [RideController::class, 'start']);
     Route::post('rides/{ride}/complete', [RideController::class, 'complete']);
     Route::post('rides/{ride}/cancel', [RideController::class, 'cancel']);
     Route::post('rides/{ride}/rate', [RideController::class, 'rate']);
+    Route::post('rides/{ride}/dispute', [RideController::class, 'dispute']);
 
     // Static delivery routes must come before {delivery} wildcard routes.
     Route::get('deliveries/available', [DeliveryController::class, 'available']);
@@ -111,6 +118,7 @@ Route::prefix('v1')->group(function () {
     Route::post('wallet/withdraw', [WalletController::class, 'requestWithdrawal']);
 
     Route::get('drivers/nearby', [DriverController::class, 'nearby']);
+    Route::get('drivers/{driver}', [DriverController::class, 'profile']);
 
     Route::get('driver/status', [DriverController::class, 'status']);
     Route::post('driver/availability', [DriverController::class, 'setAvailability']);
