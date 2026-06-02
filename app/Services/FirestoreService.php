@@ -110,24 +110,29 @@ class FirestoreService
     {
         $driver = $ride->driver;
 
+        // Note: address strings are intentionally excluded — they may contain
+        // Unicode (Khmer etc.) that trips google/protobuf interceptors.
+        // Flutter fetches full booking details via GET /v1/rides/{id}.
         $this->set(self::C_BOOKINGS, 'ride_' . $ride->id, [
-            'type'            => 'ride',
-            'id'              => $ride->id,
-            'status'          => $ride->status,
-            'passenger_id'    => $ride->passenger_id,
-            'driver_id'       => $ride->driver_id,
-            'pickup_address'  => $ride->pickup_address,
-            'dropoff_address' => $ride->dropoff_address,
-            'fare'            => $ride->fare,
-            'surge_multiplier'=> (float) ($ride->surge_multiplier ?? 1.0),
-            'driver'          => $driver ? [
+            'type'             => 'ride',
+            'id'               => $ride->id,
+            'status'           => $ride->status,
+            'passenger_id'     => $ride->passenger_id,
+            'driver_id'        => $ride->driver_id,
+            'pickup_lat'       => $ride->pickup_lat   ? (float) $ride->pickup_lat   : null,
+            'pickup_lng'       => $ride->pickup_lng   ? (float) $ride->pickup_lng   : null,
+            'dropoff_lat'      => $ride->dropoff_lat  ? (float) $ride->dropoff_lat  : null,
+            'dropoff_lng'      => $ride->dropoff_lng  ? (float) $ride->dropoff_lng  : null,
+            'fare'             => $ride->fare,
+            'service_type'     => $ride->service_type,
+            'surge_multiplier' => (float) ($ride->surge_multiplier ?? 1.0),
+            'driver'           => $driver ? [
                 'id'      => $driver->id,
-                'name'    => $driver->name,
-                'phone'   => $driver->phone,
                 'lat'     => $driver->current_latitude  ? (float) $driver->current_latitude  : null,
                 'lng'     => $driver->current_longitude ? (float) $driver->current_longitude : null,
+                'heading' => null,
             ] : null,
-            'updated_at'      => now()->toIso8601String(),
+            'updated_at'       => now()->toIso8601String(),
         ]);
     }
 
@@ -154,26 +159,24 @@ class FirestoreService
         $driver = $delivery->driver;
 
         $this->set(self::C_BOOKINGS, 'delivery_' . $delivery->id, [
-            'type'            => 'delivery',
-            'id'              => $delivery->id,
-            'status'          => $delivery->status,
-            'sender_id'       => $delivery->sender_id,
-            'driver_id'       => $delivery->driver_id,
-            'recipient_name'  => $delivery->recipient_name,
-            'recipient_phone' => $delivery->recipient_phone,
-            'pickup_address'  => $delivery->pickup_address,
-            'dropoff_address' => $delivery->dropoff_address,
-            'fee'             => $delivery->fee,
-            'surge_multiplier'=> (float) ($delivery->surge_multiplier ?? 1.0),
-            'assigned_at'     => $delivery->assigned_at?->toIso8601String(),
-            'driver'          => $driver ? [
+            'type'             => 'delivery',
+            'id'               => $delivery->id,
+            'status'           => $delivery->status,
+            'sender_id'        => $delivery->sender_id,
+            'driver_id'        => $delivery->driver_id,
+            'pickup_lat'       => $delivery->pickup_lat  ? (float) $delivery->pickup_lat  : null,
+            'pickup_lng'       => $delivery->pickup_lng  ? (float) $delivery->pickup_lng  : null,
+            'fee'              => $delivery->fee,
+            'package_size'     => $delivery->package_size,
+            'surge_multiplier' => (float) ($delivery->surge_multiplier ?? 1.0),
+            'assigned_at'      => $delivery->assigned_at?->toIso8601String(),
+            'driver'           => $driver ? [
                 'id'      => $driver->id,
-                'name'    => $driver->name,
-                'phone'   => $driver->phone,
                 'lat'     => $driver->current_latitude  ? (float) $driver->current_latitude  : null,
                 'lng'     => $driver->current_longitude ? (float) $driver->current_longitude : null,
+                'heading' => null,
             ] : null,
-            'updated_at'      => now()->toIso8601String(),
+            'updated_at'       => now()->toIso8601String(),
         ]);
     }
 
@@ -290,11 +293,15 @@ class FirestoreService
         $token     = $this->token();
         if (! $projectId || ! $token) return;
 
-        $url = "https://firestore.googleapis.com/v1/projects/{$projectId}/databases/(default)/documents/{$collection}/{$docId}";
+        $url  = "https://firestore.googleapis.com/v1/projects/{$projectId}/databases/(default)/documents/{$collection}/{$docId}";
+        // Encode JSON ourselves — prevents google/gax protobuf interceptors from
+        // touching the body and rejecting Unicode characters like Khmer script.
+        $body = json_encode(['fields' => $this->toFirestoreFields($data)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         try {
             Http::withToken($token)
-                ->patch($url, ['fields' => $this->toFirestoreFields($data)]);
+                ->withBody($body, 'application/json')
+                ->patch($url);
         } catch (Throwable $e) {
             report($e);
         }
@@ -303,7 +310,6 @@ class FirestoreService
     /**
      * Partial field update using Firestore updateMask.
      * Each field path must be a separate query param — NOT comma-joined.
-     * e.g. ?updateMask.fieldPaths=driver.lat&updateMask.fieldPaths=driver.lng
      */
     private function patch(string $collection, string $docId, array $data): void
     {
@@ -311,17 +317,18 @@ class FirestoreService
         $token     = $this->token();
         if (! $projectId || ! $token) return;
 
-        // Build query string with one updateMask.fieldPaths param per field.
         $query = collect(array_keys($data))
             ->map(fn($k) => 'updateMask.fieldPaths=' . rawurlencode($k))
             ->implode('&');
 
-        $url = "https://firestore.googleapis.com/v1/projects/{$projectId}/databases/(default)/documents"
-             . "/{$collection}/{$docId}?{$query}";
+        $url  = "https://firestore.googleapis.com/v1/projects/{$projectId}/databases/(default)/documents"
+              . "/{$collection}/{$docId}?{$query}";
+        $body = json_encode(['fields' => $this->toFirestoreFields($data)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         try {
             Http::withToken($token)
-                ->patch($url, ['fields' => $this->toFirestoreFields($data)]);
+                ->withBody($body, 'application/json')
+                ->patch($url);
         } catch (Throwable $e) {
             report($e);
         }

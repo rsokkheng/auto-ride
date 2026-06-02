@@ -17,9 +17,15 @@ class Ride extends Model
         'vehicle_id',
         'pickup_address',
         'dropoff_address',
+        'pickup_lat',
+        'pickup_lng',
+        'dropoff_lat',
+        'dropoff_lng',
         'scheduled_at',
         'status',
         'fare',
+        'surge_multiplier',
+        'surge_zone_id',
         'payment_method',
         'payment_status',
         'service_type',
@@ -29,9 +35,14 @@ class Ride extends Model
     ];
 
     protected $casts = [
-        'scheduled_at' => 'datetime',
-        'fare'         => 'integer',
-        'rating'       => 'float',
+        'scheduled_at'    => 'datetime',
+        'fare'            => 'integer',
+        'rating'          => 'float',
+        'pickup_lat'      => 'float',
+        'pickup_lng'      => 'float',
+        'dropoff_lat'     => 'float',
+        'dropoff_lng'     => 'float',
+        'surge_multiplier'=> 'float',
     ];
 
     public function passenger(): BelongsTo
