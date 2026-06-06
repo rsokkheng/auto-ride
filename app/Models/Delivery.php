@@ -35,16 +35,40 @@ class Delivery extends Model
         'assigned_at',
         'surge_multiplier',
         'surge_zone_id',
+        // Moving service
+        'service_type',
+        'floor_pickup',
+        'floor_dropoff',
+        'has_elevator',
+        'needs_stairs_carry',
+        'heavy_items',
+        'requires_helpers',
+        'helper_type',
+        'helper_fee',
+        'floor_fee',
+        // Payment model
+        'payment_model',
+        'split_pct_customer',
+        'partner_reference',
     ];
 
     protected $casts = [
         'scheduled_at'    => 'datetime',
         'assigned_at'     => 'datetime',
         'surge_multiplier'=> 'float',
-        'fee'          => 'integer',
-        'rating'       => 'float',
-        'pickup_lat'   => 'float',
-        'pickup_lng'   => 'float',
+        'fee'              => 'integer',
+        'rating'           => 'float',
+        'pickup_lat'       => 'float',
+        'pickup_lng'       => 'float',
+        'has_elevator'     => 'boolean',
+        'needs_stairs_carry' => 'boolean',
+        'heavy_items'      => 'boolean',
+        'floor_pickup'     => 'integer',
+        'floor_dropoff'    => 'integer',
+        'requires_helpers' => 'integer',
+        'helper_fee'          => 'integer',
+        'floor_fee'           => 'integer',
+        'split_pct_customer'  => 'integer',
     ];
 
     public function sender(): BelongsTo

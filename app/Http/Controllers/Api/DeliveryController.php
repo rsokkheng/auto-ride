@@ -7,6 +7,7 @@ use App\Models\Vehicle;
 use App\Services\DriverMatchingService;
 use App\Services\FareService;
 use App\Services\FirestoreService;
+use App\Services\MovingFareService;
 use App\Services\PaymentService;
 use Illuminate\Http\Request;
 
@@ -16,6 +17,7 @@ class DeliveryController extends ApiController
         private DriverMatchingService $matcher,
         private FareService $fare,
         private FirestoreService $firestore,
+        private MovingFareService $movingFare,
     ) {}
 
     // ── List / History ──────────────────────────────────────────────────────
@@ -125,77 +127,113 @@ class DeliveryController extends ApiController
     public function store(Request $request)
     {
         $user = $this->authUser($request);
-
-        if (! $user) {
-            return $this->unauthorized();
-        }
+        if (! $user) return $this->unauthorized();
 
         $data = $request->validate([
-            'sender_name'     => 'required|string|max:255',
-            'recipient_name'  => 'required|string|max:255',
-            'recipient_phone' => 'required|string|max:24',
-            'package_size'    => 'required|in:small,medium,large',
-            'pickup_address'  => 'required|string|max:255',
-            'dropoff_address' => 'required|string|max:255',
-            'pickup_lat'      => 'nullable|numeric|between:-90,90',
-            'pickup_lng'      => 'nullable|numeric|between:-180,180',
-            'scheduled_at'    => 'nullable|date',
-            'package_details' => 'nullable|string|max:500',
-            'fee'             => 'nullable|numeric|min:0',
-            'payment_by'      => 'nullable|in:sender,recipient',
-            'payment_method'  => 'nullable|in:cash,wallet,aba,wing,other_online',
-            'notes'           => 'nullable|string',
-            'vehicle_id'      => 'nullable|exists:vehicles,id',
+            'service_type'      => 'nullable|in:delivery,moving',
+            'sender_name'       => 'required|string|max:255',
+            'recipient_name'    => 'required|string|max:255',
+            'recipient_phone'   => 'required|string|max:24',
+            'package_size'      => 'nullable|in:small,medium,large',
+            'pickup_address'    => 'required|string|max:255',
+            'dropoff_address'   => 'required|string|max:255',
+            'pickup_lat'        => 'nullable|numeric|between:-90,90',
+            'pickup_lng'        => 'nullable|numeric|between:-180,180',
+            'dropoff_lat'       => 'nullable|numeric|between:-90,90',
+            'dropoff_lng'       => 'nullable|numeric|between:-180,180',
+            'scheduled_at'      => 'nullable|date',
+            'package_details'   => 'nullable|string|max:500',
+            'fee'               => 'nullable|numeric|min:0',
+            'payment_by'        => 'nullable|in:sender,recipient',
+            'payment_method'    => 'nullable|in:cash,wallet,aba,wing,other_online',
+            'notes'             => 'nullable|string',
+            'vehicle_id'        => 'nullable|exists:vehicles,id',
+            // Moving-specific
+            'floor_pickup'       => 'nullable|integer|min:0|max:50',
+            'floor_dropoff'      => 'nullable|integer|min:0|max:50',
+            'has_elevator'       => 'nullable|boolean',
+            'needs_stairs_carry' => 'nullable|boolean',
+            'heavy_items'        => 'nullable|boolean',
+            'requires_helpers'   => 'nullable|integer|min:0|max:4',
+            'helper_type'        => 'nullable|in:normal_carry,heavy_carry',
+            // Payment model
+            'payment_model'      => 'nullable|in:customer_pays,partner_pays,split_payment,sponsored',
+            'split_pct_customer' => 'nullable|integer|min:0|max:100',
+            'partner_reference'  => 'nullable|string|max:150',
         ]);
 
-        $driverId = null;
+        $serviceType = $data['service_type'] ?? 'delivery';
+        $driverId    = null;
 
-        // If a specific vehicle was requested, honour it.
         if (! empty($data['vehicle_id'])) {
             $vehicle  = Vehicle::find($data['vehicle_id']);
             $driverId = $vehicle?->user_id;
         }
 
-        // If no driver yet and we have coordinates, auto-assign the best nearby driver.
         if (! $driverId && ! empty($data['pickup_lat']) && ! empty($data['pickup_lng'])) {
             $best     = $this->matcher->findDrivers((float) $data['pickup_lat'], (float) $data['pickup_lng'], 1)->first();
             $driverId = $best?->id;
         }
 
-        // Auto-calculate fee with surge if caller didn't provide one.
-        $fee            = (int) ($data['fee'] ?? 0);
-        $surgeMultiplier = 1.0;
-        $surgeZoneId    = null;
+        // Calculate fee based on service type.
+        $fee        = (int) ($data['fee'] ?? 0);
+        $helperFee  = null;
+        $floorFee   = null;
 
-        if ($fee === 0 && ! empty($data['pickup_lat']) && ! empty($data['pickup_lng'])) {
-            $size      = $data['package_size'] ?? 'small';
-            $baseFee   = (int) (
-                config('delivery.fee_base', 3000)
-                + config('delivery.fee_per_km', 1200) * 5
-                + config("delivery.fee_surcharge_{$size}", 0)
+        if ($fee === 0 && $serviceType === 'moving'
+            && ! empty($data['pickup_lat']) && ! empty($data['dropoff_lat'])
+        ) {
+            $fareResult = $this->movingFare->estimate(
+                (float) $data['pickup_lat'],  (float) $data['pickup_lng'],
+                (float) $data['dropoff_lat'], (float) $data['dropoff_lng'],
+                (int) ($data['floor_pickup']     ?? 0),
+                (int) ($data['floor_dropoff']    ?? 0),
+                (bool) ($data['has_elevator']    ?? false),
+                (int) ($data['requires_helpers'] ?? 0),
+                $data['helper_type'] ?? 'normal_carry',
             );
-            $surgeResult     = $this->surge->applyTo($baseFee, (float) $data['pickup_lat'], (float) $data['pickup_lng'], 'deliveries');
-            $fee             = $surgeResult['total'];
-            $surgeMultiplier = $surgeResult['multiplier'];
-            $surgeZoneId     = $surgeResult['zone']?->id;
+            $fee       = $fareResult['total'];
+            $helperFee = $fareResult['helper_fee'];
+            $floorFee  = $fareResult['floor_fee'];
         }
 
-        $delivery = Delivery::create(array_merge(
-            $data,
-            [
-                'sender_id'        => $user->id,
-                'driver_id'        => $driverId,
-                'status'           => 'requested',
-                'fee'              => $fee,
-                'payment_by'       => $data['payment_by'] ?? 'sender',
-                'payment_method'   => $data['payment_method'] ?? 'cash',
-                'payment_status'   => 'unpaid',
-                'package_details'  => $data['package_details'] ?? '',
-                'assigned_at'      => $driverId ? now() : null,
-                'surge_multiplier' => $surgeMultiplier,
-                'surge_zone_id'    => $surgeZoneId,
-            ]
-        ));
+        $delivery = Delivery::create([
+            'sender_id'         => $user->id,
+            'driver_id'         => $driverId,
+            'service_type'      => $serviceType,
+            'sender_name'       => $data['sender_name'],
+            'recipient_name'    => $data['recipient_name'],
+            'recipient_phone'   => $data['recipient_phone'],
+            'package_size'      => $data['package_size'] ?? null,
+            'pickup_address'    => $data['pickup_address'],
+            'dropoff_address'   => $data['dropoff_address'],
+            'pickup_lat'        => $data['pickup_lat'] ?? null,
+            'pickup_lng'        => $data['pickup_lng'] ?? null,
+            'scheduled_at'      => $data['scheduled_at'] ?? null,
+            'package_details'   => $data['package_details'] ?? '',
+            'notes'             => $data['notes'] ?? null,
+            'status'            => 'requested',
+            'fee'               => $fee,
+            'payment_by'        => $data['payment_by'] ?? 'sender',
+            'payment_method'    => $data['payment_method'] ?? 'cash',
+            'payment_status'    => 'unpaid',
+            'assigned_at'       => $driverId ? now() : null,
+            'surge_multiplier'  => 1.0,
+            // Moving fields
+            'floor_pickup'       => $data['floor_pickup']      ?? null,
+            'floor_dropoff'      => $data['floor_dropoff']     ?? null,
+            'has_elevator'       => $data['has_elevator']      ?? false,
+            'needs_stairs_carry' => $data['needs_stairs_carry'] ?? false,
+            'heavy_items'        => $data['heavy_items']       ?? false,
+            'requires_helpers'   => $data['requires_helpers']  ?? 0,
+            'helper_type'        => $data['helper_type']       ?? null,
+            'helper_fee'         => $helperFee,
+            'floor_fee'          => $floorFee,
+            // Payment model
+            'payment_model'      => $data['payment_model']     ?? 'customer_pays',
+            'split_pct_customer' => $data['split_pct_customer'] ?? null,
+            'partner_reference'  => $data['partner_reference'] ?? null,
+        ]);
 
         $delivery->load('driver', 'vehicle');
         $this->firestore->syncDelivery($delivery);
@@ -264,16 +302,51 @@ class DeliveryController extends ApiController
      *   dropoff_lat, dropoff_lng required
      *   package_size             optional (small|medium|large, default: small)
      */
+    /**
+     * POST /v1/deliveries/estimate
+     *
+     * For service_type=delivery: returns package delivery fare.
+     * For service_type=moving:   returns full moving fare breakdown
+     *   (base + distance + truck + helper + floor fees).
+     */
     public function estimate(Request $request)
     {
         $data = $request->validate([
-            'pickup_lat'   => 'required|numeric|between:-90,90',
-            'pickup_lng'   => 'required|numeric|between:-180,180',
-            'dropoff_lat'  => 'required|numeric|between:-90,90',
-            'dropoff_lng'  => 'required|numeric|between:-180,180',
-            'package_size' => 'nullable|in:small,medium,large',
+            'service_type'      => 'nullable|in:delivery,moving',
+            'pickup_lat'        => 'required|numeric|between:-90,90',
+            'pickup_lng'        => 'required|numeric|between:-180,180',
+            'dropoff_lat'       => 'required|numeric|between:-90,90',
+            'dropoff_lng'       => 'required|numeric|between:-180,180',
+            // Delivery
+            'package_size'      => 'nullable|in:small,medium,large',
+            // Moving
+            'floor_pickup'      => 'nullable|integer|min:0|max:50',
+            'floor_dropoff'     => 'nullable|integer|min:0|max:50',
+            'has_elevator'      => 'nullable|boolean',
+            'requires_helpers'  => 'nullable|integer|min:0|max:4',
+            'helper_type'       => 'nullable|in:normal_carry,heavy_carry',
         ]);
 
+        $serviceType = $data['service_type'] ?? 'delivery';
+
+        if ($serviceType === 'moving') {
+            $fare = $this->movingFare->estimate(
+                (float) $data['pickup_lat'],  (float) $data['pickup_lng'],
+                (float) $data['dropoff_lat'], (float) $data['dropoff_lng'],
+                (int) ($data['floor_pickup']    ?? 0),
+                (int) ($data['floor_dropoff']   ?? 0),
+                (bool) ($data['has_elevator']   ?? false),
+                (int) ($data['requires_helpers']?? 0),
+                $data['helper_type'] ?? 'normal_carry',
+            );
+
+            return $this->success([
+                'service_type' => 'moving',
+                'fare'         => $fare,
+            ]);
+        }
+
+        // Default: package delivery estimate.
         $route  = $this->fare->getRoute(
             (float) $data['pickup_lat'],  (float) $data['pickup_lng'],
             (float) $data['dropoff_lat'], (float) $data['dropoff_lng'],
@@ -286,6 +359,7 @@ class DeliveryController extends ApiController
         );
 
         return $this->success([
+            'service_type' => 'delivery',
             'route' => [
                 'distance_km'   => $route['distance_km'],
                 'duration_min'  => $route['duration_min'],

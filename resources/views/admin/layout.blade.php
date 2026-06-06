@@ -154,6 +154,12 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ route('admin.moving-fare') }}" class="nav-link {{ request()->routeIs('admin.moving-fare') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-truck-moving"></i>
+                            <p>Moving Fare</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ route('admin.marketplace') }}" class="nav-link {{ request()->routeIs('admin.marketplace') ? 'active' : '' }}">
                             <i class="nav-icon fas fa-store"></i>
                             <p>Marketplace</p>

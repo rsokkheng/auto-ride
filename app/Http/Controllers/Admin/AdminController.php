@@ -402,73 +402,124 @@ class AdminController extends Controller
 
     // ─── Deliveries ──────────────────────────────────────────────────────────
 
-    public function deliveries()
+    public function deliveries(\Illuminate\Http\Request $request)
     {
+        $type  = $request->input('type', 'all');
+        $query = Delivery::with(['sender', 'driver'])->orderBy('created_at', 'desc');
+
+        if ($type !== 'all') {
+            $query->where('service_type', $type);
+        }
+
         return view('admin.deliveries', [
-            'deliveries' => Delivery::with(['sender', 'driver'])->orderBy('created_at')->paginate(20),
+            'deliveries' => $query->paginate(20)->appends(['type' => $type]),
             'senders'    => User::where('role', 'passenger')->orderBy('name')->get(),
             'drivers'    => User::where('role', 'driver')->orderBy('name')->get(),
+            'activeType' => $type,
+            'counts'     => [
+                'all'      => Delivery::count(),
+                'delivery' => Delivery::where('service_type', 'delivery')->count(),
+                'moving'   => Delivery::where('service_type', 'moving')->count(),
+            ],
         ]);
     }
 
     public function storeDelivery(Request $request)
     {
         $data = $request->validate([
-            'sender_id'       => 'required|exists:users,id',
-            'sender_name'     => 'required|string|max:255',
-            'recipient_name'  => 'required|string|max:255',
-            'recipient_phone' => 'required|string|max:24',
-            'package_size'    => 'required|in:small,medium,large',
-            'driver_id'       => 'nullable|exists:users,id',
-            'pickup_address'  => 'required|string|max:255',
-            'dropoff_address' => 'required|string|max:255',
-            'status'          => 'required|in:requested,pending,accepted,in_progress,completed,cancelled',
-            'fee'             => 'nullable|numeric|min:0',
-            'payment_by'      => 'nullable|in:sender,recipient',
-            'payment_method'  => 'nullable|in:cash,wallet,aba,wing,other_online',
-            'scheduled_at'    => 'nullable|date',
-            'notes'           => 'nullable|string',
-            'package_details' => 'nullable|string|max:500',
+            'service_type'       => 'required|in:delivery,moving',
+            'sender_id'          => 'required|exists:users,id',
+            'sender_name'        => 'required|string|max:255',
+            'recipient_name'     => 'required|string|max:255',
+            'recipient_phone'    => 'required|string|max:24',
+            'package_size'       => 'nullable|in:small,medium,large',
+            'driver_id'          => 'nullable|exists:users,id',
+            'pickup_address'     => 'required|string|max:255',
+            'dropoff_address'    => 'required|string|max:255',
+            'status'             => 'required|in:requested,pending,accepted,in_progress,completed,cancelled',
+            'fee'                => 'nullable|numeric|min:0',
+            'payment_by'         => 'nullable|in:sender,recipient',
+            'payment_method'     => 'nullable|in:cash,wallet,aba,wing,other_online',
+            'scheduled_at'       => 'nullable|date',
+            'notes'              => 'nullable|string',
+            'package_details'    => 'nullable|string|max:500',
+            // Moving fields
+            'floor_pickup'        => 'nullable|integer|min:0|max:50',
+            'floor_dropoff'       => 'nullable|integer|min:0|max:50',
+            'has_elevator'        => 'nullable|boolean',
+            'needs_stairs_carry'  => 'nullable|boolean',
+            'heavy_items'         => 'nullable|boolean',
+            'requires_helpers'    => 'nullable|integer|min:0|max:4',
+            'helper_type'         => 'nullable|in:normal_carry,heavy_carry',
+            'helper_fee'          => 'nullable|numeric|min:0',
+            'floor_fee'           => 'nullable|numeric|min:0',
+            // Payment model
+            'payment_model'       => 'nullable|in:customer_pays,partner_pays,split_payment,sponsored',
+            'split_pct_customer'  => 'nullable|integer|min:0|max:100',
+            'partner_reference'   => 'nullable|string|max:150',
         ]);
 
-        $data['package_details'] = $data['package_details'] ?? '';
-        $data['payment_by']      = $data['payment_by'] ?? 'sender';
-        $data['payment_method']  = $data['payment_method'] ?? 'cash';
-        $data['payment_status']  = 'unpaid';
-        $data['assigned_at']     = ! empty($data['driver_id']) ? now() : null;
+        $data['package_details']    = $data['package_details'] ?? '';
+        $data['payment_by']         = $data['payment_by'] ?? 'sender';
+        $data['payment_method']     = $data['payment_method'] ?? 'cash';
+        $data['payment_status']     = 'unpaid';
+        $data['payment_model']      = $data['payment_model'] ?? 'customer_pays';
+        $data['assigned_at']        = ! empty($data['driver_id']) ? now() : null;
+        $data['has_elevator']       = (bool) ($data['has_elevator'] ?? false);
+        $data['needs_stairs_carry'] = (bool) ($data['needs_stairs_carry'] ?? false);
+        $data['heavy_items']        = (bool) ($data['heavy_items'] ?? false);
 
         Delivery::create($data);
 
-        return redirect()->route('admin.deliveries')->with('success', 'Delivery created successfully.');
+        return redirect()->route('admin.deliveries', ['type' => $data['service_type']])->with('success', ucfirst($data['service_type']) . ' order created successfully.');
     }
 
     public function updateDelivery(Request $request, Delivery $delivery)
     {
         $data = $request->validate([
-            'sender_id'       => 'required|exists:users,id',
-            'sender_name'     => 'required|string|max:255',
-            'recipient_name'  => 'required|string|max:255',
-            'recipient_phone' => 'required|string|max:24',
-            'package_size'    => 'required|in:small,medium,large',
-            'driver_id'       => 'nullable|exists:users,id',
-            'pickup_address'  => 'required|string|max:255',
-            'dropoff_address' => 'required|string|max:255',
-            'status'          => 'required|in:requested,pending,accepted,in_progress,completed,cancelled',
-            'fee'             => 'nullable|numeric|min:0',
-            'payment_by'      => 'nullable|in:sender,recipient',
-            'payment_method'  => 'nullable|in:cash,wallet,aba,wing,other_online',
-            'scheduled_at'    => 'nullable|date',
-            'notes'           => 'nullable|string',
+            'service_type'       => 'required|in:delivery,moving',
+            'sender_id'          => 'required|exists:users,id',
+            'sender_name'        => 'required|string|max:255',
+            'recipient_name'     => 'required|string|max:255',
+            'recipient_phone'    => 'required|string|max:24',
+            'package_size'       => 'nullable|in:small,medium,large',
+            'driver_id'          => 'nullable|exists:users,id',
+            'pickup_address'     => 'required|string|max:255',
+            'dropoff_address'    => 'required|string|max:255',
+            'status'             => 'required|in:requested,pending,accepted,in_progress,completed,cancelled',
+            'fee'                => 'nullable|numeric|min:0',
+            'payment_by'         => 'nullable|in:sender,recipient',
+            'payment_method'     => 'nullable|in:cash,wallet,aba,wing,other_online',
+            'scheduled_at'       => 'nullable|date',
+            'notes'              => 'nullable|string',
+            // Moving fields
+            'floor_pickup'        => 'nullable|integer|min:0|max:50',
+            'floor_dropoff'       => 'nullable|integer|min:0|max:50',
+            'has_elevator'        => 'nullable|boolean',
+            'needs_stairs_carry'  => 'nullable|boolean',
+            'heavy_items'         => 'nullable|boolean',
+            'requires_helpers'    => 'nullable|integer|min:0|max:4',
+            'helper_type'         => 'nullable|in:normal_carry,heavy_carry',
+            'helper_fee'          => 'nullable|numeric|min:0',
+            'floor_fee'           => 'nullable|numeric|min:0',
+            // Payment model
+            'payment_model'       => 'nullable|in:customer_pays,partner_pays,split_payment,sponsored',
+            'split_pct_customer'  => 'nullable|integer|min:0|max:100',
+            'partner_reference'   => 'nullable|string|max:150',
         ]);
 
-        // Stamp assigned_at when a driver is set for the first time.
         if (! empty($data['driver_id']) && ! $delivery->assigned_at) {
             $data['assigned_at'] = now();
         }
 
+        $data['has_elevator']       = (bool) ($data['has_elevator'] ?? false);
+        $data['needs_stairs_carry'] = (bool) ($data['needs_stairs_carry'] ?? false);
+        $data['heavy_items']        = (bool) ($data['heavy_items'] ?? false);
+        $data['payment_model']      = $data['payment_model'] ?? 'customer_pays';
+
         $delivery->update($data);
 
-        return redirect()->route('admin.deliveries')->with('success', 'Delivery updated successfully.');
+        return redirect()->route('admin.deliveries', ['type' => $data['service_type']])->with('success', 'Order updated successfully.');
     }
 
     public function assignDelivery(Request $request, Delivery $delivery)
@@ -1113,5 +1164,44 @@ class AdminController extends Controller
         ]);
 
         return redirect()->route('admin.topups')->with('success', "Top-up request rejected.");
+    }
+
+    // ─── Moving Fare Pricing ─────────────────────────────────────────────────
+
+    public function movingFare()
+    {
+        $keys = [
+            'moving_base_fee', 'moving_truck_fee', 'moving_distance_rate',
+            'moving_helper_rate_normal', 'moving_helper_rate_heavy',
+            'moving_no_elevator_mult',
+            'moving_floor_fee_tier_1', 'moving_floor_fee_tier_3',
+            'moving_floor_fee_tier_6', 'moving_floor_fee_tier_7plus',
+        ];
+
+        $settings = PricingSetting::whereIn('key', $keys)->get()->keyBy('key');
+
+        return view('admin.moving-fare', compact('settings'));
+    }
+
+    public function updateMovingFare(Request $request)
+    {
+        $data = $request->validate([
+            'moving_base_fee'             => 'required|integer|min:0',
+            'moving_truck_fee'            => 'required|integer|min:0',
+            'moving_distance_rate'        => 'required|integer|min:0',
+            'moving_helper_rate_normal'   => 'required|integer|min:0',
+            'moving_helper_rate_heavy'    => 'required|integer|min:0',
+            'moving_no_elevator_mult'     => 'required|numeric|min:1|max:5',
+            'moving_floor_fee_tier_1'     => 'required|integer|min:0',
+            'moving_floor_fee_tier_3'     => 'required|integer|min:0',
+            'moving_floor_fee_tier_6'     => 'required|integer|min:0',
+            'moving_floor_fee_tier_7plus' => 'required|integer|min:0',
+        ]);
+
+        foreach ($data as $key => $value) {
+            PricingSetting::where('key', $key)->update(['value' => $value]);
+        }
+
+        return redirect()->route('admin.moving-fare')->with('success', 'Moving fare rates saved.');
     }
 }
