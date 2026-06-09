@@ -252,6 +252,8 @@ class DeliveryController extends ApiController
             'dropoff_address'   => $data['dropoff_address'],
             'pickup_lat'        => $data['pickup_lat'] ?? null,
             'pickup_lng'        => $data['pickup_lng'] ?? null,
+            'dropoff_lat'       => $data['dropoff_lat'] ?? null,
+            'dropoff_lng'       => $data['dropoff_lng'] ?? null,
             'scheduled_at'      => $data['scheduled_at'] ?? null,
             'package_details'   => $data['package_details'] ?? '',
             'notes'             => $data['notes'] ?? null,
