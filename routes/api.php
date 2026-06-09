@@ -78,6 +78,19 @@ Route::prefix('v1')->group(function () {
     Route::post('deliveries/{delivery}/complete', [DeliveryController::class, 'complete']);
     Route::post('deliveries/{delivery}/rate', [DeliveryController::class, 'rate']);
 
+    // Aliases for Moving service using the same delivery controller logic.
+    Route::post('movings/estimate', [DeliveryController::class, 'estimate']);
+    Route::post('movings', [DeliveryController::class, 'store']);
+    Route::get('movings/{delivery}', [DeliveryController::class, 'show']);
+    Route::put('movings/{delivery}', [DeliveryController::class, 'update']);
+    Route::patch('movings/{delivery}', [DeliveryController::class, 'update']);
+    Route::delete('movings/{delivery}', [DeliveryController::class, 'destroy']);
+    Route::post('movings/{delivery}/accept', [DeliveryController::class, 'accept']);
+    Route::post('movings/{delivery}/cancel', [DeliveryController::class, 'cancel']);
+    Route::post('movings/{delivery}/track', [DeliveryController::class, 'track']);
+    Route::post('movings/{delivery}/complete', [DeliveryController::class, 'complete']);
+    Route::post('movings/{delivery}/rate', [DeliveryController::class, 'rate']);
+
     Route::get('charging-stations', [ChargingStationController::class, 'index']);
 
     Route::get('tracking/rides/{ride}', [RideTrackingController::class, 'show']);
