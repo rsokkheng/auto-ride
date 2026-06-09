@@ -177,9 +177,9 @@ class DeliveryController extends ApiController
             'needs_stairs_carry' => 'nullable|boolean',
             'heavy_items'        => 'nullable|boolean',
             'requires_helpers'   => 'nullable|integer|min:0|max:4',
-            'helper_type'        => 'nullable|in:normal_carry,heavy_carry',
+            'helper_type'        => 'sometimes|nullable|in:normal_carry,heavy_carry',
             // Payment model
-            'payment_model'      => 'nullable|in:customer_pays,partner_pays,split_payment,sponsored',
+            'payment_model'      => 'sometimes|nullable|in:customer_pays,partner_pays,split_payment,sponsored',
             'split_pct_customer' => 'nullable|integer|min:0|max:100',
             'partner_reference'  => 'nullable|string|max:150',
         ]);
