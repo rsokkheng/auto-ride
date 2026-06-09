@@ -186,6 +186,16 @@ $colors = [
                     <small class="text-muted">e.g. 0.15 = +15%</small>
                 </div>
                 <div class="col-md-3 mb-3">
+                    <label class="field-label">Express Multiplier (Delivery)</label>
+                    <div class="input-group">
+                        <input type="number" name="delivery_express_multiplier" class="form-control"
+                               value="{{ $settings['delivery_express_multiplier']->value ?? 1.25 }}"
+                               step="0.01" min="1" max="10" required>
+                        <div class="input-group-append"><span class="input-group-text">×</span></div>
+                    </div>
+                    <small class="text-muted">e.g. 1.25 = +25% on top of calculated fare</small>
+                </div>
+                <div class="col-md-3 mb-3">
                     <label class="field-label">Avg City Speed (km/h)</label>
                     <div class="input-group">
                         <input type="number" name="avg_city_speed_kmh" class="form-control"

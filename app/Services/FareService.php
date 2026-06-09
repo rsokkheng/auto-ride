@@ -313,7 +313,7 @@ class FareService
     public static function clearCache(): void
     {
         Cache::forget('ride_pricing_all');
-        foreach (['night_surcharge_rate','avg_city_speed_kmh','traffic_speed_threshold_kmh','delivery_night_surcharge_rate'] as $k) {
+        foreach (['night_surcharge_rate','avg_city_speed_kmh','traffic_speed_threshold_kmh','delivery_night_surcharge_rate','delivery_express_multiplier'] as $k) {
             Cache::forget("pricing_setting_{$k}");
         }
     }

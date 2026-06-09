@@ -643,6 +643,7 @@ class AdminController extends Controller
         $data = $request->validate([
             'night_surcharge_rate'           => 'required|numeric|min:0|max:1',
             'delivery_night_surcharge_rate'  => 'required|numeric|min:0|max:1',
+            'delivery_express_multiplier'    => 'required|numeric|min:1|max:10',
             'avg_city_speed_kmh'             => 'required|integer|min:5|max:120',
             'traffic_speed_threshold_kmh'    => 'required|integer|min:5|max:60',
         ]);

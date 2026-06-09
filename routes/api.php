@@ -69,6 +69,9 @@ Route::prefix('v1')->group(function () {
     Route::get('deliveries', [DeliveryController::class, 'index']);
     Route::post('deliveries', [DeliveryController::class, 'store']);
     Route::get('deliveries/{delivery}', [DeliveryController::class, 'show']);
+    Route::put('deliveries/{delivery}', [DeliveryController::class, 'update']);
+    Route::patch('deliveries/{delivery}', [DeliveryController::class, 'update']);
+    Route::delete('deliveries/{delivery}', [DeliveryController::class, 'destroy']);
     Route::post('deliveries/{delivery}/accept', [DeliveryController::class, 'accept']);
     Route::post('deliveries/{delivery}/cancel', [DeliveryController::class, 'cancel']);
     Route::post('deliveries/{delivery}/track', [DeliveryController::class, 'track']);

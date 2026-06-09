@@ -35,6 +35,8 @@ class Delivery extends Model
         'assigned_at',
         'surge_multiplier',
         'surge_zone_id',
+        // Service option: normal or express
+        'service_option',
         // Moving service
         'service_type',
         'floor_pickup',

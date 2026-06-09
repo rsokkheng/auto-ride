@@ -131,6 +131,7 @@ class DeliveryController extends ApiController
 
         $data = $request->validate([
             'service_type'      => 'nullable|in:delivery,moving',
+            'service_option'    => 'nullable|in:normal,express',
             'sender_name'       => 'required|string|max:255',
             'recipient_name'    => 'required|string|max:255',
             'recipient_phone'   => 'required|string|max:24',
@@ -197,10 +198,27 @@ class DeliveryController extends ApiController
             $floorFee  = $fareResult['floor_fee'];
         }
 
+        // Apply express multiplier if requested.
+        $serviceOption = $data['service_option'] ?? 'normal';
+        $multiplier = $serviceOption === 'express'
+            ? (float) \App\Models\PricingSetting::get('delivery_express_multiplier', config('delivery.express_multiplier', 1.25))
+            : 1.0;
+
+        if ($multiplier !== 1.0) {
+            $fee = (int) ceil(($fee * $multiplier) / 100) * 100;
+            if ($helperFee !== null) {
+                $helperFee = (int) ceil(($helperFee * $multiplier) / 100) * 100;
+            }
+            if ($floorFee !== null) {
+                $floorFee = (int) ceil(($floorFee * $multiplier) / 100) * 100;
+            }
+        }
+
         $delivery = Delivery::create([
             'sender_id'         => $user->id,
             'driver_id'         => $driverId,
             'service_type'      => $serviceType,
+            'service_option'    => $data['service_option'] ?? 'normal',
             'sender_name'       => $data['sender_name'],
             'recipient_name'    => $data['recipient_name'],
             'recipient_phone'   => $data['recipient_phone'],
@@ -229,6 +247,8 @@ class DeliveryController extends ApiController
             'helper_type'        => $data['helper_type']       ?? null,
             'helper_fee'         => $helperFee,
             'floor_fee'          => $floorFee,
+            'service_option'     => $serviceOption,
+            'express_multiplier' => $multiplier !== 1.0 ? $multiplier : null,
             // Payment model
             'payment_model'      => $data['payment_model']     ?? 'customer_pays',
             'split_pct_customer' => $data['split_pct_customer'] ?? null,
@@ -313,6 +333,7 @@ class DeliveryController extends ApiController
     {
         $data = $request->validate([
             'service_type'      => 'nullable|in:delivery,moving',
+            'service_option'    => 'nullable|in:normal,express',
             'pickup_lat'        => 'required|numeric|between:-90,90',
             'pickup_lng'        => 'required|numeric|between:-180,180',
             'dropoff_lat'       => 'required|numeric|between:-90,90',
@@ -340,6 +361,20 @@ class DeliveryController extends ApiController
                 $data['helper_type'] ?? 'normal_carry',
             );
 
+            // Apply service option multiplier (normal|express)
+            $serviceOption = $data['service_option'] ?? 'normal';
+            $multiplier = $serviceOption === 'express'
+                ? (float) config('delivery.express_multiplier', 1.25)
+                : 1.0;
+
+            if ($multiplier !== 1.0) {
+                    $fare['total'] = (int) ceil(($fare['total'] * $multiplier) / 100) * 100;
+                    $fare['helper_fee'] = (int) ceil((($fare['helper_fee'] ?? 0) * $multiplier) / 100) * 100;
+                    $fare['floor_fee'] = (int) ceil((($fare['floor_fee'] ?? 0) * $multiplier) / 100) * 100;
+                $fare['express_multiplier'] = $multiplier;
+                $fare['service_option'] = $serviceOption;
+            }
+
             return $this->success([
                 'service_type' => 'moving',
                 'fare'         => $fare,
@@ -357,6 +392,24 @@ class DeliveryController extends ApiController
             (float) $data['pickup_lat'],
             (float) $data['pickup_lng'],
         );
+
+        // Apply express multiplier for delivery estimates
+        $serviceOption = $data['service_option'] ?? 'normal';
+        $multiplier = $serviceOption === 'express'
+            ? (float) \App\Models\PricingSetting::get('delivery_express_multiplier', config('delivery.express_multiplier', 1.25))
+            : 1.0;
+
+        if ($multiplier !== 1.0) {
+            $result['subtotal'] = (int) ceil(($result['subtotal'] * $multiplier) / 100) * 100;
+            $result['total'] = (int) ceil(($result['total'] * $multiplier) / 100) * 100;
+            foreach ($result['breakdown'] as $k => $v) {
+                if (is_numeric($v)) {
+                    $result['breakdown'][$k] = (int) ceil(($v * $multiplier) / 100) * 100;
+                }
+            }
+            $result['express_multiplier'] = $multiplier;
+            $result['service_option'] = $serviceOption;
+        }
 
         return $this->success([
             'service_type' => 'delivery',
@@ -497,6 +550,102 @@ class DeliveryController extends ApiController
         return $this->success([
             'delivery'       => $delivery->fresh(),
             'driver_rating'  => $delivery->driver?->fresh()->only(['id', 'rating', 'total_ratings']),
+        ]);
+    }
+
+    // ── Update ──────────────────────────────────────────────────────────────
+
+    /**
+     * PUT/PATCH /v1/deliveries/{delivery}
+     *
+     * Updates delivery details. Only allowed before delivery is accepted or in certain statuses.
+     */
+    public function update(Request $request, Delivery $delivery)
+    {
+        $user = $this->authUser($request);
+
+        if (! $user || $delivery->sender_id !== $user->id) {
+            return $this->unauthorized();
+        }
+
+        // Only allow updates for pending/requested deliveries
+        if (! in_array($delivery->status, ['requested', 'pending'], true)) {
+            return response()->json([
+                'message' => "Cannot update delivery with status '{$delivery->status}'",
+            ], 422);
+        }
+
+        $data = $request->validate([
+            'sender_name'       => 'nullable|string|max:255',
+            'service_option'    => 'nullable|in:normal,express',
+            'recipient_name'    => 'nullable|string|max:255',
+            'recipient_phone'   => 'nullable|string|max:24',
+            'package_size'      => 'nullable|in:small,medium,large',
+            'pickup_address'    => 'nullable|string|max:255',
+            'dropoff_address'   => 'nullable|string|max:255',
+            'pickup_lat'        => 'nullable|numeric|between:-90,90',
+            'pickup_lng'        => 'nullable|numeric|between:-180,180',
+            'dropoff_lat'       => 'nullable|numeric|between:-90,90',
+            'dropoff_lng'       => 'nullable|numeric|between:-180,180',
+            'scheduled_at'      => 'nullable|date',
+            'package_details'   => 'nullable|string|max:500',
+            'payment_method'    => 'nullable|in:cash,wallet,aba,wing,other_online',
+            'notes'             => 'nullable|string',
+            'floor_pickup'      => 'nullable|integer|min:0|max:50',
+            'floor_dropoff'     => 'nullable|integer|min:0|max:50',
+            'has_elevator'      => 'nullable|boolean',
+            'needs_stairs_carry' => 'nullable|boolean',
+            'heavy_items'       => 'nullable|boolean',
+            'requires_helpers'  => 'nullable|integer|min:0|max:4',
+            'helper_type'       => 'nullable|in:normal_carry,heavy_carry',
+        ]);
+
+        $updateData = array_filter($data, fn($value) => $value !== null);
+
+        $delivery->update($updateData);
+        $delivery->load('driver', 'vehicle');
+
+        $this->firestore->syncDelivery($delivery);
+
+        return $this->success([
+            'delivery' => $delivery,
+            'message' => 'Delivery updated successfully',
+        ]);
+    }
+
+    // ── Delete ──────────────────────────────────────────────────────────────
+
+    /**
+     * DELETE /v1/deliveries/{delivery}
+     *
+     * Soft deletes a delivery. Only allowed for pending/requested deliveries.
+     * The sender can delete their own delivery, or a driver can delete if not yet confirmed.
+     */
+    public function destroy(Request $request, Delivery $delivery)
+    {
+        $user = $this->authUser($request);
+
+        if (! $user) {
+            return $this->unauthorized();
+        }
+
+        // Only sender can delete, or driver can delete if still pending
+        if ($delivery->sender_id !== $user->id && ! ($user->role === 'driver' && $delivery->driver_id === $user->id)) {
+            return $this->unauthorized();
+        }
+
+        // Only allow deletion for certain statuses
+        if (! in_array($delivery->status, ['requested', 'pending', 'accepted'], true)) {
+            return response()->json([
+                'message' => "Cannot delete delivery with status '{$delivery->status}'",
+            ], 422);
+        }
+
+        $delivery->delete();
+
+        return $this->success([
+            'message' => 'Delivery deleted successfully',
+            'delivery_id' => $delivery->id,
         ]);
     }
 }

@@ -60,4 +60,12 @@ return [
     'match_distance_weight' => env('DRIVER_MATCH_DISTANCE_WEIGHT', 0.7),
     'match_rating_weight'   => env('DRIVER_MATCH_RATING_WEIGHT', 1.5),
 
+    /*
+    |------------------------------------------------------------------
+    | Express service multiplier
+    |------------------------------------------------------------------
+    | Multiplies the calculated fare for express deliveries/moving.
+    */
+    'express_multiplier' => env('DELIVERY_EXPRESS_MULTIPLIER', 1.25),
+
 ];
