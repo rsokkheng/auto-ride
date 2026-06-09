@@ -10,6 +10,7 @@ use App\Services\FirestoreService;
 use App\Services\MovingFareService;
 use App\Services\PaymentService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class DeliveryController extends ApiController
 {
@@ -124,17 +125,37 @@ class DeliveryController extends ApiController
 
     // ── Store (book a delivery) ─────────────────────────────────────────────
 
+    public function storeMoving(Request $request)
+    {
+        $request->merge(['service_type' => 'moving']);
+        return $this->store($request);
+    }
+
+    public function estimateMoving(Request $request)
+    {
+        $request->merge(['service_type' => 'moving']);
+        return $this->estimate($request);
+    }
+
     public function store(Request $request)
     {
         $user = $this->authUser($request);
         if (! $user) return $this->unauthorized();
 
+        foreach (['payment_model', 'helper_type'] as $key) {
+            if ($request->exists($key) && $request->input($key) === '') {
+                $request->merge([$key => null]);
+            }
+        }
+
+        $serviceType = $request->input('service_type') ?? 'delivery';
+
         $data = $request->validate([
             'service_type'      => 'nullable|in:delivery,moving',
             'service_option'    => 'nullable|in:normal,express',
-            'sender_name'       => 'required|string|max:255',
-            'recipient_name'    => 'required|string|max:255',
-            'recipient_phone'   => 'required|string|max:24',
+            'sender_name'       => [Rule::requiredIf($serviceType === 'delivery'), 'string', 'max:255'],
+            'recipient_name'    => [Rule::requiredIf($serviceType === 'delivery'), 'string', 'max:255'],
+            'recipient_phone'   => [Rule::requiredIf($serviceType === 'delivery'), 'string', 'max:24'],
             'package_size'      => 'nullable|in:small,medium,large',
             'pickup_address'    => 'required|string|max:255',
             'dropoff_address'   => 'required|string|max:255',
@@ -219,9 +240,9 @@ class DeliveryController extends ApiController
             'driver_id'         => $driverId,
             'service_type'      => $serviceType,
             'service_option'    => $data['service_option'] ?? 'normal',
-            'sender_name'       => $data['sender_name'],
-            'recipient_name'    => $data['recipient_name'],
-            'recipient_phone'   => $data['recipient_phone'],
+            'sender_name'       => $data['sender_name'] ?? $user->name,
+            'recipient_name'    => $data['recipient_name'] ?? null,
+            'recipient_phone'   => $data['recipient_phone'] ?? null,
             'package_size'      => $data['package_size'] ?? null,
             'pickup_address'    => $data['pickup_address'],
             'dropoff_address'   => $data['dropoff_address'],
