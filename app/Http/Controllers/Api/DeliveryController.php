@@ -142,8 +142,12 @@ class DeliveryController extends ApiController
         $user = $this->authUser($request);
         if (! $user) return $this->unauthorized();
 
-        foreach (['payment_model', 'helper_type'] as $key) {
-            if ($request->exists($key) && $request->input($key) === '') {
+        $enumGuards = [
+            'helper_type'   => ['normal_carry', 'heavy_carry'],
+            'payment_model' => ['customer_pays', 'partner_pays', 'split_payment', 'sponsored'],
+        ];
+        foreach ($enumGuards as $key => $valid) {
+            if ($request->exists($key) && ! in_array($request->input($key), $valid, true)) {
                 $request->merge([$key => null]);
             }
         }
