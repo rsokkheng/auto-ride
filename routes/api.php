@@ -38,10 +38,33 @@ Route::prefix('v1')->group(function () {
     Route::get('vehicles/{vehicle}', [VehicleController::class, 'show']);
     Route::post('vehicles', [VehicleController::class, 'store']);
 
-    Route::get('marketplace', [MarketplaceController::class, 'index']);
-    Route::get('marketplace/{item}', [MarketplaceController::class, 'show']);
-    Route::post('marketplace', [MarketplaceController::class, 'store']);
-    Route::post('marketplace/{item}/purchase', [MarketplaceController::class, 'purchase']);
+    // Marketplace — categories
+    Route::get('marketplace/categories', [MarketplaceController::class, 'categories']);
+
+    // Marketplace — my listings & orders (static, before {product} wildcard)
+    Route::get('marketplace/my-products', [MarketplaceController::class, 'myProducts']);
+    Route::get('marketplace/my-orders',   [MarketplaceController::class, 'myOrders']);
+
+    // Marketplace — products CRUD
+    Route::get('marketplace',                            [MarketplaceController::class, 'index']);
+    Route::post('marketplace',                           [MarketplaceController::class, 'store']);
+    Route::get('marketplace/{product}',                  [MarketplaceController::class, 'show']);
+    Route::put('marketplace/{product}',                  [MarketplaceController::class, 'update']);
+    Route::patch('marketplace/{product}',                [MarketplaceController::class, 'update']);
+    Route::delete('marketplace/{product}',               [MarketplaceController::class, 'destroy']);
+
+    // Marketplace — product images
+    Route::post('marketplace/{product}/images',                    [MarketplaceController::class, 'addImage']);
+    Route::delete('marketplace/{product}/images/{image}',          [MarketplaceController::class, 'deleteImage']);
+
+    // Marketplace — orders
+    Route::post('marketplace/{product}/order',           [MarketplaceController::class, 'placeOrder']);
+    Route::post('marketplace/orders/{order}/confirm',    [MarketplaceController::class, 'confirmOrder']);
+    Route::post('marketplace/orders/{order}/complete',   [MarketplaceController::class, 'completeOrder']);
+    Route::post('marketplace/orders/{order}/cancel',     [MarketplaceController::class, 'cancelOrder']);
+
+    // Legacy marketplace_items (backward compat)
+    Route::post('marketplace/items/{item}/purchase', [MarketplaceController::class, 'purchase']);
 
     // Static ride routes — must come before {ride} wildcard.
     Route::get('rides', [RideController::class, 'index']);

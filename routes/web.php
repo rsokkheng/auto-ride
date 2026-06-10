@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminController;
+use App\Http\Controllers\Seller\SellerController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -107,4 +108,30 @@ Route::prefix('admin')->group(function () {
     Route::get('topups', [AdminController::class, 'topups'])->name('admin.topups');
     Route::post('topups/{topup}/approve', [AdminController::class, 'approveTopUp'])->name('admin.topups.approve');
     Route::post('topups/{topup}/reject', [AdminController::class, 'rejectTopUp'])->name('admin.topups.reject');
+});
+
+// ── Seller Portal ─────────────────────────────────────────────────────────────
+
+Route::get('seller/login',  [SellerController::class, 'showLogin'])->name('seller.login');
+Route::post('seller/login', [SellerController::class, 'login'])->name('seller.login.post');
+
+Route::prefix('seller')->middleware(\App\Http\Middleware\SellerAuth::class)->group(function () {
+    Route::post('logout', [SellerController::class, 'logout'])->name('seller.logout');
+
+    Route::get('/',        [SellerController::class, 'dashboard'])->name('seller.dashboard');
+
+    // Products
+    Route::get('products',                                   [SellerController::class, 'products'])->name('seller.products');
+    Route::get('products/create',                            [SellerController::class, 'createProduct'])->name('seller.products.create');
+    Route::post('products',                                  [SellerController::class, 'storeProduct'])->name('seller.products.store');
+    Route::get('products/{product}/edit',                    [SellerController::class, 'editProduct'])->name('seller.products.edit');
+    Route::put('products/{product}',                         [SellerController::class, 'updateProduct'])->name('seller.products.update');
+    Route::delete('products/{product}',                      [SellerController::class, 'deleteProduct'])->name('seller.products.destroy');
+    Route::delete('products/{product}/images/{image}',       [SellerController::class, 'deleteProductImage'])->name('seller.products.images.destroy');
+
+    // Orders
+    Route::get('orders',                                     [SellerController::class, 'orders'])->name('seller.orders');
+    Route::post('orders/{order}/confirm',                    [SellerController::class, 'confirmOrder'])->name('seller.orders.confirm');
+    Route::post('orders/{order}/complete',                   [SellerController::class, 'completeOrder'])->name('seller.orders.complete');
+    Route::post('orders/{order}/cancel',                     [SellerController::class, 'cancelOrder'])->name('seller.orders.cancel');
 });
