@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Models\Ride;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Models\PromoCode;
+use App\Models\PromoCodeUsage;
 use App\Services\FareService;
 use App\Services\FirestoreService;
 use App\Services\PaymentService;
@@ -175,6 +177,11 @@ class RideController extends ApiController
             'scheduled_at'    => 'nullable|date',
             'notes'           => 'nullable|string|max:500',
             'vehicle_id'      => 'nullable|exists:vehicles,id',
+            // Ride for someone else
+            'passenger_name'  => 'nullable|string|max:100',
+            'passenger_phone' => 'nullable|string|max:24',
+            // Promo code
+            'promo_code'      => 'nullable|string|max:32',
         ]);
 
         if (! empty($data['vehicle_id'])) {
@@ -204,6 +211,20 @@ class RideController extends ApiController
             ], 422);
         }
 
+        // Apply promo code if provided
+        $promoCodeId     = null;
+        $discountAmount  = 0;
+        $finalFare       = $fareResult['total'];
+
+        if (! empty($data['promo_code'])) {
+            $promo = PromoCode::where('code', strtoupper(trim($data['promo_code'])))->first();
+            if ($promo && $promo->isValid('rides', $fareResult['total'], $user->id)) {
+                $discountAmount = $promo->calculateDiscount($fareResult['total']);
+                $finalFare      = max(0, $fareResult['total'] - $discountAmount);
+                $promoCodeId    = $promo->id;
+            }
+        }
+
         $ride = Ride::create([
             'passenger_id'    => $user->id,
             'driver_id'       => $data['driver_id'] ?? null,
@@ -220,11 +241,26 @@ class RideController extends ApiController
             'scheduled_at'    => $data['scheduled_at'] ?? null,
             'notes'           => $data['notes'] ?? null,
             'status'          => Ride::STATUS_REQUESTED,
-            'fare'            => $fareResult['total'],
+            'fare'            => $finalFare,
             'surge_multiplier'=> $fareResult['surge_multiplier'],
             'surge_zone_id'   => $fareResult['surge_zone']['id'] ?? null,
             'surge_accepted'  => ! empty($data['surge_accepted']),
+            'passenger_name'  => $data['passenger_name'] ?? null,
+            'passenger_phone' => $data['passenger_phone'] ?? null,
+            'promo_code_id'   => $promoCodeId,
+            'discount_amount' => $discountAmount,
         ]);
+
+        if ($promoCodeId) {
+            PromoCodeUsage::create([
+                'promo_code_id'   => $promoCodeId,
+                'user_id'         => $user->id,
+                'bookable_type'   => Ride::class,
+                'bookable_id'     => $ride->id,
+                'discount_amount' => $discountAmount,
+            ]);
+            PromoCode::where('id', $promoCodeId)->increment('used_count');
+        }
 
         $ride->load('driver', 'vehicle');
         $this->firestore->syncRide($ride);
@@ -391,14 +427,41 @@ class RideController extends ApiController
             ], 422);
         }
 
+        // Cancellation fee: charge passenger if driver already arrived
+        $cancellationFee = 0;
+        $isByPassenger   = $user->id === $ride->passenger_id;
+        $isAfterArrival  = in_array($ride->status, [Ride::STATUS_DRIVER_ARRIVED], true);
+
+        if ($isByPassenger && $isAfterArrival) {
+            $cancellationFee = (int) config('ride.cancellation_fee', 2000); // 2000 KHR default
+        }
+
+        // Track driver cancellations
+        if (! $isByPassenger && $ride->driver_id) {
+            $driver = User::find($ride->driver_id);
+            if ($driver) {
+                $newCount = $driver->cancellation_count + 1;
+                $updates  = ['cancellation_count' => $newCount];
+                if ($newCount >= 5) {
+                    $updates['cancellation_penalty_until'] = now()->addHours(24);
+                }
+                $driver->update($updates);
+            }
+        }
+
         $ride->update([
-            'status'       => Ride::STATUS_CANCELLED,
-            'cancelled_at' => now(),
+            'status'             => Ride::STATUS_CANCELLED,
+            'cancelled_at'       => now(),
+            'cancellation_reason'=> $request->input('reason'),
+            'cancellation_fee'   => $cancellationFee,
         ]);
 
         $this->firestore->syncRide($ride->fresh()->load('driver', 'vehicle'));
 
-        return $this->success(['ride' => $ride->fresh()]);
+        return $this->success([
+            'ride'             => $ride->fresh(),
+            'cancellation_fee' => $cancellationFee,
+        ]);
     }
 
     // ── Rate ──────────────────────────────────────────────────────────────────

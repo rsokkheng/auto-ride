@@ -7,14 +7,19 @@ use App\Http\Controllers\Api\UploadController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\ChargingStationController;
 use App\Http\Controllers\Api\DeliveryController;
+use App\Http\Controllers\Api\DeliveryFeaturesController;
 use App\Http\Controllers\Api\DriverController;
+use App\Http\Controllers\Api\DriverFeaturesController;
 use App\Http\Controllers\Api\MarketplaceController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\PromoCodeController;
 use App\Http\Controllers\Api\RideController;
+use App\Http\Controllers\Api\RideFeaturesController;
 use App\Http\Controllers\Api\RideTrackingController;
 use App\Http\Controllers\Api\SafetyController;
 use App\Http\Controllers\Api\SupportController;
+use App\Http\Controllers\Api\UserProfileController;
 use App\Http\Controllers\Api\VehicleController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -70,6 +75,7 @@ Route::prefix('v1')->group(function () {
     Route::get('rides', [RideController::class, 'index']);
     Route::get('rides/available', [RideController::class, 'available']);
     Route::get('rides/active', [RideController::class, 'active']);
+    Route::get('rides/reorder-last', [RideFeaturesController::class, 'reorderLast']);
     Route::post('rides/estimate', [RideController::class, 'estimate']);
     Route::post('rides', [RideController::class, 'store']);
 
@@ -169,4 +175,55 @@ Route::prefix('v1')->group(function () {
     Route::get('driver/stats', [DriverController::class, 'getDriverStats']);
     Route::post('driver/vehicles', [DriverController::class, 'registerVehicle']);
     Route::put('driver/vehicles/{vehicle}', [DriverController::class, 'updateVehicle']);
+
+    // ── Saved places ──────────────────────────────────────────────────────────
+    Route::get('saved-places', [UserProfileController::class, 'savedPlaces']);
+    Route::post('saved-places', [UserProfileController::class, 'storeSavedPlace']);
+    Route::put('saved-places/{place}', [UserProfileController::class, 'updateSavedPlace']);
+    Route::patch('saved-places/{place}', [UserProfileController::class, 'updateSavedPlace']);
+    Route::delete('saved-places/{place}', [UserProfileController::class, 'destroySavedPlace']);
+
+    // ── Emergency contacts ────────────────────────────────────────────────────
+    Route::get('emergency-contacts', [UserProfileController::class, 'emergencyContacts']);
+    Route::post('emergency-contacts', [UserProfileController::class, 'storeEmergencyContact']);
+    Route::put('emergency-contacts/{contact}', [UserProfileController::class, 'updateEmergencyContact']);
+    Route::patch('emergency-contacts/{contact}', [UserProfileController::class, 'updateEmergencyContact']);
+    Route::delete('emergency-contacts/{contact}', [UserProfileController::class, 'destroyEmergencyContact']);
+
+    // ── Ride features (stops, share, reorder, promo, safety) ─────────────────
+    Route::get('rides/{ride}/stops', [RideFeaturesController::class, 'stops']);
+    Route::post('rides/{ride}/stops', [RideFeaturesController::class, 'addStops']);
+    Route::post('rides/{ride}/stops/{stop}/arrive', [RideFeaturesController::class, 'markStopArrived']);
+    Route::post('rides/{ride}/share', [RideFeaturesController::class, 'shareToken']);
+    Route::delete('rides/{ride}/share', [RideFeaturesController::class, 'deactivateShare']);
+    Route::post('rides/{ride}/sos', [RideFeaturesController::class, 'sos']);
+    Route::post('rides/{ride}/timeout', [RideFeaturesController::class, 'setPickupTimeout']);
+
+    // ── Delivery features (stops, proof, live location) ───────────────────────
+    Route::get('deliveries/{delivery}/stops', [DeliveryFeaturesController::class, 'stops']);
+    Route::post('deliveries/{delivery}/stops', [DeliveryFeaturesController::class, 'addStops']);
+    Route::post('deliveries/{delivery}/proof', [DeliveryFeaturesController::class, 'uploadProof']);
+    Route::post('deliveries/{delivery}/stops/{stop}/proof', [DeliveryFeaturesController::class, 'uploadStopProof']);
+    Route::get('deliveries/{delivery}/driver-location', [DeliveryFeaturesController::class, 'driverLocation']);
+
+    // ── Promo codes ───────────────────────────────────────────────────────────
+    Route::post('promo-codes/validate', [PromoCodeController::class, 'check']);
+
+    // ── Driver features ───────────────────────────────────────────────────────
+    Route::get('driver/earnings', [DriverFeaturesController::class, 'earnings']);
+    Route::get('driver/incentives', [DriverFeaturesController::class, 'incentives']);
+    Route::get('driver/cancellation-status', [DriverFeaturesController::class, 'cancellationStatus']);
+    Route::get('driver/approval-status', [DriverFeaturesController::class, 'approvalStatus']);
+    Route::get('driver/heatmap', [DriverFeaturesController::class, 'heatmap']);
+
+    // ── Admin: driver approval ────────────────────────────────────────────────
+    Route::get('admin/drivers/pending', [DriverFeaturesController::class, 'pendingDrivers']);
+    Route::post('admin/drivers/{driver}/approve', [DriverFeaturesController::class, 'approveDriver']);
+
+    // ── Safety features ───────────────────────────────────────────────────────
+    Route::post('safety/fake-call', [RideFeaturesController::class, 'fakeCall']);
+    Route::get('rides/{ride}/masked-phone', [DriverFeaturesController::class, 'maskedPhone']);
+
+    // ── Public trip tracking (no auth required) ───────────────────────────────
+    Route::get('track/{token}', [RideFeaturesController::class, 'trackByToken']);
 });

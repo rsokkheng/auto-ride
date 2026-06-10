@@ -55,6 +55,12 @@ class Delivery extends Model
         'payment_model',
         'split_pct_customer',
         'partner_reference',
+        // New feature columns
+        'proof_photo',
+        'promo_code_id',
+        'discount_amount',
+        'cancellation_reason',
+        'cancellation_fee',
     ];
 
     protected $casts = [
@@ -92,5 +98,15 @@ class Delivery extends Model
     public function vehicle(): BelongsTo
     {
         return $this->belongsTo(Vehicle::class);
+    }
+
+    public function stops()
+    {
+        return $this->hasMany(DeliveryStop::class)->orderBy('sort_order');
+    }
+
+    public function promoCode(): BelongsTo
+    {
+        return $this->belongsTo(PromoCode::class);
     }
 }

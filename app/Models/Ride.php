@@ -58,6 +58,16 @@ class Ride extends Model
         'started_at',
         'completed_at',
         'cancelled_at',
+        // New feature columns
+        'passenger_name',
+        'passenger_phone',
+        'cancellation_fee',
+        'cancellation_reason',
+        'share_token',
+        'share_active',
+        'pickup_timeout_at',
+        'promo_code_id',
+        'discount_amount',
     ];
 
     protected $casts = [
@@ -67,7 +77,11 @@ class Ride extends Model
         'started_at'        => 'datetime',
         'completed_at'      => 'datetime',
         'cancelled_at'      => 'datetime',
+        'pickup_timeout_at' => 'datetime',
         'fare'              => 'integer',
+        'cancellation_fee'  => 'integer',
+        'discount_amount'   => 'integer',
+        'share_active'      => 'boolean',
         'rating'            => 'float',
         'pickup_lat'        => 'float',
         'pickup_lng'        => 'float',
@@ -95,5 +109,15 @@ class Ride extends Model
     public function locations(): HasMany
     {
         return $this->hasMany(RideLocation::class);
+    }
+
+    public function stops(): HasMany
+    {
+        return $this->hasMany(RideStop::class)->orderBy('sort_order');
+    }
+
+    public function promoCode(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(PromoCode::class);
     }
 }

@@ -11,7 +11,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['name', 'email', 'password', 'phone', 'avatar', 'role', 'driver_type', 'company_name', 'company_id', 'salary', 'commission_rate', 'api_token', 'refresh_token', 'token_expires_at', 'refresh_token_expires_at', 'available', 'status_note', 'wallet_balance', 'current_latitude', 'current_longitude', 'rating', 'total_ratings'])]
+#[Fillable(['name', 'email', 'password', 'phone', 'avatar', 'role', 'driver_type', 'company_name', 'company_id', 'salary', 'commission_rate', 'api_token', 'refresh_token', 'token_expires_at', 'refresh_token_expires_at', 'available', 'status_note', 'wallet_balance', 'current_latitude', 'current_longitude', 'rating', 'total_ratings', 'approval_status', 'approved_at', 'cancellation_count', 'cancellation_penalty_until', 'proxy_phone'])]
 #[Hidden(['password', 'remember_token', 'api_token', 'refresh_token'])]
 class User extends Authenticatable
 {
@@ -26,13 +26,16 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
-            'email_verified_at'         => 'datetime',
-            'password'                  => 'hashed',
-            'wallet_balance'            => 'integer',
-            'salary'                    => 'integer',
-            'commission_rate'           => 'float',
-            'token_expires_at'          => 'datetime',
-            'refresh_token_expires_at'  => 'datetime',
+            'email_verified_at'           => 'datetime',
+            'password'                    => 'hashed',
+            'wallet_balance'              => 'integer',
+            'salary'                      => 'integer',
+            'commission_rate'             => 'float',
+            'token_expires_at'            => 'datetime',
+            'refresh_token_expires_at'    => 'datetime',
+            'approved_at'                 => 'datetime',
+            'cancellation_penalty_until'  => 'datetime',
+            'cancellation_count'          => 'integer',
         ];
     }
 
@@ -128,5 +131,20 @@ class User extends Authenticatable
     public function topUpRequests(): HasMany
     {
         return $this->hasMany(TopUpRequest::class)->orderByDesc('created_at');
+    }
+
+    public function savedPlaces(): HasMany
+    {
+        return $this->hasMany(UserSavedPlace::class);
+    }
+
+    public function emergencyContacts(): HasMany
+    {
+        return $this->hasMany(UserEmergencyContact::class);
+    }
+
+    public function incentives(): HasMany
+    {
+        return $this->hasMany(DriverIncentive::class, 'driver_id');
     }
 }
