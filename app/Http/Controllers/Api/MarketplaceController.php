@@ -103,9 +103,26 @@ class MarketplaceController extends ApiController
             'location_lat'       => 'nullable|numeric|between:-90,90',
             'location_lng'       => 'nullable|numeric|between:-180,180',
             'expires_at'         => 'nullable|date',
+            'images'             => 'nullable|array|max:10',
+            'images.*'           => 'image|max:5120',
         ]);
 
-        $product = MarketplaceProduct::create(array_merge($data, ['seller_id' => $user->id]));
+        $product = MarketplaceProduct::create(array_merge(
+            collect($data)->except('images')->toArray(),
+            ['seller_id' => $user->id]
+        ));
+
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $i => $file) {
+                $path = $file->store('marketplace', 'public');
+                MarketplaceProductImage::create([
+                    'product_id' => $product->id,
+                    'url'        => $path,
+                    'disk'       => 'public',
+                    'sort_order' => $i,
+                ]);
+            }
+        }
 
         return $this->success(['product' => $product->load('category', 'images')], 201);
     }
@@ -160,19 +177,25 @@ class MarketplaceController extends ApiController
         $user = $this->authUser($request);
         if (! $user || $product->seller_id !== $user->id) return $this->unauthorized();
 
-        $request->validate(['image' => 'required|image|max:5120']);
-
-        $path  = $request->file('image')->store('marketplace', 'public');
-        $order = ($product->images()->max('sort_order') ?? 0) + 1;
-
-        $image = MarketplaceProductImage::create([
-            'product_id' => $product->id,
-            'url'        => $path,
-            'disk'       => 'public',
-            'sort_order' => $order,
+        $request->validate([
+            'images'   => 'required|array|min:1|max:10',
+            'images.*' => 'image|max:5120',
         ]);
 
-        return $this->success(['image' => $image], 201);
+        $next   = ($product->images()->max('sort_order') ?? 0) + 1;
+        $saved  = [];
+
+        foreach ($request->file('images') as $i => $file) {
+            $path  = $file->store('marketplace', 'public');
+            $saved[] = MarketplaceProductImage::create([
+                'product_id' => $product->id,
+                'url'        => $path,
+                'disk'       => 'public',
+                'sort_order' => $next + $i,
+            ]);
+        }
+
+        return $this->success(['images' => $saved], 201);
     }
 
     public function deleteImage(Request $request, MarketplaceProduct $product, MarketplaceProductImage $image)
