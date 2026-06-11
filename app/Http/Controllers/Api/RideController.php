@@ -11,6 +11,7 @@ use App\Services\FareService;
 use App\Services\FcmService;
 use App\Services\FirestoreService;
 use App\Services\PaymentService;
+use App\Services\WalletService;
 use Illuminate\Http\Request;
 
 class RideController extends ApiController
@@ -19,6 +20,7 @@ class RideController extends ApiController
         private FareService $fare,
         private FirestoreService $firestore,
         private FcmService $fcm,
+        private WalletService $wallet,
     ) {}
 
     // ── List / History ────────────────────────────────────────────────────────
@@ -567,6 +569,64 @@ class RideController extends ApiController
 
         return $this->success([
             'message' => 'Dispute filed. Our support team will review it within 24 hours.',
+        ]);
+    }
+
+    // ── Tip driver ───────────────────────────────────────────────────────────
+
+    /**
+     * POST /v1/rides/{ride}/tip
+     * Passenger adds a tip after a completed ride. Deducted from wallet.
+     * Body: amount (KHR, min 500)
+     */
+    public function tip(Request $request, Ride $ride)
+    {
+        $user = $this->authUser($request);
+        if (! $user || $user->id !== $ride->passenger_id) {
+            return $this->unauthorized();
+        }
+
+        if ($ride->status !== Ride::STATUS_COMPLETED) {
+            return response()->json(['data' => null, 'message' => 'Tips can only be added to completed rides.'], 422);
+        }
+
+        if ($ride->tip_amount > 0) {
+            return response()->json(['data' => null, 'message' => 'A tip has already been added for this ride.'], 422);
+        }
+
+        $data = $request->validate([
+            'amount' => 'required|integer|min:500',
+        ]);
+
+        if ($user->wallet_balance < $data['amount']) {
+            return response()->json(['data' => null, 'message' => 'Insufficient wallet balance.'], 422);
+        }
+
+        // Deduct from passenger wallet
+        $this->wallet->debit($user, $data['amount'], 'tip_out', "Tip for ride #{$ride->id}");
+
+        // Credit driver wallet
+        if ($ride->driver_id) {
+            $driver = \App\Models\User::find($ride->driver_id);
+            if ($driver) {
+                $this->wallet->credit($driver, $data['amount'], 'tip_in', "Tip from passenger for ride #{$ride->id}");
+            }
+        }
+
+        $ride->update(['tip_amount' => $data['amount']]);
+
+        if ($ride->driver_id) {
+            $this->fcm->sendToUser(
+                $ride->driver_id,
+                'You received a tip!',
+                "Your passenger added a " . number_format($data['amount']) . " KHR tip.",
+                ['type' => 'tip_received', 'ride_id' => (string) $ride->id, 'amount' => (string) $data['amount']],
+            );
+        }
+
+        return $this->success([
+            'message'    => 'Tip sent successfully.',
+            'tip_amount' => $ride->tip_amount,
         ]);
     }
 

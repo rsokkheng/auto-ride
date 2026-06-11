@@ -68,6 +68,7 @@ class Ride extends Model
         'pickup_timeout_at',
         'promo_code_id',
         'discount_amount',
+        'tip_amount',
     ];
 
     protected $casts = [
@@ -81,6 +82,7 @@ class Ride extends Model
         'fare'              => 'integer',
         'cancellation_fee'  => 'integer',
         'discount_amount'   => 'integer',
+        'tip_amount'        => 'integer',
         'share_active'      => 'boolean',
         'rating'            => 'float',
         'pickup_lat'        => 'float',

@@ -89,6 +89,7 @@ Route::prefix('v1')->group(function () {
     Route::post('rides/{ride}/cancel', [RideController::class, 'cancel']);
     Route::post('rides/{ride}/rate', [RideController::class, 'rate']);
     Route::post('rides/{ride}/dispute', [RideController::class, 'dispute']);
+    Route::post('rides/{ride}/tip', [RideController::class, 'tip']);
 
     // Static delivery routes must come before {delivery} wildcard routes.
     Route::get('deliveries/available', [DeliveryController::class, 'available']);
@@ -162,6 +163,7 @@ Route::prefix('v1')->group(function () {
     Route::post('wallet/topup', [WalletController::class, 'requestTopUp']);
     Route::get('wallet/topup/{topup}', [WalletController::class, 'topUpStatus']);
     Route::post('wallet/withdraw', [WalletController::class, 'requestWithdrawal']);
+    Route::post('wallet/transfer', [WalletController::class, 'transfer']);
 
     Route::get('drivers/nearby', [DriverController::class, 'nearby']);
     Route::get('drivers/{driver}', [DriverController::class, 'profile']);
