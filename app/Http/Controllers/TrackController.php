@@ -21,11 +21,13 @@ class TrackController extends Controller
 
         $driver = null;
         if ($ride->driver) {
+            $lat = $ride->driver->current_latitude  ?: null;
+            $lng = $ride->driver->current_longitude ?: null;
             $driver = [
                 'name'   => $ride->driver->name,
                 'rating' => $ride->driver->rating ?? 5.0,
-                'lat'    => $isLive ? $ride->driver->current_latitude  : null,
-                'lng'    => $isLive ? $ride->driver->current_longitude : null,
+                'lat'    => $isLive ? $lat : null,
+                'lng'    => $isLive ? $lng : null,
             ];
         }
 

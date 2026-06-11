@@ -143,25 +143,51 @@ class RideFeaturesController extends ApiController
     {
         $ride = Ride::with(['driver', 'vehicle'])
             ->where('share_token', $token)
-            ->where('share_active', true)
-            ->whereIn('status', [Ride::STATUS_ACCEPTED, Ride::STATUS_DRIVER_ARRIVED, Ride::STATUS_IN_PROGRESS])
             ->first();
 
         if (! $ride) {
-            return response()->json(['data' => null, 'message' => 'Link not found or no longer active.'], 404);
+            return response()->json(['data' => null, 'message' => 'Link not found.'], 404);
         }
+
+        $isLive = in_array($ride->status, [
+            Ride::STATUS_ACCEPTED,
+            Ride::STATUS_DRIVER_ARRIVED,
+            Ride::STATUS_IN_PROGRESS,
+        ]);
+
+        $driverLat = $ride->driver?->current_latitude;
+        $driverLng = $ride->driver?->current_longitude;
 
         return response()->json([
             'data' => [
-                'ride_id'         => $ride->id,
-                'status'          => $ride->status,
-                'pickup_address'  => $ride->pickup_address,
-                'dropoff_address' => $ride->dropoff_address,
+                'ride_id'          => $ride->id,
+                'status'           => $ride->status,
+                'is_live'          => $isLive,
+                'pickup_address'   => $ride->pickup_address,
+                'dropoff_address'  => $ride->dropoff_address,
                 'driver' => $ride->driver ? [
-                    'name'   => $ride->driver->name,
-                    'rating' => $ride->driver->rating,
-                    'lat'    => $ride->driver->current_latitude,
-                    'lng'    => $ride->driver->current_longitude,
+                    'id'               => $ride->driver->id,
+                    'name'             => $ride->driver->name,
+                    'rating'           => $ride->driver->rating,
+                    'phone'            => $ride->driver->phone,
+                    // explicit key names — all formats Flutter might expect
+                    'lat'              => $driverLat,
+                    'lng'              => $driverLng,
+                    'latitude'         => $driverLat,
+                    'longitude'        => $driverLng,
+                    'current_lat'      => $driverLat,
+                    'current_lng'      => $driverLng,
+                    'current_latitude' => $driverLat,
+                    'current_longitude'=> $driverLng,
+                    'location_updated' => $driverLat ? true : false,
+                    'vehicle' => $ride->vehicle ? [
+                        'type'          => $ride->vehicle->type ?? null,
+                        'make'          => $ride->vehicle->make ?? null,
+                        'model'         => $ride->vehicle->model ?? null,
+                        'plate'         => $ride->vehicle->plate ?? $ride->vehicle->license_plate ?? null,
+                        'license_plate' => $ride->vehicle->plate ?? $ride->vehicle->license_plate ?? null,
+                        'color'         => $ride->vehicle->color ?? null,
+                    ] : null,
                 ] : null,
             ],
         ]);
