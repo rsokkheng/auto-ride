@@ -38,6 +38,7 @@ Route::prefix('v1')->group(function () {
     Route::put('auth/profile', [AuthController::class, 'updateProfile']);
     Route::post('auth/otp/send', [AuthController::class, 'sendOTP']);
     Route::post('auth/otp/verify', [AuthController::class, 'verifyOTP']);
+    Route::post('auth/fcm-token', [AuthController::class, 'saveFcmToken']);
 
     Route::get('vehicles', [VehicleController::class, 'index']);
     Route::get('vehicles/{vehicle}', [VehicleController::class, 'show']);

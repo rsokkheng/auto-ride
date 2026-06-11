@@ -8,6 +8,7 @@ use App\Models\Vehicle;
 use App\Models\PromoCode;
 use App\Models\PromoCodeUsage;
 use App\Services\FareService;
+use App\Services\FcmService;
 use App\Services\FirestoreService;
 use App\Services\PaymentService;
 use Illuminate\Http\Request;
@@ -17,6 +18,7 @@ class RideController extends ApiController
     public function __construct(
         private FareService $fare,
         private FirestoreService $firestore,
+        private FcmService $fcm,
     ) {}
 
     // ── List / History ────────────────────────────────────────────────────────
@@ -265,6 +267,18 @@ class RideController extends ApiController
         $ride->load('driver', 'vehicle');
         $this->firestore->syncRide($ride);
 
+        // Notify nearby available drivers about the new ride request
+        $nearbyDrivers = User::where('role', 'driver')
+            ->where('available', true)
+            ->whereNotNull('fcm_token')
+            ->get();
+        $this->fcm->sendToUsers(
+            $nearbyDrivers->all(),
+            '🚗 New Ride Request',
+            "{$data['pickup_address']} → {$data['dropoff_address']}",
+            ['type' => 'ride_requested', 'ride_id' => (string) $ride->id]
+        );
+
         return $this->success([
             'ride' => $ride,
             'fare' => $fareResult,
@@ -302,6 +316,11 @@ class RideController extends ApiController
         $fresh = $ride->fresh()->load('passenger', 'driver', 'vehicle');
         $this->firestore->syncRide($fresh);
 
+        // Notify passenger: driver is on the way
+        if ($fresh->passenger) {
+            $this->fcm->rideAccepted($fresh->passenger, $fresh->id, $fresh->driver->name ?? 'Your driver');
+        }
+
         return $this->success([
             'ride'    => $fresh,
             'message' => 'Ride accepted. Head to pickup location.',
@@ -333,6 +352,11 @@ class RideController extends ApiController
 
         $fresh = $ride->fresh()->load('passenger', 'driver', 'vehicle');
         $this->firestore->syncRide($fresh);
+
+        // Notify passenger: driver has arrived
+        if ($fresh->passenger) {
+            $this->fcm->driverArrived($fresh->passenger, $fresh->id, $fresh->driver->name ?? 'Your driver');
+        }
 
         return $this->success([
             'ride'    => $fresh,
@@ -366,6 +390,11 @@ class RideController extends ApiController
         $fresh = $ride->fresh()->load('passenger', 'driver', 'vehicle');
         $this->firestore->syncRide($fresh);
 
+        // Notify passenger: trip has started
+        if ($fresh->passenger) {
+            $this->fcm->rideStarted($fresh->passenger, $fresh->id);
+        }
+
         return $this->success([
             'ride'    => $fresh,
             'message' => 'Trip started.',
@@ -393,6 +422,7 @@ class RideController extends ApiController
         $ride->update([
             'status'       => Ride::STATUS_COMPLETED,
             'completed_at' => now(),
+            'share_active' => false,
         ]);
 
         $transaction = null;
@@ -402,6 +432,11 @@ class RideController extends ApiController
 
         $fresh = $ride->fresh()->load('passenger', 'driver', 'vehicle');
         $this->firestore->syncRide($fresh);
+
+        // Notify passenger: trip completed with fare
+        if ($fresh->passenger) {
+            $this->fcm->rideCompleted($fresh->passenger, $fresh->id, (int) $fresh->fare);
+        }
 
         return $this->success([
             'ride'        => $fresh,
@@ -454,12 +489,21 @@ class RideController extends ApiController
             'cancelled_at'       => now(),
             'cancellation_reason'=> $request->input('reason'),
             'cancellation_fee'   => $cancellationFee,
+            'share_active'       => false,
         ]);
 
-        $this->firestore->syncRide($ride->fresh()->load('driver', 'vehicle'));
+        $fresh = $ride->fresh()->load('passenger', 'driver', 'vehicle');
+        $this->firestore->syncRide($fresh);
+
+        // Notify the other party about cancellation
+        if ($isByPassenger && $fresh->driver) {
+            $this->fcm->rideCancelledByPassenger($fresh->driver, $fresh->id);
+        } elseif (! $isByPassenger && $fresh->passenger) {
+            $this->fcm->rideCancelledByDriver($fresh->passenger, $fresh->id);
+        }
 
         return $this->success([
-            'ride'             => $ride->fresh(),
+            'ride'             => $fresh,
             'cancellation_fee' => $cancellationFee,
         ]);
     }

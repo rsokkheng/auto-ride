@@ -5,15 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Models\Ride;
 use App\Models\RideStop;
 use App\Models\PromoCode;
-use App\Models\PromoCodeUsage;
 use App\Models\UserEmergencyContact;
-use App\Services\FirestoreService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 class RideFeaturesController extends ApiController
 {
-    public function __construct(private FirestoreService $firestore) {}
 
     // ── Multi-stop waypoints ──────────────────────────────────────────────────
 
@@ -134,11 +131,11 @@ class RideFeaturesController extends ApiController
         $ride->refresh();
 
         // Notify emergency contacts
-        $this->notifyEmergencyContactsOfShare($user->id, $ride);
+        $this->notifyEmergencyContactsOfShare($user->id);
 
         return $this->success([
             'share_token' => $ride->share_token,
-            'share_url'   => url('/track/' . $ride->share_token),
+            'share_url'   => route('track.show', $ride->share_token),
         ]);
     }
 
@@ -271,9 +268,8 @@ class RideFeaturesController extends ApiController
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    private function notifyEmergencyContactsOfShare(int $userId, Ride $ride): void
+    private function notifyEmergencyContactsOfShare(int $userId): void
     {
-        // Placeholder: in production dispatch a notification job per contact.
         // UserEmergencyContact::where('user_id', $userId)->where('notify_on_trip_share', true)->get()
         // → dispatch(new NotifyEmergencyContactJob($contact, $ride))
     }

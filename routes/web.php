@@ -2,7 +2,11 @@
 
 use App\Http\Controllers\Admin\AdminController;
 use App\Http\Controllers\Seller\SellerController;
+use App\Http\Controllers\TrackController;
 use Illuminate\Support\Facades\Route;
+
+// Public live trip tracking page (no auth required)
+Route::get('/track/{token}', [TrackController::class, 'show'])->name('track.show');
 
 Route::get('/', function () {
     return redirect()->route('admin.login');

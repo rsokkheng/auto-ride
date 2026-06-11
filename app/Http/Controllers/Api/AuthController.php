@@ -215,6 +215,20 @@ class AuthController extends ApiController
         ]);
     }
 
+    public function saveFcmToken(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
+        $data = $request->validate([
+            'fcm_token' => 'required|string|max:255',
+        ]);
+
+        $user->update(['fcm_token' => $data['fcm_token']]);
+
+        return $this->success(['message' => 'FCM token saved.']);
+    }
+
     protected function tokenResponse(User $user): array
     {
         $fresh = $user->fresh();

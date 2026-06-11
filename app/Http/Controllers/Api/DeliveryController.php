@@ -6,6 +6,7 @@ use App\Models\Delivery;
 use App\Models\Vehicle;
 use App\Services\DriverMatchingService;
 use App\Services\FareService;
+use App\Services\FcmService;
 use App\Services\FirestoreService;
 use App\Services\MovingFareService;
 use App\Services\PaymentService;
@@ -17,6 +18,7 @@ class DeliveryController extends ApiController
     public function __construct(
         private DriverMatchingService $matcher,
         private FareService $fare,
+        private FcmService $fcm,
         private FirestoreService $firestore,
         private MovingFareService $movingFare,
     ) {}
@@ -282,8 +284,20 @@ class DeliveryController extends ApiController
             'partner_reference'  => $data['partner_reference'] ?? null,
         ]);
 
-        $delivery->load('driver', 'vehicle');
+        $delivery->load('sender', 'driver', 'vehicle');
         $this->firestore->syncDelivery($delivery);
+
+        // Notify available drivers about the new delivery
+        $nearbyDrivers = User::where('role', 'driver')
+            ->where('available', true)
+            ->whereNotNull('fcm_token')
+            ->get();
+        $this->fcm->sendToUsers(
+            $nearbyDrivers->all(),
+            '📦 New Delivery Request',
+            "{$delivery->pickup_address} → {$delivery->dropoff_address}",
+            ['type' => 'delivery_requested', 'delivery_id' => (string) $delivery->id]
+        );
 
         return $this->success(['delivery' => $delivery], 201);
     }
@@ -317,6 +331,11 @@ class DeliveryController extends ApiController
 
         // Sync booking to Firestore — Flutter sender listens here.
         $this->firestore->syncDelivery($fresh);
+
+        // Notify sender: driver assigned
+        if ($fresh->sender) {
+            $this->fcm->deliveryAccepted($fresh->sender, $fresh->id, $fresh->driver->name ?? 'Your driver');
+        }
 
         return $this->success([
             'delivery' => $fresh,
@@ -485,10 +504,19 @@ class DeliveryController extends ApiController
             return response()->json(['message' => 'Delivery cannot be cancelled'], 422);
         }
 
+        $isByDriver = $user->role === 'driver';
         $delivery->update(['status' => 'cancelled']);
-        $this->firestore->syncDelivery($delivery->fresh()->load('driver'));
+        $fresh = $delivery->fresh()->load('sender', 'driver');
+        $this->firestore->syncDelivery($fresh);
 
-        return $this->success(['delivery' => $delivery]);
+        // Notify the other party
+        if ($isByDriver && $fresh->sender) {
+            $this->fcm->deliveryCancelled($fresh->sender, $fresh->id, 'driver');
+        } elseif (! $isByDriver && $fresh->driver) {
+            $this->fcm->deliveryCancelled($fresh->driver, $fresh->id, 'sender');
+        }
+
+        return $this->success(['delivery' => $fresh]);
     }
 
     // ── Confirm / Complete ──────────────────────────────────────────────────
@@ -509,8 +537,13 @@ class DeliveryController extends ApiController
             $transaction = app(PaymentService::class)->processDelivery($delivery->fresh());
         }
 
-        $fresh = $delivery->fresh()->load('driver');
+        $fresh = $delivery->fresh()->load('sender', 'driver');
         $this->firestore->syncDelivery($fresh);
+
+        // Notify sender: delivery completed
+        if ($fresh->sender) {
+            $this->fcm->deliveryCompleted($fresh->sender, $fresh->id);
+        }
 
         return $this->success([
             'delivery'    => $fresh,
