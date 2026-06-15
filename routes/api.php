@@ -223,6 +223,7 @@ Route::prefix('v1')->group(function () {
     Route::get('rewards/balance', [PromoCodeController::class, 'rewardsBalance']);
 
     // ── Driver features ───────────────────────────────────────────────────────
+    Route::get('driver/dashboard', [DriverFeaturesController::class, 'dashboard']);
     Route::get('driver/earnings', [DriverFeaturesController::class, 'earnings']);
     Route::get('driver/earnings/summary', [DriverFeaturesController::class, 'earningsSummary']);
     Route::get('driver/earnings/history', [DriverFeaturesController::class, 'earningsHistory']);

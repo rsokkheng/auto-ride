@@ -5,12 +5,95 @@ namespace App\Http\Controllers\Api;
 use App\Models\Ride;
 use App\Models\Delivery;
 use App\Models\DriverIncentive;
+use App\Models\DriverSession;
+use App\Models\RideDecline;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class DriverFeaturesController extends ApiController
 {
+    // ── Driver dashboard ──────────────────────────────────────────────────────
+
+    /**
+     * GET /v1/driver/dashboard?period=today|week|month
+     *
+     * Returns: hours_online, acceptance_rate, accepted, completed
+     */
+    public function dashboard(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user || $user->role !== 'driver') return $this->unauthorized();
+
+        $period = $request->input('period', 'today');
+
+        $start = match ($period) {
+            'week'  => now()->startOfWeek(),
+            'month' => now()->startOfMonth(),
+            default => now()->startOfDay(),
+        };
+
+        // ── Hours Online ─────────────────────────────────────────────────────
+        $sessions = DriverSession::where('driver_id', $user->id)
+            ->where('started_at', '>=', $start)
+            ->get();
+
+        $onlineMinutes = $sessions->sum(function ($s) {
+            $end = $s->ended_at ?? now();
+            return (int) $s->started_at->diffInMinutes($end);
+        });
+
+        $hoursOnline = round($onlineMinutes / 60, 1);
+
+        // ── Accepted & Completed ─────────────────────────────────────────────
+        $accepted = Ride::where('driver_id', $user->id)
+            ->where('accepted_at', '>=', $start)
+            ->count()
+            + Delivery::where('driver_id', $user->id)
+            ->where('assigned_at', '>=', $start)
+            ->whereNotNull('driver_id')
+            ->count();
+
+        $completed = Ride::where('driver_id', $user->id)
+            ->where('completed_at', '>=', $start)
+            ->where('status', 'completed')
+            ->count()
+            + Delivery::where('driver_id', $user->id)
+            ->where('status', 'completed')
+            ->where('updated_at', '>=', $start)
+            ->count();
+
+        // ── Acceptance Rate ──────────────────────────────────────────────────
+        $declined = RideDecline::where('driver_id', $user->id)
+            ->where('created_at', '>=', $start)
+            ->count();
+
+        $total = $accepted + $declined;
+        $acceptanceRate = $total > 0 ? round(($accepted / $total) * 100, 1) : 100.0;
+
+        // ── Earnings this period ─────────────────────────────────────────────
+        $earnings = (int) Ride::where('driver_id', $user->id)
+            ->where('status', 'completed')
+            ->where('completed_at', '>=', $start)
+            ->sum('fare')
+            + (int) Delivery::where('driver_id', $user->id)
+            ->where('status', 'completed')
+            ->where('updated_at', '>=', $start)
+            ->sum('fee');
+
+        return $this->success([
+            'period'          => $period,
+            'from'            => $start->toDateTimeString(),
+            'hours_online'    => $hoursOnline,
+            'acceptance_rate' => $acceptanceRate,
+            'accepted'        => $accepted,
+            'completed'       => $completed,
+            'declined'        => $declined,
+            'earnings_khr'    => $earnings,
+            'is_online'       => (bool) $user->available,
+        ]);
+    }
+
     // ── Earnings summary ──────────────────────────────────────────────────────
 
     public function earnings(Request $request)

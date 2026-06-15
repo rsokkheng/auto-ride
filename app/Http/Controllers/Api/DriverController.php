@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Delivery;
+use App\Models\DriverSession;
 use App\Models\Ride;
+use App\Models\RideDecline;
 use App\Models\RideLocation;
 use App\Models\Vehicle;
 use App\Services\DriverMatchingService;
@@ -125,26 +127,41 @@ class DriverController extends ApiController
 
     public function goOnline(Request $request)
     {
+        $user = $this->authUser($request);
+        if ($user) {
+            // Close any open session first (safety), then open new one
+            DriverSession::where('driver_id', $user->id)->whereNull('ended_at')
+                ->update(['ended_at' => now()]);
+            DriverSession::create(['driver_id' => $user->id, 'started_at' => now()]);
+        }
         return $this->setAvailability($request->merge(['available' => true]));
     }
 
     public function goOffline(Request $request)
     {
+        $user = $this->authUser($request);
+        if ($user) {
+            DriverSession::where('driver_id', $user->id)->whereNull('ended_at')
+                ->update(['ended_at' => now()]);
+        }
         return $this->setAvailability($request->merge(['available' => false]));
     }
 
     public function declineRide(Request $request, Ride $ride)
     {
         $user = $this->authUser($request);
-        if (! $user || $user->role !== 'driver' || $ride->driver_id !== $user->id) {
+        if (! $user || $user->role !== 'driver') {
             return $this->unauthorized();
         }
 
-        $ride->update(['status' => 'requested', 'driver_id' => null]);
+        RideDecline::create(['driver_id' => $user->id, 'ride_id' => $ride->id]);
 
-        $this->firestore->syncRide($ride->fresh());
+        if ($ride->driver_id === $user->id) {
+            $ride->update(['status' => 'requested', 'driver_id' => null]);
+            $this->firestore->syncRide($ride->fresh());
+        }
 
-        return $this->success(['ride' => $ride]);
+        return $this->success(['message' => 'Ride declined.']);
     }
 
     /**
