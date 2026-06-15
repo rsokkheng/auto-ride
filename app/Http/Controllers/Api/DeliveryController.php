@@ -140,6 +140,28 @@ class DeliveryController extends ApiController
         return $this->estimate($request);
     }
 
+    public function indexMoving(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
+        if ($user->role === 'driver') {
+            $movings = Delivery::with(['sender', 'vehicle'])
+                ->where('driver_id', $user->id)
+                ->where('service_type', 'moving')
+                ->orderByDesc('created_at')
+                ->paginate(20);
+        } else {
+            $movings = Delivery::with(['driver', 'vehicle'])
+                ->where('sender_id', $user->id)
+                ->where('service_type', 'moving')
+                ->orderByDesc('created_at')
+                ->paginate(20);
+        }
+
+        return $this->success(['movings' => $movings]);
+    }
+
     public function store(Request $request)
     {
         $user = $this->authUser($request);

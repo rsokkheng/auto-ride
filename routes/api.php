@@ -112,6 +112,7 @@ Route::prefix('v1')->group(function () {
 
     // Aliases for Moving service using the same delivery controller logic.
     Route::post('movings/estimate', [DeliveryController::class, 'estimateMoving']);
+    Route::get('movings', [DeliveryController::class, 'indexMoving']);
     Route::post('movings', [DeliveryController::class, 'storeMoving']);
     Route::get('movings/{delivery}', [DeliveryController::class, 'show']);
     Route::put('movings/{delivery}', [DeliveryController::class, 'update']);
