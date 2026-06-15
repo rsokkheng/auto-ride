@@ -36,6 +36,7 @@ class Delivery extends Model
         'rating',
         'rating_comment',
         'assigned_at',
+        'started_at',
         'surge_multiplier',
         'surge_zone_id',
         // Service option: normal or express
@@ -67,6 +68,7 @@ class Delivery extends Model
     protected $casts = [
         'scheduled_at'    => 'datetime',
         'assigned_at'     => 'datetime',
+        'started_at'      => 'datetime',
         'surge_multiplier'=> 'float',
         'fee'              => 'integer',
         'rating'           => 'float',

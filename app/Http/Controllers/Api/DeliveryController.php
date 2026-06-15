@@ -370,6 +370,63 @@ class DeliveryController extends ApiController
         ]);
     }
 
+    // ── Start (picked up / in progress) ────────────────────────────────────
+
+    /**
+     * POST /v1/deliveries/{id}/start
+     * POST /v1/movings/{id}/start
+     * Driver has picked up the package / started the moving job.
+     */
+    public function start(Request $request, Delivery $delivery)
+    {
+        $user = $this->authUser($request);
+        if (! $user || $user->role !== 'driver' || $delivery->driver_id !== $user->id) {
+            return $this->unauthorized();
+        }
+
+        // Idempotent — already started
+        if (in_array($delivery->status, ['in_progress', 'completed'], true)) {
+            return $this->success([
+                'delivery' => $delivery->load('sender', 'driver', 'vehicle'),
+                'message'  => 'Already started.',
+            ]);
+        }
+
+        if ($delivery->status !== 'accepted') {
+            return response()->json([
+                'data'    => null,
+                'message' => "Cannot start — status is \"{$delivery->status}\". Must be accepted first.",
+            ], 422);
+        }
+
+        $delivery->update([
+            'status'     => 'in_progress',
+            'started_at' => now(),
+        ]);
+
+        $fresh = $delivery->fresh()->load('sender', 'driver', 'vehicle');
+        $this->firestore->syncDelivery($fresh);
+
+        try {
+            if ($fresh->sender) {
+                $label = $fresh->service_type === 'moving' ? 'Moving job' : 'Delivery';
+                $this->fcm->sendToUser(
+                    $fresh->sender_id,
+                    "{$label} Started",
+                    "Your driver has picked up and is on the way.",
+                    ['type' => 'delivery_started', 'delivery_id' => (string) $fresh->id]
+                );
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return $this->success([
+            'delivery' => $fresh,
+            'message'  => 'Started. On the way to destination.',
+        ]);
+    }
+
     // ── Fee Estimate ────────────────────────────────────────────────────────
 
     /**

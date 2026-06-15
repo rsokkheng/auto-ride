@@ -110,6 +110,7 @@ Route::prefix('v1')->group(function () {
     Route::patch('deliveries/{delivery}', [DeliveryController::class, 'update']);
     Route::delete('deliveries/{delivery}', [DeliveryController::class, 'destroy']);
     Route::post('deliveries/{delivery}/accept', [DeliveryController::class, 'accept']);
+    Route::post('deliveries/{delivery}/start', [DeliveryController::class, 'start']);
     Route::post('deliveries/{delivery}/cancel', [DeliveryController::class, 'cancel']);
     Route::post('deliveries/{delivery}/track', [DeliveryController::class, 'track']);
     Route::post('deliveries/{delivery}/complete', [DeliveryController::class, 'complete']);
@@ -124,6 +125,7 @@ Route::prefix('v1')->group(function () {
     Route::patch('movings/{delivery}', [DeliveryController::class, 'update']);
     Route::delete('movings/{delivery}', [DeliveryController::class, 'destroy']);
     Route::post('movings/{delivery}/accept', [DeliveryController::class, 'accept']);
+    Route::post('movings/{delivery}/start', [DeliveryController::class, 'start']);
     Route::post('movings/{delivery}/cancel', [DeliveryController::class, 'cancel']);
     Route::post('movings/{delivery}/track', [DeliveryController::class, 'track']);
     Route::post('movings/{delivery}/complete', [DeliveryController::class, 'complete']);
