@@ -66,10 +66,15 @@ class SurgeZoneController extends ApiController
         return $this->success([
             'lat'          => (float) $data['lat'],
             'lng'          => (float) $data['lng'],
+            'active'       => $multiplier > 1.0,
             'surge_active' => $multiplier > 1.0,
             'multiplier'   => $multiplier,
             'surge_pct'    => round(($multiplier - 1) * 100),
-            'zone'         => $zone ? [
+            'zone'         => $zone ? $zone->name : null,
+            'message'      => $multiplier > 1.0
+                ? "High demand in your area. Fares are {$zone->multiplier}x the normal rate."
+                : 'Normal pricing is in effect.',
+            'zone_detail'  => $zone ? [
                 'id'        => $zone->id,
                 'name'      => $zone->name,
                 'radius_km' => $zone->radius_km,

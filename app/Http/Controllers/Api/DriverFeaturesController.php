@@ -200,4 +200,84 @@ class DriverFeaturesController extends ApiController
 
         return $this->success(['phone' => $phone]);
     }
+
+    // ── Earnings summary (Flutter alias) ─────────────────────────────────────
+
+    /**
+     * GET /v1/driver/earnings/summary
+     * Returns today, this week, and total trip count in one call.
+     */
+    public function earningsSummary(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user || $user->role !== 'driver') return $this->unauthorized();
+
+        $todayStart = now()->startOfDay();
+        $weekStart  = now()->startOfWeek();
+
+        $todayKhr = (int) Ride::where('driver_id', $user->id)->where('status', 'completed')
+            ->where('completed_at', '>=', $todayStart)->sum('fare')
+            + (int) Delivery::where('driver_id', $user->id)->where('status', 'completed')
+            ->where('updated_at', '>=', $todayStart)->sum('fee');
+
+        $weekKhr = (int) Ride::where('driver_id', $user->id)->where('status', 'completed')
+            ->where('completed_at', '>=', $weekStart)->sum('fare')
+            + (int) Delivery::where('driver_id', $user->id)->where('status', 'completed')
+            ->where('updated_at', '>=', $weekStart)->sum('fee');
+
+        $totalTrips = Ride::where('driver_id', $user->id)->where('status', 'completed')->count()
+            + Delivery::where('driver_id', $user->id)->where('status', 'completed')->count();
+
+        return $this->success([
+            'today_khr'   => $todayKhr,
+            'week_khr'    => $weekKhr,
+            'total_trips' => $totalTrips,
+            'currency'    => 'KHR',
+        ]);
+    }
+
+    // ── Earnings history (daily breakdown) ───────────────────────────────────
+
+    /**
+     * GET /v1/driver/earnings/history?days=7
+     */
+    public function earningsHistory(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user || $user->role !== 'driver') return $this->unauthorized();
+
+        $days  = (int) $request->input('days', 7);
+        $start = now()->subDays($days)->startOfDay();
+
+        $rideRows = Ride::where('driver_id', $user->id)
+            ->where('status', 'completed')
+            ->where('completed_at', '>=', $start)
+            ->select(DB::raw('DATE(completed_at) as date'), DB::raw('COUNT(*) as trips'), DB::raw('SUM(fare) as amount_khr'))
+            ->groupBy('date')
+            ->get()
+            ->keyBy('date');
+
+        $deliveryRows = Delivery::where('driver_id', $user->id)
+            ->where('status', 'completed')
+            ->where('updated_at', '>=', $start)
+            ->select(DB::raw('DATE(updated_at) as date'), DB::raw('COUNT(*) as trips'), DB::raw('SUM(fee) as amount_khr'))
+            ->groupBy('date')
+            ->get()
+            ->keyBy('date');
+
+        // Merge rides + deliveries per day
+        $allDates = collect(range(0, $days - 1))->map(fn($i) => now()->subDays($i)->toDateString())->sort()->values();
+
+        $items = $allDates->map(function ($date) use ($rideRows, $deliveryRows) {
+            $r = $rideRows->get($date);
+            $d = $deliveryRows->get($date);
+            return [
+                'date'       => $date,
+                'trips'      => ($r->trips ?? 0) + ($d->trips ?? 0),
+                'amount_khr' => (int) ($r->amount_khr ?? 0) + (int) ($d->amount_khr ?? 0),
+            ];
+        });
+
+        return $this->success(['items' => $items, 'currency' => 'KHR']);
+    }
 }

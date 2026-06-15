@@ -536,7 +536,7 @@ class RideController extends ApiController
             'rating_comment' => $data['comment'] ?? null,
         ]);
 
-        return $this->success(['ride' => $ride->fresh()]);
+        return $this->success(['rated' => true, 'ride' => $ride->fresh()]);
     }
 
     // ── Dispute ───────────────────────────────────────────────────────────────

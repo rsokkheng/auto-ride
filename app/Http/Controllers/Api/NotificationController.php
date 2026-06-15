@@ -10,16 +10,39 @@ class NotificationController extends ApiController
     public function index(Request $request)
     {
         $user = $this->authUser($request);
-
-        if (! $user) {
-            return $this->unauthorized();
-        }
+        if (! $user) return $this->unauthorized();
 
         $notifications = PushNotification::where('user_id', $user->id)
             ->orderByDesc('created_at')
-            ->get();
+            ->paginate(30);
 
-        return $this->success(['notifications' => $notifications]);
+        return $this->success([
+            'notifications' => $notifications->items(),
+            'unread_count'  => PushNotification::where('user_id', $user->id)->where('is_read', false)->count(),
+            'total'         => $notifications->total(),
+        ]);
+    }
+
+    public function markRead(Request $request, PushNotification $notification)
+    {
+        $user = $this->authUser($request);
+        if (! $user || $notification->user_id !== $user->id) return $this->unauthorized();
+
+        $notification->update(['is_read' => true, 'read_at' => now()]);
+
+        return $this->success(['message' => 'Notification marked as read.']);
+    }
+
+    public function markAllRead(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
+        PushNotification::where('user_id', $user->id)
+            ->where('is_read', false)
+            ->update(['is_read' => true, 'read_at' => now()]);
+
+        return $this->success(['message' => 'All notifications marked as read.']);
     }
 
     public function send(Request $request)

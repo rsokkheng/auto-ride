@@ -27,6 +27,23 @@ class WalletController extends ApiController
         ]);
     }
 
+    // ── Balance only (Flutter-friendly) ─────────────────────────────────────
+
+    public function balance(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
+        $khr = (int) $user->wallet_balance;
+        $usd = round($khr / 4000, 2);
+
+        return $this->success([
+            'balance_khr' => $khr,
+            'balance_usd' => $usd,
+            'currency'    => 'KHR',
+        ]);
+    }
+
     // ── Full transaction history (paginated) ─────────────────────────────────
 
     public function transactions(Request $request)
@@ -51,15 +68,16 @@ class WalletController extends ApiController
         if (! $user) return $this->unauthorized();
 
         $data = $request->validate([
-            'amount' => 'required|integer|min:1000',
-            'method' => 'required|in:cash,online,company_credit',
-            'note'   => 'nullable|string|max:255',
+            'amount'         => 'required|integer|min:1000',
+            'method'         => 'nullable|in:cash,online,company_credit,card,qr',
+            'payment_method' => 'nullable|in:cash,online,company_credit,card,qr',
+            'note'           => 'nullable|string|max:255',
         ]);
 
         $topup = TopUpRequest::create([
             'user_id' => $user->id,
             'amount'  => $data['amount'],
-            'method'  => $data['method'],
+            'method'  => $data['method'] ?? $data['payment_method'] ?? 'cash',
             'note'    => $data['note'] ?? null,
             'status'  => 'pending',
         ]);

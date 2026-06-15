@@ -133,9 +133,13 @@ class RideFeaturesController extends ApiController
         // Notify emergency contacts
         $this->notifyEmergencyContactsOfShare($user->id);
 
+        $expiresAt = $ride->completed_at?->addHours(24) ?? now()->addHours(24);
+
         return $this->success([
             'share_token' => $ride->share_token,
+            'url'         => route('track.show', $ride->share_token),
             'share_url'   => route('track.show', $ride->share_token),
+            'expires_at'  => $expiresAt->toIso8601String(),
         ]);
     }
 
@@ -292,7 +296,88 @@ class RideFeaturesController extends ApiController
         return $this->success(['pickup_timeout_at' => $ride->fresh()->pickup_timeout_at]);
     }
 
+    // ── Driver ETA ────────────────────────────────────────────────────────────
+
+    /**
+     * GET /v1/rides/{ride}/eta
+     * Returns estimated minutes and km remaining to destination.
+     * Uses straight-line Haversine distance at average speed of 30 km/h city driving.
+     */
+    public function eta(Request $request, Ride $ride)
+    {
+        $user = $this->authUser($request);
+        if (! $user || ! in_array($user->id, [$ride->passenger_id, $ride->driver_id], true)) {
+            return $this->unauthorized();
+        }
+
+        $driver = $ride->driver;
+
+        // No driver assigned yet or no GPS
+        if (! $driver || ! $driver->current_latitude || ! $driver->current_longitude) {
+            return $this->success(['eta_minutes' => null, 'distance_km' => null, 'message' => 'Driver location unavailable.']);
+        }
+
+        // Target: pickup if not started yet, dropoff if in progress
+        $inProgress = $ride->status === Ride::STATUS_IN_PROGRESS;
+        $targetLat  = $inProgress ? (float) $ride->dropoff_lat  : (float) $ride->pickup_lat;
+        $targetLng  = $inProgress ? (float) $ride->dropoff_lng  : (float) $ride->pickup_lng;
+
+        if (! $targetLat || ! $targetLng) {
+            return $this->success(['eta_minutes' => null, 'distance_km' => null, 'message' => 'Destination coordinates unavailable.']);
+        }
+
+        $distanceKm = $this->haversineKm(
+            (float) $driver->current_latitude,
+            (float) $driver->current_longitude,
+            $targetLat,
+            $targetLng
+        );
+
+        $avgSpeedKmh = 30.0;
+        $etaMinutes  = (int) ceil(($distanceKm / $avgSpeedKmh) * 60);
+
+        return $this->success([
+            'eta_minutes'  => max(1, $etaMinutes),
+            'distance_km'  => round($distanceKm, 2),
+            'target'       => $inProgress ? 'dropoff' : 'pickup',
+        ]);
+    }
+
+    // ── Scheduled rides list ─────────────────────────────────────────────────
+
+    /**
+     * GET /v1/rides/scheduled
+     * Returns the authenticated user's upcoming scheduled rides.
+     */
+    public function scheduled(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
+        $rides = Ride::where(function ($q) use ($user) {
+                $q->where('passenger_id', $user->id)
+                  ->orWhere('driver_id', $user->id);
+            })
+            ->whereNotNull('scheduled_at')
+            ->where('scheduled_at', '>', now())
+            ->whereIn('status', [Ride::STATUS_REQUESTED, Ride::STATUS_ACCEPTED])
+            ->orderBy('scheduled_at')
+            ->with(['driver', 'vehicle'])
+            ->get();
+
+        return $this->success(['rides' => $rides]);
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    private function haversineKm(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $earthRadius = 6371;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        $a = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
+        return $earthRadius * 2 * asin(sqrt($a));
+    }
 
     private function notifyEmergencyContactsOfShare(int $userId): void
     {

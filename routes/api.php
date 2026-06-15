@@ -76,6 +76,7 @@ Route::prefix('v1')->group(function () {
     Route::get('rides', [RideController::class, 'index']);
     Route::get('rides/available', [RideController::class, 'available']);
     Route::get('rides/active', [RideController::class, 'active']);
+    Route::get('rides/scheduled', [RideFeaturesController::class, 'scheduled']);
     Route::get('rides/reorder-last', [RideFeaturesController::class, 'reorderLast']);
     Route::post('rides/estimate', [RideController::class, 'estimate']);
     Route::post('rides', [RideController::class, 'store']);
@@ -138,6 +139,8 @@ Route::prefix('v1')->group(function () {
 
     Route::get('notifications', [NotificationController::class, 'index']);
     Route::post('notifications/send', [NotificationController::class, 'send']);
+    Route::post('notifications/read-all', [NotificationController::class, 'markAllRead']);
+    Route::post('notifications/{notification}/read', [NotificationController::class, 'markRead']);
 
     Route::get('payments', [PaymentController::class, 'index']);
     Route::post('payments', [PaymentController::class, 'store']);
@@ -159,6 +162,7 @@ Route::prefix('v1')->group(function () {
 
     // Wallet
     Route::get('wallet', [WalletController::class, 'index']);
+    Route::get('wallet/balance', [WalletController::class, 'balance']);
     Route::get('wallet/transactions', [WalletController::class, 'transactions']);
     Route::post('wallet/topup', [WalletController::class, 'requestTopUp']);
     Route::get('wallet/topup/{topup}', [WalletController::class, 'topUpStatus']);
@@ -194,6 +198,7 @@ Route::prefix('v1')->group(function () {
     Route::delete('emergency-contacts/{contact}', [UserProfileController::class, 'destroyEmergencyContact']);
 
     // ── Ride features (stops, share, reorder, promo, safety) ─────────────────
+    Route::get('rides/{ride}/eta', [RideFeaturesController::class, 'eta']);
     Route::get('rides/{ride}/stops', [RideFeaturesController::class, 'stops']);
     Route::post('rides/{ride}/stops', [RideFeaturesController::class, 'addStops']);
     Route::post('rides/{ride}/stops/{stop}/arrive', [RideFeaturesController::class, 'markStopArrived']);
@@ -211,9 +216,15 @@ Route::prefix('v1')->group(function () {
 
     // ── Promo codes ───────────────────────────────────────────────────────────
     Route::post('promo-codes/validate', [PromoCodeController::class, 'check']);
+    Route::get('promos/active', [PromoCodeController::class, 'active']);
+
+    // ── Rewards ───────────────────────────────────────────────────────────────
+    Route::get('rewards/balance', [PromoCodeController::class, 'rewardsBalance']);
 
     // ── Driver features ───────────────────────────────────────────────────────
     Route::get('driver/earnings', [DriverFeaturesController::class, 'earnings']);
+    Route::get('driver/earnings/summary', [DriverFeaturesController::class, 'earningsSummary']);
+    Route::get('driver/earnings/history', [DriverFeaturesController::class, 'earningsHistory']);
     Route::get('driver/incentives', [DriverFeaturesController::class, 'incentives']);
     Route::get('driver/cancellation-status', [DriverFeaturesController::class, 'cancellationStatus']);
     Route::get('driver/approval-status', [DriverFeaturesController::class, 'approvalStatus']);
@@ -223,9 +234,16 @@ Route::prefix('v1')->group(function () {
     Route::get('admin/drivers/pending', [DriverFeaturesController::class, 'pendingDrivers']);
     Route::post('admin/drivers/{driver}/approve', [DriverFeaturesController::class, 'approveDriver']);
 
-    // ── Safety features ───────────────────────────────────────────────────────
+    // ── Safety features & contact aliases ────────────────────────────────────
     Route::post('safety/fake-call', [RideFeaturesController::class, 'fakeCall']);
+    Route::get('safety/contacts', [UserProfileController::class, 'emergencyContacts']);
+    Route::post('safety/contacts', [UserProfileController::class, 'storeEmergencyContact']);
+    Route::delete('safety/contacts/{contact}', [UserProfileController::class, 'destroyEmergencyContact']);
     Route::get('rides/{ride}/masked-phone', [DriverFeaturesController::class, 'maskedPhone']);
+
+
+    // ── Surge alias ───────────────────────────────────────────────────────────
+    Route::get('surge', [SurgeZoneController::class, 'check']);
 
     // ── Public trip tracking (no auth required) ───────────────────────────────
     Route::get('track/{token}', [RideFeaturesController::class, 'trackByToken']);

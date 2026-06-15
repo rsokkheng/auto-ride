@@ -17,10 +17,14 @@ class PushNotification extends Model
         'type',
         'payload',
         'status',
+        'is_read',
+        'read_at',
     ];
 
     protected $casts = [
         'payload' => 'array',
+        'is_read' => 'boolean',
+        'read_at' => 'datetime',
     ];
 
     public function user(): BelongsTo
