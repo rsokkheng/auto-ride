@@ -37,6 +37,7 @@ class Delivery extends Model
         'rating_comment',
         'assigned_at',
         'started_at',
+        'completed_at',
         'surge_multiplier',
         'surge_zone_id',
         // Service option: normal or express
@@ -69,6 +70,7 @@ class Delivery extends Model
         'scheduled_at'    => 'datetime',
         'assigned_at'     => 'datetime',
         'started_at'      => 'datetime',
+        'completed_at'    => 'datetime',
         'surge_multiplier'=> 'float',
         'fee'              => 'integer',
         'rating'           => 'float',

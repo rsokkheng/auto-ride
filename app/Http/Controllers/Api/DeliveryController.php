@@ -637,7 +637,45 @@ class DeliveryController extends ApiController
 
     public function complete(Request $request, Delivery $delivery)
     {
-        return $this->confirm($request, $delivery);
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
+        $isDriver = $user->role === 'driver' && $delivery->driver_id === $user->id;
+        $isSender = $delivery->sender_id === $user->id;
+
+        if (! $isDriver && ! $isSender) {
+            return $this->unauthorized();
+        }
+
+        // Idempotent — already completed
+        if ($delivery->status === 'completed') {
+            return $this->success([
+                'delivery' => $delivery->load('sender', 'driver', 'vehicle'),
+                'message'  => 'Already completed.',
+            ]);
+        }
+
+        if ($delivery->status === 'cancelled') {
+            return response()->json(['data' => null, 'message' => 'Cannot complete a cancelled job.'], 422);
+        }
+
+        $delivery->update(['status' => 'completed', 'completed_at' => now()]);
+
+        $fresh = $delivery->fresh()->load('sender', 'driver', 'vehicle');
+        $this->firestore->syncDelivery($fresh);
+
+        try {
+            if ($fresh->sender) {
+                $this->fcm->deliveryCompleted($fresh->sender, $fresh->id);
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return $this->success([
+            'delivery' => $fresh,
+            'message'  => 'Job completed successfully.',
+        ]);
     }
 
     // ── Rate ────────────────────────────────────────────────────────────────
