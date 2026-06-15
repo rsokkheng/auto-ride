@@ -301,6 +301,14 @@ class RideController extends ApiController
         $user = $this->authUser($request);
         if (! $user || $user->role !== 'driver') return $this->unauthorized();
 
+        // This driver already accepted — idempotent retry
+        if ($ride->driver_id === $user->id && $ride->status === Ride::STATUS_ACCEPTED) {
+            return $this->success([
+                'ride'    => $ride->load('passenger', 'driver', 'vehicle'),
+                'message' => 'Ride already accepted.',
+            ]);
+        }
+
         if (! in_array($ride->status, Ride::OPEN_STATUSES, true)) {
             return response()->json([
                 'data'    => null,
@@ -343,6 +351,14 @@ class RideController extends ApiController
             return $this->unauthorized();
         }
 
+        // Already past this step — return current state (idempotent retry)
+        if (in_array($ride->status, [Ride::STATUS_DRIVER_ARRIVED, Ride::STATUS_IN_PROGRESS, Ride::STATUS_COMPLETED], true)) {
+            return $this->success([
+                'ride'    => $ride->load('passenger', 'driver', 'vehicle'),
+                'message' => 'Already arrived.',
+            ]);
+        }
+
         if ($ride->status !== Ride::STATUS_ACCEPTED) {
             return response()->json([
                 'data'    => null,
@@ -358,7 +374,6 @@ class RideController extends ApiController
         $fresh = $ride->fresh()->load('passenger', 'driver', 'vehicle');
         $this->firestore->syncRide($fresh);
 
-        // Notify passenger: driver has arrived
         if ($fresh->passenger) {
             $this->fcm->driverArrived($fresh->passenger, $fresh->id, $fresh->driver->name ?? 'Your driver');
         }
@@ -380,6 +395,14 @@ class RideController extends ApiController
             return $this->unauthorized();
         }
 
+        // Already past this step — return current state (idempotent retry)
+        if (in_array($ride->status, [Ride::STATUS_IN_PROGRESS, Ride::STATUS_COMPLETED], true)) {
+            return $this->success([
+                'ride'    => $ride->load('passenger', 'driver', 'vehicle'),
+                'message' => 'Trip already started.',
+            ]);
+        }
+
         if ($ride->status !== Ride::STATUS_DRIVER_ARRIVED) {
             return response()->json([
                 'data'    => null,
@@ -395,7 +418,6 @@ class RideController extends ApiController
         $fresh = $ride->fresh()->load('passenger', 'driver', 'vehicle');
         $this->firestore->syncRide($fresh);
 
-        // Notify passenger: trip has started
         if ($fresh->passenger) {
             $this->fcm->rideStarted($fresh->passenger, $fresh->id);
         }
