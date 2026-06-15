@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\RideFeaturesController;
 use App\Http\Controllers\Api\RideTrackingController;
 use App\Http\Controllers\Api\SafetyController;
 use App\Http\Controllers\Api\SupportController;
+use App\Http\Controllers\Api\TripHistoryController;
 use App\Http\Controllers\Api\UserProfileController;
 use App\Http\Controllers\Api\VehicleController;
 use Illuminate\Http\Request;
@@ -71,6 +72,10 @@ Route::prefix('v1')->group(function () {
 
     // Legacy marketplace_items (backward compat)
     Route::post('marketplace/items/{item}/purchase', [MarketplaceController::class, 'purchase']);
+
+    // ── Unified trip history ──────────────────────────────────────────────────
+    Route::get('trips', [TripHistoryController::class, 'index']);
+    Route::get('trips/months', [TripHistoryController::class, 'months']);
 
     // Static ride routes — must come before {ride} wildcard.
     Route::get('rides', [RideController::class, 'index']);
