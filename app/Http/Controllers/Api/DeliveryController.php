@@ -287,17 +287,20 @@ class DeliveryController extends ApiController
         $delivery->load('sender', 'driver', 'vehicle');
         $this->firestore->syncDelivery($delivery);
 
-        // Notify available drivers about the new delivery
-        $nearbyDrivers = User::where('role', 'driver')
-            ->where('available', true)
-            ->whereNotNull('fcm_token')
-            ->get();
-        $this->fcm->sendToUsers(
-            $nearbyDrivers->all(),
-            '📦 New Delivery Request',
-            "{$delivery->pickup_address} → {$delivery->dropoff_address}",
-            ['type' => 'delivery_requested', 'delivery_id' => (string) $delivery->id]
-        );
+        try {
+            $nearbyDrivers = User::where('role', 'driver')
+                ->where('available', true)
+                ->whereNotNull('fcm_token')
+                ->get();
+            $this->fcm->sendToUsers(
+                $nearbyDrivers->all(),
+                '📦 New Delivery Request',
+                "{$delivery->pickup_address} → {$delivery->dropoff_address}",
+                ['type' => 'delivery_requested', 'delivery_id' => (string) $delivery->id]
+            );
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return $this->success(['delivery' => $delivery], 201);
     }

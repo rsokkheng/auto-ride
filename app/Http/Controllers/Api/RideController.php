@@ -269,17 +269,20 @@ class RideController extends ApiController
         $ride->load('driver', 'vehicle');
         $this->firestore->syncRide($ride);
 
-        // Notify nearby available drivers about the new ride request
-        $nearbyDrivers = User::where('role', 'driver')
-            ->where('available', true)
-            ->whereNotNull('fcm_token')
-            ->get();
-        $this->fcm->sendToUsers(
-            $nearbyDrivers->all(),
-            '🚗 New Ride Request',
-            "{$data['pickup_address']} → {$data['dropoff_address']}",
-            ['type' => 'ride_requested', 'ride_id' => (string) $ride->id]
-        );
+        try {
+            $nearbyDrivers = User::where('role', 'driver')
+                ->where('available', true)
+                ->whereNotNull('fcm_token')
+                ->get();
+            $this->fcm->sendToUsers(
+                $nearbyDrivers->all(),
+                '🚗 New Ride Request',
+                "{$data['pickup_address']} → {$data['dropoff_address']}",
+                ['type' => 'ride_requested', 'ride_id' => (string) $ride->id]
+            );
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return $this->success([
             'ride' => $ride,
