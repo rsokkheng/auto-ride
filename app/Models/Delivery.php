@@ -13,6 +13,7 @@ class Delivery extends Model
     protected $fillable = [
         'sender_id',
         'sender_name',
+        'sender_phone',
         'recipient_name',
         'recipient_phone',
         'package_size',

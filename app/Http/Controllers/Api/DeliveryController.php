@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Delivery;
+use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\DriverMatchingService;
 use App\Services\FareService;
@@ -160,6 +161,7 @@ class DeliveryController extends ApiController
             'service_type'      => 'nullable|in:delivery,moving',
             'service_option'    => 'nullable|in:normal,express',
             'sender_name'       => [Rule::requiredIf($serviceType === 'delivery'), 'string', 'max:255'],
+            'sender_phone'      => 'nullable|string|max:24',
             'recipient_name'    => [Rule::requiredIf($serviceType === 'delivery'), 'string', 'max:255'],
             'recipient_phone'   => [Rule::requiredIf($serviceType === 'delivery'), 'string', 'max:24'],
             'package_size'      => 'nullable|in:small,medium,large',
@@ -245,8 +247,8 @@ class DeliveryController extends ApiController
             'sender_id'         => $user->id,
             'driver_id'         => $driverId,
             'service_type'      => $serviceType,
-            'service_option'    => $data['service_option'] ?? 'normal',
             'sender_name'       => $data['sender_name'] ?? $user->name,
+            'sender_phone'      => $data['sender_phone'] ?? null,
             'recipient_name'    => $data['recipient_name'] ?? null,
             'recipient_phone'   => $data['recipient_phone'] ?? null,
             'package_size'      => $data['package_size'] ?? null,
@@ -640,6 +642,7 @@ class DeliveryController extends ApiController
 
         $data = $request->validate([
             'sender_name'       => 'nullable|string|max:255',
+            'sender_phone'      => 'nullable|string|max:24',
             'service_option'    => 'nullable|in:normal,express',
             'recipient_name'    => 'nullable|string|max:255',
             'recipient_phone'   => 'nullable|string|max:24',
