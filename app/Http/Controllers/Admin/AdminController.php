@@ -145,11 +145,13 @@ class AdminController extends Controller
             'commission_rate' => 'nullable|numeric|min:0|max:100',
         ]);
 
-        $data['password']  = Hash::make($data['password']);
         $data['api_token'] = bin2hex(random_bytes(40));
 
         if ($data['role'] !== 'driver') {
-            $data['driver_type'] = $data['company_id'] = $data['salary'] = $data['commission_rate'] = null;
+            $data['driver_type']     = null;
+            $data['company_id']      = null;
+            $data['salary']          = 0;
+            $data['commission_rate'] = null;
         }
 
         // Handle optional avatar upload on create.
@@ -193,12 +195,13 @@ class AdminController extends Controller
 
         if (empty($data['password'])) {
             unset($data['password']);
-        } else {
-            $data['password'] = Hash::make($data['password']);
         }
 
         if ($data['role'] !== 'driver') {
-            $data['driver_type'] = $data['company_id'] = $data['salary'] = $data['commission_rate'] = null;
+            $data['driver_type']     = null;
+            $data['company_id']      = null;
+            $data['salary']          = 0;
+            $data['commission_rate'] = null;
         }
 
         // Handle avatar upload if a file was attached.
