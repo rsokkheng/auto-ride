@@ -20,26 +20,55 @@ class SurgeZoneController extends ApiController
         $user = $this->authUser($request);
         if (! $user) return $this->unauthorized();
 
-        $type  = in_array($request->query('type'), ['rides', 'deliveries', 'both'], true)
+        $type = in_array($request->query('type'), ['rides', 'deliveries', 'both'], true)
             ? $request->query('type')
             : null;
 
-        $zones = $this->surge->getAllActive($type)->map(fn($z) => [
-            'id'          => $z->id,
-            'name'        => $z->name,
-            'description' => $z->description,
-            'center_lat'  => $z->center_lat,
-            'center_lng'  => $z->center_lng,
-            'radius_km'   => $z->radius_km,
-            'multiplier'  => $z->multiplier,
-            'type'        => $z->type,
-            'ends_at'     => $z->ends_at?->toIso8601String(),
-        ]);
+        $lat = $request->query('lat') !== null ? (float) $request->query('lat') : null;
+        $lng = $request->query('lng') !== null ? (float) $request->query('lng') : null;
+
+        $zones = $this->surge->getAllActive($type)->map(function ($z) use ($lat, $lng) {
+            $distanceKm = null;
+            $insideZone = false;
+
+            if ($lat !== null && $lng !== null) {
+                $distanceKm = $this->haversineKm($lat, $lng, $z->center_lat, $z->center_lng);
+                $insideZone = $distanceKm <= $z->radius_km;
+            }
+
+            return [
+                'id'          => $z->id,
+                'name'        => $z->name,
+                'description' => $z->description,
+                'center_lat'  => $z->center_lat,
+                'center_lng'  => $z->center_lng,
+                'radius_km'   => $z->radius_km,
+                'multiplier'  => $z->multiplier,
+                'type'        => $z->type,
+                'ends_at'     => $z->ends_at?->toIso8601String(),
+                'distance_km' => $distanceKm !== null ? round($distanceKm, 2) : null,
+                'you_are_inside' => $insideZone,
+            ];
+        });
+
+        // Sort nearest first when coords provided
+        if ($lat !== null && $lng !== null) {
+            $zones = $zones->sortBy('distance_km')->values();
+        }
 
         return $this->success([
             'zones' => $zones,
             'total' => $zones->count(),
         ]);
+    }
+
+    private function haversineKm(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $R  = 6371;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        $a = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
+        return $R * 2 * atan2(sqrt($a), sqrt(1 - $a));
     }
 
     /**
