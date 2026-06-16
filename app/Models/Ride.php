@@ -69,6 +69,9 @@ class Ride extends Model
         'promo_code_id',
         'discount_amount',
         'tip_amount',
+        'passenger_rating',
+        'passenger_rating_comment',
+        'passenger_rated_at',
     ];
 
     protected $casts = [
@@ -84,7 +87,9 @@ class Ride extends Model
         'discount_amount'   => 'integer',
         'tip_amount'        => 'integer',
         'share_active'      => 'boolean',
-        'rating'            => 'float',
+        'rating'                  => 'float',
+        'passenger_rating'        => 'integer',
+        'passenger_rated_at'      => 'datetime',
         'pickup_lat'        => 'float',
         'pickup_lng'        => 'float',
         'dropoff_lat'       => 'float',

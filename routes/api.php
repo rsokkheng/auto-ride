@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\LoyaltyController;
+use App\Http\Controllers\Api\ReferralController;
+use App\Http\Controllers\Api\RentalController;
 use App\Http\Controllers\Api\SurgeZoneController;
 use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\UploadController;
@@ -253,6 +256,24 @@ Route::prefix('v1')->group(function () {
 
     // ── Surge alias ───────────────────────────────────────────────────────────
     Route::get('surge', [SurgeZoneController::class, 'check']);
+
+    // ── Driver trip history & rate-passenger ─────────────────────────────────
+    Route::get('driver/trips', [DriverFeaturesController::class, 'trips']);
+    Route::post('rides/{ride}/rate-passenger', [RideController::class, 'ratePassenger']);
+
+    // ── Loyalty / rewards ─────────────────────────────────────────────────────
+    Route::get('loyalty', [LoyaltyController::class, 'index']);
+    Route::post('loyalty/redeem', [LoyaltyController::class, 'redeem']);
+
+    // ── Referrals ─────────────────────────────────────────────────────────────
+    Route::get('referrals', [ReferralController::class, 'index']);
+
+    // ── Car rentals ───────────────────────────────────────────────────────────
+    Route::get('rentals', [RentalController::class, 'index']);
+    Route::post('rentals', [RentalController::class, 'store']);
+
+    // ── Promo apply (alias to validate — same logic, booking-time friendly) ──
+    Route::post('promo/apply', [PromoCodeController::class, 'check']);
 
     // ── Public trip tracking (no auth required) ───────────────────────────────
     Route::get('track/{token}', [RideFeaturesController::class, 'trackByToken']);

@@ -363,4 +363,83 @@ class DriverFeaturesController extends ApiController
 
         return $this->success(['items' => $items, 'currency' => 'KHR']);
     }
+
+    // ── Driver trip history ───────────────────────────────────────────────────
+
+    /**
+     * GET /v1/driver/trips?page=&filter=all|rides|deliveries|completed|cancelled
+     */
+    public function trips(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user || $user->role !== 'driver') return $this->unauthorized();
+
+        $filter = $request->input('filter', 'all');
+
+        // ── Rides driven ──────────────────────────────────────────────────────
+        $ridesQ = Ride::where('driver_id', $user->id)->with('passenger:id,name,avatar,phone,rating');
+
+        // ── Deliveries driven ─────────────────────────────────────────────────
+        $delivQ = Delivery::where('driver_id', $user->id)
+            ->whereIn('service_type', ['delivery', 'moving']);
+
+        switch ($filter) {
+            case 'rides':
+                $rides      = $ridesQ->latest('created_at')->paginate(20);
+                $deliveries = collect();
+                break;
+            case 'deliveries':
+                $rides      = collect();
+                $deliveries = $delivQ->latest('created_at')->paginate(20);
+                break;
+            case 'completed':
+                $rides      = $ridesQ->where('status', 'completed')->latest('completed_at')->paginate(20);
+                $deliveries = $delivQ->where('status', 'completed')->latest('updated_at')->paginate(20);
+                break;
+            case 'cancelled':
+                $rides      = $ridesQ->where('status', 'cancelled')->latest('cancelled_at')->paginate(20);
+                $deliveries = $delivQ->where('status', 'cancelled')->latest('updated_at')->paginate(20);
+                break;
+            default: // all
+                $rides      = $ridesQ->latest('created_at')->paginate(20);
+                $deliveries = $delivQ->latest('created_at')->paginate(20);
+        }
+
+        $rideItems = ($rides instanceof \Illuminate\Pagination\LengthAwarePaginator ? $rides->items() : $rides)
+            ? collect($rides instanceof \Illuminate\Pagination\LengthAwarePaginator ? $rides->items() : $rides)->map(fn($r) => [
+                'id'              => $r->id,
+                'ref'             => 'RIDE-' . str_pad($r->id, 6, '0', STR_PAD_LEFT),
+                'type'            => 'ride',
+                'status'          => $r->status,
+                'pickup'          => $r->pickup_address,
+                'dropoff'         => $r->dropoff_address,
+                'fare_khr'        => $r->fare,
+                'passenger'       => $r->passenger ? ['id' => $r->passenger->id, 'name' => $r->passenger->name, 'rating' => $r->passenger->rating] : null,
+                'passenger_rating'=> $r->passenger_rating,
+                'date'            => optional($r->completed_at ?? $r->created_at)->toDateTimeString(),
+            ]) : collect();
+
+        $delivItems = ($deliveries instanceof \Illuminate\Pagination\LengthAwarePaginator ? $deliveries->items() : $deliveries)
+            ? collect($deliveries instanceof \Illuminate\Pagination\LengthAwarePaginator ? $deliveries->items() : $deliveries)->map(fn($d) => [
+                'id'       => $d->id,
+                'ref'      => ($d->service_type === 'moving' ? 'MOV-' : 'DEL-') . str_pad($d->id, 6, '0', STR_PAD_LEFT),
+                'type'     => $d->service_type,
+                'status'   => $d->status,
+                'pickup'   => $d->pickup_address,
+                'dropoff'  => $d->dropoff_address,
+                'fare_khr' => $d->fee,
+                'sender'   => ['name' => $d->sender_name, 'phone' => $d->sender_phone],
+                'date'     => optional($d->completed_at ?? $d->created_at)->toDateTimeString(),
+            ]) : collect();
+
+        return $this->success([
+            'rides'      => $rideItems,
+            'deliveries' => $delivItems,
+            'pagination' => [
+                'rides_total'      => $rides instanceof \Illuminate\Pagination\LengthAwarePaginator ? $rides->total() : 0,
+                'deliveries_total' => $deliveries instanceof \Illuminate\Pagination\LengthAwarePaginator ? $deliveries->total() : 0,
+                'page'             => (int) $request->input('page', 1),
+            ],
+        ]);
+    }
 }

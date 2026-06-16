@@ -669,6 +669,53 @@ class RideController extends ApiController
         return $this->success(['drivers' => $drivers]);
     }
 
+    // ── Rate passenger ────────────────────────────────────────────────────────
+
+    /**
+     * POST /v1/rides/{ride}/rate-passenger
+     * Driver rates the passenger after a completed ride.
+     * Body: rating (1–5), comment (optional)
+     */
+    public function ratePassenger(Request $request, Ride $ride)
+    {
+        $user = $this->authUser($request);
+        if (! $user || $user->role !== 'driver' || $ride->driver_id !== $user->id) {
+            return $this->unauthorized();
+        }
+
+        if ($ride->status !== Ride::STATUS_COMPLETED) {
+            return response()->json(['data' => null, 'message' => 'Ride must be completed before rating.'], 422);
+        }
+
+        if ($ride->passenger_rating !== null) {
+            return response()->json(['data' => null, 'message' => 'Passenger already rated for this ride.'], 422);
+        }
+
+        $data = $request->validate([
+            'rating'  => 'required|integer|min:1|max:5',
+            'comment' => 'nullable|string|max:500',
+        ]);
+
+        $ride->update([
+            'passenger_rating'         => $data['rating'],
+            'passenger_rating_comment' => $data['comment'] ?? null,
+            'passenger_rated_at'       => now(),
+        ]);
+
+        // Update passenger's overall rating (rolling average).
+        $passenger = $ride->passenger;
+        if ($passenger) {
+            $total  = ($passenger->total_ratings ?? 0) + 1;
+            $newAvg = (($passenger->rating ?? 0) * ($total - 1) + $data['rating']) / $total;
+            $passenger->update([
+                'rating'       => round($newAvg, 2),
+                'total_ratings'=> $total,
+            ]);
+        }
+
+        return $this->success(['rated' => true, 'passenger_rating' => $data['rating']]);
+    }
+
     private function authUserOrFail(Request $request)
     {
         $user = $this->authUser($request);
