@@ -521,6 +521,7 @@ class DeliveryController extends ApiController
             $route,
             (float) $data['pickup_lat'],
             (float) $data['pickup_lng'],
+            'delivery',
         );
 
         // Apply express multiplier for delivery estimates

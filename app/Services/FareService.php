@@ -207,6 +207,7 @@ class FareService
         array  $route,
         ?float $pickupLat = null,
         ?float $pickupLng = null,
+        string $serviceType = 'delivery',
     ): array {
         $distanceKm = max(1.0, (float) $route['distance_km']);
 
@@ -229,7 +230,7 @@ class FareService
         $surgeMultiplier = 1.0;
 
         if ($pickupLat !== null && $pickupLng !== null) {
-            $surgeZone       = $this->surge->getActiveZone($pickupLat, $pickupLng, 'deliveries');
+            $surgeZone       = $this->surge->getActiveZone($pickupLat, $pickupLng, $serviceType);
             $surgeMultiplier = $surgeZone ? (float) $surgeZone->multiplier : 1.0;
         }
 

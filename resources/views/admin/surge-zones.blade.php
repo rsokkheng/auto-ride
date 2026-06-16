@@ -38,8 +38,13 @@
                         @endif
                     </td>
                     <td>
-                        @php $tc = ['rides'=>'primary','deliveries'=>'warning','both'=>'success']; @endphp
-                        <span class="badge badge-{{ $tc[$z->type] ?? 'secondary' }}">{{ ucfirst($z->type) }}</span>
+                        @php
+                            $tc = ['rides'=>'primary','deliveries'=>'warning','delivery'=>'info','moving'=>'purple','both'=>'success'];
+                            $tl = ['rides'=>'Rides','deliveries'=>'All Deliveries','delivery'=>'Package Delivery','moving'=>'Moving','both'=>'Rides + All'];
+                        @endphp
+                        <span class="badge badge-{{ $tc[$z->type] ?? 'secondary' }}" style="{{ $z->type === 'moving' ? 'background:#6f42c1' : '' }}">
+                            {{ $tl[$z->type] ?? ucfirst($z->type) }}
+                        </span>
                     </td>
                     <td>
                         <span class="badge badge-danger" style="font-size:.85rem;">
@@ -169,9 +174,11 @@
                         <div class="form-group col-md-6">
                             <label>Applies To <span class="text-danger">*</span></label>
                             <select name="type" id="f-type" class="form-control" required>
-                                <option value="both">🚗📦 Rides &amp; Deliveries</option>
+                                <option value="both">🚗📦 Rides &amp; All Deliveries</option>
                                 <option value="rides">🚗 Rides only</option>
-                                <option value="deliveries">📦 Deliveries only</option>
+                                <option value="deliveries">📦 All Deliveries (package + moving)</option>
+                                <option value="delivery">📦 Package Delivery only</option>
+                                <option value="moving">🚚 Moving Service only</option>
                             </select>
                         </div>
                     </div>

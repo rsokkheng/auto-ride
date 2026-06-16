@@ -41,7 +41,7 @@ class DriverController extends ApiController
         $data = $request->validate([
             'lat'    => 'required|numeric|between:-90,90',
             'lng'    => 'required|numeric|between:-180,180',
-            'type'   => 'nullable|in:rides,deliveries,both',
+            'type'   => 'nullable|in:rides,deliveries,delivery,moving,both',
             'radius' => 'nullable|numeric|min:0.5|max:100',
             'limit'  => 'nullable|integer|min:1|max:50',
         ]);

@@ -20,7 +20,7 @@ class SurgeZoneController extends ApiController
         $user = $this->authUser($request);
         if (! $user) return $this->unauthorized();
 
-        $type = in_array($request->query('type'), ['rides', 'deliveries', 'both'], true)
+        $type = in_array($request->query('type'), ['rides', 'deliveries', 'delivery', 'moving', 'both'], true)
             ? $request->query('type')
             : null;
 
@@ -85,7 +85,7 @@ class SurgeZoneController extends ApiController
         $data = $request->validate([
             'lat'  => 'required|numeric|between:-90,90',
             'lng'  => 'required|numeric|between:-180,180',
-            'type' => 'nullable|in:rides,deliveries,both',
+            'type' => 'nullable|in:rides,deliveries,delivery,moving,both',
         ]);
 
         $type = $data['type'] ?? 'both';

@@ -793,7 +793,7 @@ class AdminController extends Controller
             'center_lng'  => 'required|numeric|between:-180,180',
             'radius_km'   => 'required|numeric|min:0.1|max:100',
             'multiplier'  => 'required|numeric|min:1.1|max:5.0',
-            'type'        => 'required|in:rides,deliveries,both',
+            'type'        => 'required|in:rides,deliveries,delivery,moving,both',
             'active'               => 'boolean',
             'starts_at'            => 'nullable|date',
             'ends_at'              => 'nullable|date|after_or_equal:starts_at',

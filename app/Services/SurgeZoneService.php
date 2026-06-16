@@ -98,7 +98,20 @@ class SurgeZoneService
             ->where(fn($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>=', $now));
 
         if ($type && $type !== 'both') {
-            $query->where(fn($q) => $q->where('type', 'both')->orWhere('type', $type));
+            $query->where(function ($q) use ($type) {
+                $q->where('type', 'both');
+
+                match ($type) {
+                    // All delivery types: match zones targeting any delivery variant
+                    'deliveries' => $q->orWhereIn('type', ['deliveries', 'delivery', 'moving']),
+                    // Package delivery: matches "all deliveries" zone or specific "delivery" zone
+                    'delivery'   => $q->orWhereIn('type', ['deliveries', 'delivery']),
+                    // Moving service: matches "all deliveries" zone or specific "moving" zone
+                    'moving'     => $q->orWhereIn('type', ['deliveries', 'moving']),
+                    // Rides: exact match
+                    default      => $q->orWhere('type', $type),
+                };
+            });
         }
 
         return $query->get();
