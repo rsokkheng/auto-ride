@@ -23,8 +23,10 @@ class AuthController extends ApiController
             'password'     => 'required|string|min:8',
             'phone'        => 'nullable|string|max:24',
             'role'         => 'nullable|in:passenger,driver',
-            'driver_type'  => 'nullable|in:owner,company_staff,rental',
+            'driver_type'  => 'nullable|in:owner,employee,rental',
             'company_name' => 'nullable|string|max:255',
+            'city'         => 'nullable|string|max:100',
+            'referred_by_code' => 'nullable|string|max:12',
         ]);
 
         $data['role']           = $data['role'] ?? 'passenger';
@@ -32,16 +34,34 @@ class AuthController extends ApiController
 
         // driver_type only applies to drivers; default to owner.
         if ($data['role'] === 'driver') {
-            $data['driver_type'] = $data['driver_type'] ?? 'owner';
-            // company_name is only kept for company_staff and rental.
-            if (! in_array($data['driver_type'], ['company_staff', 'rental'])) {
+            $data['driver_type']     = $data['driver_type'] ?? 'owner';
+            $data['approval_status'] = 'pending';
+            if (! in_array($data['driver_type'], ['employee', 'rental'])) {
                 $data['company_name'] = null;
             }
         } else {
             unset($data['driver_type'], $data['company_name']);
         }
 
+        // Handle referral code.
+        $referralCode = $data['referred_by_code'] ?? null;
+        unset($data['referred_by_code']);
+
         $user = User::create($data);
+
+        // Link referral if a valid code was provided.
+        if ($referralCode) {
+            $referrer = \App\Models\User::where('referral_code', strtoupper($referralCode))->first();
+            if ($referrer && $referrer->id !== $user->id) {
+                \App\Models\Referral::create([
+                    'referrer_id' => $referrer->id,
+                    'referee_id'  => $user->id,
+                    'status'      => 'pending',
+                    'bonus_khr'   => \App\Http\Controllers\Api\ReferralController::REFERRAL_BONUS_KHR,
+                ]);
+                $user->update(['referred_by' => $referrer->id]);
+            }
+        }
 
         $this->issueTokens($user);
 

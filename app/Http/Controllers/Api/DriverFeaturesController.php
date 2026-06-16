@@ -201,9 +201,16 @@ class DriverFeaturesController extends ApiController
         $user = $this->authUser($request);
         if (! $user || $user->role !== 'driver') return $this->unauthorized();
 
+        $docs = \App\Models\DriverDocument::where('driver_id', $user->id)
+            ->get(['type', 'status', 'admin_note']);
+
         return $this->success([
             'approval_status' => $user->approval_status,
-            'approved_at'     => $user->approved_at,
+            'approved_at'     => $user->approved_at?->toDateTimeString(),
+            'service_zone'    => $user->service_zone,
+            'city'            => $user->city,
+            'status_note'     => $user->status_note,
+            'documents'       => $docs,
         ]);
     }
 
@@ -215,19 +222,26 @@ class DriverFeaturesController extends ApiController
         if (! $admin || $admin->role !== 'admin') return $this->unauthorized();
 
         $data = $request->validate([
-            'action' => 'required|in:approve,reject',
-            'reason' => 'nullable|string|max:255',
+            'action'       => 'required|in:approve,reject',
+            'reason'       => 'nullable|string|max:255',
+            'service_zone' => 'nullable|string|max:100',
         ]);
 
-        $driver->update([
+        $update = [
             'approval_status' => $data['action'] === 'approve' ? 'approved' : 'rejected',
             'approved_at'     => $data['action'] === 'approve' ? now() : null,
             'status_note'     => $data['reason'] ?? null,
-        ]);
+        ];
+
+        if (! empty($data['service_zone'])) {
+            $update['service_zone'] = $data['service_zone'];
+        }
+
+        $driver->update($update);
 
         return $this->success([
             'message' => "Driver {$data['action']}d.",
-            'driver'  => $driver->fresh(['id', 'name', 'email', 'approval_status', 'approved_at']),
+            'driver'  => $driver->fresh()->only(['id', 'name', 'email', 'city', 'service_zone', 'approval_status', 'approved_at']),
         ]);
     }
 

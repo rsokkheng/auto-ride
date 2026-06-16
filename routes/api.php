@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DriverDocumentController;
 use App\Http\Controllers\Api\LoyaltyController;
 use App\Http\Controllers\Api\ReferralController;
 use App\Http\Controllers\Api\RentalController;
@@ -242,9 +243,15 @@ Route::prefix('v1')->group(function () {
     Route::get('driver/approval-status', [DriverFeaturesController::class, 'approvalStatus']);
     Route::get('driver/heatmap', [DriverFeaturesController::class, 'heatmap']);
 
-    // ── Admin: driver approval ────────────────────────────────────────────────
+    // ── Admin: driver approval & documents ────────────────────────────────────
     Route::get('admin/drivers/pending', [DriverFeaturesController::class, 'pendingDrivers']);
     Route::post('admin/drivers/{driver}/approve', [DriverFeaturesController::class, 'approveDriver']);
+    Route::get('admin/drivers/{driver}/documents', [DriverDocumentController::class, 'adminView']);
+    Route::post('admin/drivers/{driver}/documents/{document}/review', [DriverDocumentController::class, 'adminReview']);
+
+    // ── Driver documents ──────────────────────────────────────────────────────
+    Route::get('driver/documents', [DriverDocumentController::class, 'index']);
+    Route::post('driver/documents', [DriverDocumentController::class, 'upload']);
 
     // ── Safety features & contact aliases ────────────────────────────────────
     Route::post('safety/fake-call', [RideFeaturesController::class, 'fakeCall']);
