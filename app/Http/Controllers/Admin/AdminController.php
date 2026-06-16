@@ -1208,4 +1208,83 @@ class AdminController extends Controller
 
         return redirect()->route('admin.moving-fare')->with('success', 'Moving fare rates saved.');
     }
+
+    // ─── Driver Approvals ─────────────────────────────────────────────────────
+
+    public function drivers(Request $request)
+    {
+        $status = $request->input('status', 'pending');
+
+        $query = User::where('role', 'driver')
+            ->withCount('driverDocuments')
+            ->orderBy('created_at', 'desc');
+
+        if (in_array($status, ['pending','approved','rejected'])) {
+            $query->where('approval_status', $status);
+        }
+
+        return view('admin.drivers', [
+            'drivers' => $query->paginate(20)->appends(['status' => $status]),
+            'status' => $status,
+            'counts' => [
+                'pending'  => User::where('role','driver')->where('approval_status','pending')->count(),
+                'approved' => User::where('role','driver')->where('approval_status','approved')->count(),
+                'rejected' => User::where('role','driver')->where('approval_status','rejected')->count(),
+            ],
+        ]);
+    }
+
+    public function showDriver(User $driver)
+    {
+        $documents = $driver->driverDocuments()->orderBy('type')->get();
+
+        return view('admin.driver-detail', [
+            'driver'    => $driver,
+            'documents' => $documents,
+            'vehicle'   => $driver->vehicles()->latest()->first(),
+        ]);
+    }
+
+    public function approveDriver(Request $request, User $driver)
+    {
+        $data = $request->validate([
+            'action'       => 'required|in:approve,reject',
+            'service_zone' => 'nullable|string|max:100',
+            'reason'       => 'nullable|string|max:500',
+        ]);
+
+        $update = [
+            'approval_status' => $data['action'] === 'approve' ? 'approved' : 'rejected',
+            'approved_at'     => $data['action'] === 'approve' ? now() : null,
+            'status_note'     => $data['reason'] ?? null,
+        ];
+
+        if (! empty($data['service_zone'])) {
+            $update['service_zone'] = $data['service_zone'];
+        }
+
+        $driver->update($update);
+
+        $label = $data['action'] === 'approve' ? 'approved' : 'rejected';
+
+        return redirect()->route('admin.drivers.show', $driver)
+            ->with('success', "Driver {$driver->name} has been {$label}.");
+    }
+
+    public function reviewDocument(Request $request, User $driver, \App\Models\DriverDocument $document)
+    {
+        $data = $request->validate([
+            'action' => 'required|in:approve,reject',
+            'note'   => 'nullable|string|max:500',
+        ]);
+
+        $document->update([
+            'status'      => $data['action'] === 'approve' ? 'approved' : 'rejected',
+            'admin_note'  => $data['note'] ?? null,
+            'reviewed_at' => now(),
+            'reviewed_by' => Auth::id(),
+        ]);
+
+        return back()->with('success', 'Document ' . $data['action'] . 'd.');
+    }
 }

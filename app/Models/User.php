@@ -147,4 +147,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(DriverIncentive::class, 'driver_id');
     }
+
+    public function driverDocuments(): HasMany
+    {
+        return $this->hasMany(\App\Models\DriverDocument::class, 'driver_id');
+    }
 }

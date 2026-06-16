@@ -19,6 +19,12 @@ Route::post('admin/logout', [AdminController::class, 'logout'])->name('admin.log
 Route::prefix('admin')->group(function () {
     Route::get('/', [AdminController::class, 'dashboard'])->name('admin.dashboard');
 
+    // Driver Approvals
+    Route::get('drivers', [AdminController::class, 'drivers'])->name('admin.drivers');
+    Route::get('drivers/{driver}', [AdminController::class, 'showDriver'])->name('admin.drivers.show');
+    Route::post('drivers/{driver}/approve', [AdminController::class, 'approveDriver'])->name('admin.drivers.approve');
+    Route::post('drivers/{driver}/documents/{document}/review', [AdminController::class, 'reviewDocument'])->name('admin.drivers.documents.review');
+
     // Users
     Route::get('users', [AdminController::class, 'users'])->name('admin.users');
     Route::post('users', [AdminController::class, 'storeUser'])->name('admin.users.store');

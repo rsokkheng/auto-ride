@@ -166,6 +166,19 @@
                         </a>
                     </li>
 
+                    <li class="nav-item">
+                        <a href="{{ route('admin.drivers') }}" class="nav-link {{ request()->routeIs('admin.drivers*') ? 'active' : '' }}">
+                            @php $pendingDrivers = \App\Models\User::where('role','driver')->where('approval_status','pending')->count(); @endphp
+                            <i class="nav-icon fas fa-id-card"></i>
+                            <p>
+                                Driver Approvals
+                                @if($pendingDrivers)
+                                    <span class="right badge badge-danger">{{ $pendingDrivers }}</span>
+                                @endif
+                            </p>
+                        </a>
+                    </li>
+
                     <li class="nav-header" style="font-size:.65rem;color:#475569;letter-spacing:.1em;padding:8px 16px 4px;">DRIVER &amp; FINANCE</li>
 
                     <li class="nav-item">
