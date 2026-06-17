@@ -133,6 +133,17 @@ Route::prefix('admin')->group(function () {
     Route::post('banners', [AdminController::class, 'storeBanner'])->name('admin.banners.store');
     Route::put('banners/{banner}', [AdminController::class, 'updateBanner'])->name('admin.banners.update');
     Route::delete('banners/{banner}', [AdminController::class, 'destroyBanner'])->name('admin.banners.destroy');
+
+    // Airport Zones
+    Route::get('airport-zones', [AdminController::class, 'airportZones'])->name('admin.airport-zones');
+    Route::post('airport-zones', [AdminController::class, 'storeAirportZone'])->name('admin.airport-zones.store');
+    Route::put('airport-zones/{zone}', [AdminController::class, 'updateAirportZone'])->name('admin.airport-zones.update');
+    Route::delete('airport-zones/{zone}', [AdminController::class, 'destroyAirportZone'])->name('admin.airport-zones.destroy');
+
+    // Business Accounts
+    Route::get('business-accounts', [AdminController::class, 'businessAccounts'])->name('admin.business-accounts');
+    Route::get('business-accounts/{account}', [AdminController::class, 'showBusinessAccount'])->name('admin.business-accounts.show');
+    Route::put('business-accounts/{account}', [AdminController::class, 'updateBusinessAccount'])->name('admin.business-accounts.update');
 });
 
 // ── Seller Portal ─────────────────────────────────────────────────────────────

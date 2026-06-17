@@ -73,6 +73,21 @@ class Ride extends Model
         'passenger_rating',
         'passenger_rating_comment',
         'passenger_rated_at',
+        // Airport trip fields
+        'is_airport_trip',
+        'flight_number',
+        'terminal',
+        'luggage_count',
+        'airport_surcharge_khr',
+        'airport_zone_id',
+        // Business trip fields
+        'business_account_id',
+        'is_business_trip',
+        'expense_category',
+        'expense_ref',
+        // Family booking fields
+        'booked_by_user_id',
+        'family_member_id',
     ];
 
     protected $casts = [
@@ -97,7 +112,11 @@ class Ride extends Model
         'dropoff_lat'       => 'float',
         'dropoff_lng'       => 'float',
         'surge_multiplier'  => 'float',
-        'surge_accepted'    => 'boolean',
+        'surge_accepted'        => 'boolean',
+        'is_airport_trip'       => 'boolean',
+        'luggage_count'         => 'integer',
+        'airport_surcharge_khr' => 'integer',
+        'is_business_trip'      => 'boolean',
     ];
 
     public function passenger(): BelongsTo
@@ -128,5 +147,25 @@ class Ride extends Model
     public function promoCode(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(PromoCode::class);
+    }
+
+    public function airportZone(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(AirportZone::class);
+    }
+
+    public function businessAccount(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(BusinessAccount::class);
+    }
+
+    public function bookedBy(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(User::class, 'booked_by_user_id');
+    }
+
+    public function familyMember(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(FamilyMember::class);
     }
 }

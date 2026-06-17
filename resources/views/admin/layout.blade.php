@@ -264,6 +264,18 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ route('admin.airport-zones') }}" class="nav-link {{ request()->routeIs('admin.airport-zones*') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-plane-departure"></i>
+                            <p>Airport Zones</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ route('admin.business-accounts') }}" class="nav-link {{ request()->routeIs('admin.business-accounts*') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-building"></i>
+                            <p>Business Accounts</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ route('admin.chat') }}" class="nav-link {{ request()->routeIs('admin.chat') ? 'active' : '' }}">
                             <i class="nav-icon fas fa-comments"></i>
                             <p>Chat Testing</p>

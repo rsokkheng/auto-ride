@@ -37,6 +37,9 @@ use App\Http\Controllers\Api\OnboardingController;
 use App\Http\Controllers\Api\QrPaymentController;
 use App\Http\Controllers\Api\VoucherController;
 use App\Http\Controllers\Api\WithdrawalController;
+use App\Http\Controllers\Api\AirportTripController;
+use App\Http\Controllers\Api\BusinessController;
+use App\Http\Controllers\Api\FamilyController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -349,6 +352,28 @@ Route::prefix('v1')->group(function () {
     // ── Accessibility settings ────────────────────────────────────────────────
     Route::get('accessibility', [AccessibilityController::class, 'show']);
     Route::put('accessibility', [AccessibilityController::class, 'update']);
+
+    // ── Airport Trips ─────────────────────────────────────────────────────────
+    Route::get('airport/zones',           [AirportTripController::class, 'zones']);
+    Route::post('airport/estimate',       [AirportTripController::class, 'estimateFare']);
+
+    // ── Business Users ────────────────────────────────────────────────────────
+    Route::get('business',                  [BusinessController::class, 'myAccount']);
+    Route::post('business/register',        [BusinessController::class, 'register']);
+    Route::post('business/join',            [BusinessController::class, 'join']);
+    Route::post('business/leave',           [BusinessController::class, 'leave']);
+    Route::put('business/account',          [BusinessController::class, 'updateAccount']);
+    Route::get('business/members',          [BusinessController::class, 'members']);
+    Route::put('business/members/{bMember}',    [BusinessController::class, 'updateMember']);
+    Route::delete('business/members/{bMember}', [BusinessController::class, 'removeMember']);
+    Route::get('business/trips',            [BusinessController::class, 'trips']);
+
+    // ── Family Trips ──────────────────────────────────────────────────────────
+    Route::get('family',                    [FamilyController::class, 'index']);
+    Route::post('family/setup',             [FamilyController::class, 'setup']);
+    Route::post('family/members',           [FamilyController::class, 'addMember']);
+    Route::put('family/members/{member}',   [FamilyController::class, 'updateMember']);
+    Route::delete('family/members/{member}',[FamilyController::class, 'removeMember']);
 
     // ── Mobile Admin API ──────────────────────────────────────────────────────
     // Auth (no bearer token required)

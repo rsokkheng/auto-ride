@@ -22,7 +22,9 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\WalletTransaction;
 use App\Models\WithdrawalRequest;
+use App\Models\AirportZone;
 use App\Models\Banner;
+use App\Models\BusinessAccount;
 use App\Models\MembershipTier;
 use App\Services\PaymentService;
 use App\Services\WalletService;
@@ -1513,5 +1515,91 @@ class AdminController extends Controller
     {
         $banner->delete();
         return redirect()->route('admin.banners')->with('success', 'Banner deleted.');
+    }
+
+    // ─── Airport Zones ────────────────────────────────────────────────────────
+
+    public function airportZones()
+    {
+        $emptyPage = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
+        return view('admin.airport-zones', [
+            'zones' => rescue(fn () => AirportZone::orderBy('sort_order')->orderBy('name')->paginate(20), $emptyPage, false),
+        ]);
+    }
+
+    public function storeAirportZone(Request $request)
+    {
+        $data = $request->validate([
+            'name'            => 'required|string|max:100',
+            'iata_code'       => 'required|string|max:4|unique:airport_zones',
+            'latitude'        => 'required|numeric|between:-90,90',
+            'longitude'       => 'required|numeric|between:-180,180',
+            'radius_meters'   => 'required|integer|min:100|max:10000',
+            'surcharge_khr'   => 'required|integer|min:0',
+            'luggage_fee_khr' => 'required|integer|min:0',
+            'active'          => 'boolean',
+        ]);
+        $data['iata_code'] = strtoupper($data['iata_code']);
+        $data['active']    = $request->boolean('active', true);
+        AirportZone::create($data);
+        return redirect()->route('admin.airport-zones')->with('success', 'Airport zone created.');
+    }
+
+    public function updateAirportZone(Request $request, AirportZone $zone)
+    {
+        $data = $request->validate([
+            'name'            => 'required|string|max:100',
+            'latitude'        => 'required|numeric|between:-90,90',
+            'longitude'       => 'required|numeric|between:-180,180',
+            'radius_meters'   => 'required|integer|min:100|max:10000',
+            'surcharge_khr'   => 'required|integer|min:0',
+            'luggage_fee_khr' => 'required|integer|min:0',
+            'active'          => 'boolean',
+        ]);
+        $data['active'] = $request->boolean('active');
+        $zone->update($data);
+        return redirect()->route('admin.airport-zones')->with('success', 'Airport zone updated.');
+    }
+
+    public function destroyAirportZone(AirportZone $zone)
+    {
+        $zone->delete();
+        return redirect()->route('admin.airport-zones')->with('success', 'Airport zone deleted.');
+    }
+
+    // ─── Business Accounts ────────────────────────────────────────────────────
+
+    public function businessAccounts(Request $request)
+    {
+        $emptyPage = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
+        return view('admin.business-accounts', [
+            'accounts' => rescue(fn () => BusinessAccount::with('owner:id,name,email')
+                ->withCount('members')
+                ->orderByDesc('created_at')
+                ->paginate(20), $emptyPage, false),
+        ]);
+    }
+
+    public function showBusinessAccount(BusinessAccount $account)
+    {
+        $account->load(['owner:id,name,email', 'members.user:id,name,email,phone']);
+        $recentRides = rescue(fn () => \App\Models\Ride::where('business_account_id', $account->id)
+            ->where('status', 'completed')
+            ->orderByDesc('completed_at')
+            ->limit(10)
+            ->get(), collect(), false);
+
+        return view('admin.business-account-detail', compact('account', 'recentRides'));
+    }
+
+    public function updateBusinessAccount(Request $request, BusinessAccount $account)
+    {
+        $data = $request->validate([
+            'monthly_credit_limit_khr' => 'required|integer|min:0',
+            'active'                   => 'boolean',
+        ]);
+        $data['active'] = $request->boolean('active');
+        $account->update($data);
+        return redirect()->route('admin.business-accounts')->with('success', 'Business account updated.');
     }
 }
