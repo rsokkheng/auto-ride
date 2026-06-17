@@ -40,6 +40,7 @@ use App\Http\Controllers\Api\WithdrawalController;
 use App\Http\Controllers\Api\AirportTripController;
 use App\Http\Controllers\Api\BusinessController;
 use App\Http\Controllers\Api\FamilyController;
+use App\Http\Controllers\Api\SubscriptionController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -374,6 +375,15 @@ Route::prefix('v1')->group(function () {
     Route::post('family/members',           [FamilyController::class, 'addMember']);
     Route::put('family/members/{member}',   [FamilyController::class, 'updateMember']);
     Route::delete('family/members/{member}',[FamilyController::class, 'removeMember']);
+
+    // ── Subscription Plans ────────────────────────────────────────────────────
+    Route::get('subscriptions/plans',       [SubscriptionController::class, 'plans']);
+    Route::get('subscriptions/my',          [SubscriptionController::class, 'mySubscription']);
+    Route::post('subscriptions/subscribe',  [SubscriptionController::class, 'subscribe']);
+    Route::post('subscriptions/upgrade',    [SubscriptionController::class, 'upgrade']);
+    Route::post('subscriptions/cancel',     [SubscriptionController::class, 'cancel']);
+    Route::put('subscriptions/auto-renew',  [SubscriptionController::class, 'toggleAutoRenew']);
+    Route::get('subscriptions/history',     [SubscriptionController::class, 'history']);
 
     // ── Mobile Admin API ──────────────────────────────────────────────────────
     // Auth (no bearer token required)

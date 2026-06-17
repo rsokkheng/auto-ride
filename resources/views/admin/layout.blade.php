@@ -276,6 +276,12 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ route('admin.subscription-plans') }}" class="nav-link {{ request()->routeIs('admin.subscription-plans*') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-layer-group"></i>
+                            <p>Subscription Plans</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ route('admin.chat') }}" class="nav-link {{ request()->routeIs('admin.chat') ? 'active' : '' }}">
                             <i class="nav-icon fas fa-comments"></i>
                             <p>Chat Testing</p>

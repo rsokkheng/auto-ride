@@ -144,6 +144,13 @@ Route::prefix('admin')->group(function () {
     Route::get('business-accounts', [AdminController::class, 'businessAccounts'])->name('admin.business-accounts');
     Route::get('business-accounts/{account}', [AdminController::class, 'showBusinessAccount'])->name('admin.business-accounts.show');
     Route::put('business-accounts/{account}', [AdminController::class, 'updateBusinessAccount'])->name('admin.business-accounts.update');
+
+    // Subscription Plans
+    Route::get('subscription-plans', [AdminController::class, 'subscriptionPlans'])->name('admin.subscription-plans');
+    Route::post('subscription-plans', [AdminController::class, 'storeSubscriptionPlan'])->name('admin.subscription-plans.store');
+    Route::put('subscription-plans/{plan}', [AdminController::class, 'updateSubscriptionPlan'])->name('admin.subscription-plans.update');
+    Route::delete('subscription-plans/{plan}', [AdminController::class, 'destroySubscriptionPlan'])->name('admin.subscription-plans.destroy');
+    Route::get('subscription-plans/{plan}/subscribers', [AdminController::class, 'subscriptionSubscribers'])->name('admin.subscription-plans.subscribers');
 });
 
 // ── Seller Portal ─────────────────────────────────────────────────────────────

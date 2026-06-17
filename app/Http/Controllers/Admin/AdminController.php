@@ -26,6 +26,8 @@ use App\Models\AirportZone;
 use App\Models\Banner;
 use App\Models\BusinessAccount;
 use App\Models\MembershipTier;
+use App\Models\SubscriptionPlan;
+use App\Models\UserSubscription;
 use App\Services\PaymentService;
 use App\Services\WalletService;
 use Illuminate\Http\Request;
@@ -1601,5 +1603,119 @@ class AdminController extends Controller
         $data['active'] = $request->boolean('active');
         $account->update($data);
         return redirect()->route('admin.business-accounts')->with('success', 'Business account updated.');
+    }
+
+    // ─── Subscription Plans ───────────────────────────────────────────────────
+
+    public function subscriptionPlans()
+    {
+        $emptyPage = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
+
+        $plans = rescue(fn () => SubscriptionPlan::orderBy('sort_order')->paginate(20), $emptyPage, false);
+
+        $stats = [
+            'total_active'      => rescue(fn () => UserSubscription::where('status', 'active')->count(), 0, false),
+            'revenue_month'     => rescue(fn () => \App\Models\SubscriptionTransaction::where('status', 'paid')
+                ->where('created_at', '>=', now()->startOfMonth())->sum('amount_khr'), 0, false),
+            'cancelled_month'   => rescue(fn () => UserSubscription::where('status', 'cancelled')
+                ->where('cancelled_at', '>=', now()->startOfMonth())->count(), 0, false),
+        ];
+
+        return view('admin.subscription-plans', compact('plans', 'stats'));
+    }
+
+    public function storeSubscriptionPlan(Request $request)
+    {
+        $data = $request->validate([
+            'name'                  => 'required|string|max:80',
+            'slug'                  => 'required|string|max:40|unique:subscription_plans',
+            'description'           => 'nullable|string',
+            'price_khr'             => 'required|integer|min:0',
+            'billing_cycle'         => 'required|in:weekly,monthly,yearly',
+            'ride_credit_khr'       => 'nullable|integer|min:0',
+            'ride_discount_pct'     => 'nullable|integer|min:0|max:100',
+            'delivery_discount_pct' => 'nullable|integer|min:0|max:100',
+            'free_cancellations'    => 'nullable|integer|min:0',
+            'surge_waived'          => 'boolean',
+            'priority_matching'     => 'boolean',
+            'bonus_points_pct'      => 'nullable|integer|min:0|max:200',
+            'badge_color'           => 'nullable|string|max:20',
+            'sort_order'            => 'nullable|integer|min:0',
+            'active'                => 'boolean',
+        ]);
+
+        $data['slug']               = \Illuminate\Support\Str::slug($data['slug']);
+        $data['surge_waived']       = $request->boolean('surge_waived');
+        $data['priority_matching']  = $request->boolean('priority_matching');
+        $data['active']             = $request->boolean('active', true);
+        $data['ride_credit_khr']    = $data['ride_credit_khr'] ?? 0;
+        $data['ride_discount_pct']  = $data['ride_discount_pct'] ?? 0;
+        $data['delivery_discount_pct'] = $data['delivery_discount_pct'] ?? 0;
+        $data['free_cancellations'] = $data['free_cancellations'] ?? 0;
+        $data['bonus_points_pct']   = $data['bonus_points_pct'] ?? 0;
+        $data['sort_order']         = $data['sort_order'] ?? 0;
+
+        SubscriptionPlan::create($data);
+
+        return redirect()->route('admin.subscription-plans')->with('success', 'Plan created.');
+    }
+
+    public function updateSubscriptionPlan(Request $request, SubscriptionPlan $plan)
+    {
+        $data = $request->validate([
+            'name'                  => 'required|string|max:80',
+            'description'           => 'nullable|string',
+            'price_khr'             => 'required|integer|min:0',
+            'billing_cycle'         => 'required|in:weekly,monthly,yearly',
+            'ride_credit_khr'       => 'nullable|integer|min:0',
+            'ride_discount_pct'     => 'nullable|integer|min:0|max:100',
+            'delivery_discount_pct' => 'nullable|integer|min:0|max:100',
+            'free_cancellations'    => 'nullable|integer|min:0',
+            'surge_waived'          => 'boolean',
+            'priority_matching'     => 'boolean',
+            'bonus_points_pct'      => 'nullable|integer|min:0|max:200',
+            'badge_color'           => 'nullable|string|max:20',
+            'sort_order'            => 'nullable|integer|min:0',
+            'active'                => 'boolean',
+        ]);
+
+        $data['surge_waived']          = $request->boolean('surge_waived');
+        $data['priority_matching']     = $request->boolean('priority_matching');
+        $data['active']                = $request->boolean('active');
+        $data['ride_credit_khr']       = $data['ride_credit_khr'] ?? 0;
+        $data['ride_discount_pct']     = $data['ride_discount_pct'] ?? 0;
+        $data['delivery_discount_pct'] = $data['delivery_discount_pct'] ?? 0;
+        $data['free_cancellations']    = $data['free_cancellations'] ?? 0;
+        $data['bonus_points_pct']      = $data['bonus_points_pct'] ?? 0;
+
+        $plan->update($data);
+
+        return redirect()->route('admin.subscription-plans')->with('success', 'Plan updated.');
+    }
+
+    public function destroySubscriptionPlan(SubscriptionPlan $plan)
+    {
+        if ($plan->subscriptions()->where('status', 'active')->exists()) {
+            return redirect()->route('admin.subscription-plans')
+                ->with('error', 'Cannot delete a plan with active subscribers.');
+        }
+
+        $plan->update(['active' => false]);
+
+        return redirect()->route('admin.subscription-plans')->with('success', 'Plan deactivated.');
+    }
+
+    public function subscriptionSubscribers(SubscriptionPlan $plan)
+    {
+        $subscribers = rescue(
+            fn () => UserSubscription::with('user:id,name,email,phone')
+                ->where('subscription_plan_id', $plan->id)
+                ->orderByDesc('created_at')
+                ->paginate(30),
+            new \Illuminate\Pagination\LengthAwarePaginator([], 0, 30),
+            false
+        );
+
+        return view('admin.subscription-subscribers', compact('plan', 'subscribers'));
     }
 }
