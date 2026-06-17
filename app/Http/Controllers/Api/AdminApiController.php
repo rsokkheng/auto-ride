@@ -13,7 +13,6 @@ use App\Models\SupportMessage;
 use App\Models\SupportTicket;
 use App\Models\SurgeZone;
 use App\Models\TopUpRequest;
-use App\Models\TransactionRecord;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\WalletTransaction;
@@ -23,7 +22,6 @@ use App\Services\WalletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 
 class AdminApiController extends ApiController
 {
@@ -336,7 +334,7 @@ class AdminApiController extends ApiController
      * POST /api/v1/admin/drivers/{driver}/documents/{document}/review
      * Body: { status: "approved"|"rejected", note? }
      */
-    public function reviewDocument(Request $request, User $driver, DriverDocument $document): JsonResponse
+    public function reviewDocument(Request $request, User $_driver, DriverDocument $document): JsonResponse
     {
         $admin = $this->adminUser($request);
         if (! $admin) return $this->unauthorized();
@@ -348,7 +346,7 @@ class AdminApiController extends ApiController
 
         $document->update([
             'status'      => $data['status'],
-            'reject_note' => $data['note'] ?? null,
+            'admin_note'  => $data['note'] ?? null,
             'reviewed_at' => now(),
             'reviewed_by' => $admin->id,
         ]);
@@ -401,8 +399,9 @@ class AdminApiController extends ApiController
         }
 
         $ride->update([
-            'status'      => 'cancelled',
-            'cancel_note' => $request->input('reason', 'Cancelled by admin'),
+            'status'               => 'cancelled',
+            'cancellation_reason'  => $request->input('reason', 'Cancelled by admin'),
+            'cancelled_at'         => now(),
         ]);
 
         return $this->ok($ride->fresh(), 'Ride cancelled.');
@@ -618,10 +617,9 @@ class AdminApiController extends ApiController
         $data = $request->validate(['message' => 'required|string|max:2000']);
 
         $msg = SupportMessage::create([
-            'ticket_id'  => $ticket->id,
-            'sender_id'  => $admin->id,
-            'message'    => $data['message'],
-            'is_staff'   => true,
+            'ticket_id' => $ticket->id,
+            'sender_id' => $admin->id,
+            'message'   => $data['message'],
         ]);
 
         if ($ticket->status === 'open') {
