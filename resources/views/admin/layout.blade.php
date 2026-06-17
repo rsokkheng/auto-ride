@@ -183,7 +183,7 @@
 
                     <li class="nav-item">
                         <a href="{{ route('admin.transactions') }}" class="nav-link {{ request()->routeIs('admin.transactions') ? 'active' : '' }}">
-                            @php $pendingTx = \App\Models\TransactionRecord::where('status','pending')->count(); @endphp
+                            @php $pendingTx = rescue(fn() => \App\Models\TransactionRecord::where('status','pending')->count(), 0, false); @endphp
                             <i class="nav-icon fas fa-receipt"></i>
                             <p>
                                 Transactions
@@ -207,7 +207,7 @@
                     </li>
                     <li class="nav-item">
                         <a href="{{ route('admin.topups') }}" class="nav-link {{ request()->routeIs('admin.topups') ? 'active' : '' }}">
-                            @php $pendingCount = \App\Models\TopUpRequest::where('status','pending')->count(); @endphp
+                            @php $pendingCount = rescue(fn() => \App\Models\TopUpRequest::where('status','pending')->count(), 0, false); @endphp
                             <i class="nav-icon fas fa-money-bill-transfer"></i>
                             <p>
                                 Top-up Requests
@@ -220,7 +220,7 @@
 
                     <li class="nav-item">
                         <a href="{{ route('admin.withdrawals') }}" class="nav-link {{ request()->routeIs('admin.withdrawals') ? 'active' : '' }}">
-                            @php $pendingWithdrawals = \App\Models\WithdrawalRequest::where('status','pending')->count(); @endphp
+                            @php $pendingWithdrawals = rescue(fn() => \App\Models\WithdrawalRequest::where('status','pending')->count(), 0, false); @endphp
                             <i class="nav-icon fas fa-money-check-alt"></i>
                             <p>
                                 Driver Payouts

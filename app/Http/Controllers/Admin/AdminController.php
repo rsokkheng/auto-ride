@@ -107,23 +107,27 @@ class AdminController extends Controller
 
     public function dashboard()
     {
-        $today     = now()->startOfDay();
-        $yesterday = now()->subDay()->startOfDay();
-        $week      = now()->subDays(6)->startOfDay();
+        $today = now()->startOfDay();
+        $week  = now()->subDays(6)->startOfDay();
 
-        // Revenue last 7 days for chart
+        // Revenue last 7 days for chart — safe even if completed_at column is missing
         $revenueChart = [];
         $ridesChart   = [];
         for ($i = 6; $i >= 0; $i--) {
             $day   = now()->subDays($i)->toDateString();
             $start = now()->subDays($i)->startOfDay();
             $end   = now()->subDays($i)->endOfDay();
-            $revenueChart[$day] = (int) Ride::where('status', 'completed')
-                ->whereBetween('completed_at', [$start, $end])
-                ->sum('fare');
-            $ridesChart[$day]   = Ride::where('status', 'completed')
-                ->whereBetween('completed_at', [$start, $end])
-                ->count();
+            try {
+                $revenueChart[$day] = (int) Ride::where('status', 'completed')
+                    ->whereBetween('completed_at', [$start, $end])
+                    ->sum('fare');
+                $ridesChart[$day]   = Ride::where('status', 'completed')
+                    ->whereBetween('completed_at', [$start, $end])
+                    ->count();
+            } catch (\Throwable) {
+                $revenueChart[$day] = 0;
+                $ridesChart[$day]   = 0;
+            }
         }
 
         $todayRevenue     = $revenueChart[now()->toDateString()] ?? 0;
@@ -131,6 +135,9 @@ class AdminController extends Controller
         $revenueGrowth    = $yesterdayRevenue > 0
             ? round(($todayRevenue - $yesterdayRevenue) / $yesterdayRevenue * 100, 1)
             : null;
+
+        // Helper: safely count a query even if the table doesn't exist yet
+        $safe = fn (\Closure $cb, int $default = 0) => rescue($cb, $default, false);
 
         return view('admin.dashboard', [
             'metrics' => [
@@ -145,11 +152,11 @@ class AdminController extends Controller
                 'deliveries_total'    => Delivery::count(),
                 'deliveries_today'    => Delivery::where('created_at', '>=', $today)->count(),
                 'revenue_today'       => $todayRevenue,
-                'revenue_week'        => (int) Ride::where('status','completed')->where('completed_at','>=',$week)->sum('fare'),
+                'revenue_week'        => $safe(fn () => (int) Ride::where('status','completed')->where('completed_at','>=',$week)->sum('fare')),
                 'revenue_growth'      => $revenueGrowth,
                 'marketplace'         => MarketplaceItem::count(),
                 'support_open'        => SupportTicket::whereIn('status', ['open','in_progress'])->count(),
-                'withdrawals_pending' => WithdrawalRequest::where('status','pending')->count(),
+                'withdrawals_pending' => $safe(fn () => WithdrawalRequest::where('status','pending')->count()),
                 'safety_incidents'    => SafetyIncident::count(),
             ],
             'revenueChart'   => $revenueChart,
@@ -164,7 +171,7 @@ class AdminController extends Controller
     public function fareManagement()
     {
         $settings = PricingSetting::all()->keyBy('key');
-        $tiers    = MembershipTier::orderBy('sort_order')->get();
+        $tiers    = rescue(fn () => MembershipTier::orderBy('sort_order')->get(), collect(), false);
 
         return view('admin.fare-management', compact('settings', 'tiers'));
     }
