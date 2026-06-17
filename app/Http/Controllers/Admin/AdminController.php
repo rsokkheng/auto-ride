@@ -1379,16 +1379,22 @@ class AdminController extends Controller
     {
         $status = $request->input('status', 'pending');
 
+        $emptyPage = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
+
         return view('admin.withdrawals', [
-            'withdrawals' => WithdrawalRequest::with('driver')
-                ->where('status', $status)
-                ->orderBy('created_at')
-                ->paginate(20),
+            'withdrawals' => rescue(
+                fn () => WithdrawalRequest::with('driver')
+                    ->where('status', $status)
+                    ->orderBy('created_at')
+                    ->paginate(20),
+                $emptyPage,
+                false
+            ),
             'status' => $status,
             'counts' => [
-                'pending'  => WithdrawalRequest::where('status', 'pending')->count(),
-                'approved' => WithdrawalRequest::where('status', 'approved')->count(),
-                'rejected' => WithdrawalRequest::where('status', 'rejected')->count(),
+                'pending'  => rescue(fn () => WithdrawalRequest::where('status', 'pending')->count(), 0, false),
+                'approved' => rescue(fn () => WithdrawalRequest::where('status', 'approved')->count(), 0, false),
+                'rejected' => rescue(fn () => WithdrawalRequest::where('status', 'rejected')->count(), 0, false),
             ],
         ]);
     }
@@ -1443,8 +1449,14 @@ class AdminController extends Controller
 
     public function banners()
     {
+        $emptyPage = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
+
         return view('admin.banners', [
-            'banners' => Banner::orderBy('sort_order')->orderByDesc('created_at')->paginate(20),
+            'banners' => rescue(
+                fn () => Banner::orderBy('sort_order')->orderByDesc('created_at')->paginate(20),
+                $emptyPage,
+                false
+            ),
         ]);
     }
 

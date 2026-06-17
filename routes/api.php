@@ -414,9 +414,11 @@ Route::prefix('v1')->group(function () {
     Route::delete('admin/surge-zones/{zone}',          [AdminApiController::class, 'destroySurgeZone']);
     Route::post('admin/surge-zones/{zone}/toggle',     [AdminApiController::class, 'toggleSurgeZone']);
 
-    // Pricing settings
-    Route::get('admin/pricing',         [AdminApiController::class, 'pricing']);
+    // Pricing / fares settings (both paths accepted)
+    Route::get('admin/pricing',          [AdminApiController::class, 'pricing']);
+    Route::get('admin/fares',            [AdminApiController::class, 'pricing']);
     Route::put('admin/pricing/settings', [AdminApiController::class, 'updatePricing']);
+    Route::put('admin/fares/settings',   [AdminApiController::class, 'updatePricing']);
 
     // Safety incidents
     Route::get('admin/safety', [AdminApiController::class, 'safety']);
