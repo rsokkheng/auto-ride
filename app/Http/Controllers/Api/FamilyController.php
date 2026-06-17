@@ -9,11 +9,11 @@ use Illuminate\Http\Request;
 
 class FamilyController extends ApiController
 {
-    // ── Get family group and members ──────────────────────────────────────────
-
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $user  = $this->authUser();
+        $user  = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
         $group = FamilyGroup::with('members')->where('owner_user_id', $user->id)->first();
 
         if (! $group) {
@@ -29,11 +29,11 @@ class FamilyController extends ApiController
         ]);
     }
 
-    // ── Create or rename family group ─────────────────────────────────────────
-
     public function setup(Request $request): JsonResponse
     {
-        $user = $this->authUser();
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
         $data = $request->validate(['name' => 'required|string|max:80']);
 
         $group = FamilyGroup::firstOrCreate(
@@ -51,11 +51,11 @@ class FamilyController extends ApiController
         ]);
     }
 
-    // ── Add a family member ───────────────────────────────────────────────────
-
     public function addMember(Request $request): JsonResponse
     {
-        $user = $this->authUser();
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
         $data = $request->validate([
             'name'         => 'required|string|max:100',
             'phone'        => 'required|string|max:20',
@@ -67,12 +67,10 @@ class FamilyController extends ApiController
             ['name' => 'My Family']
         );
 
-        // Cap at 10 members
         if ($group->members()->count() >= 10) {
             return response()->json(['message' => 'Maximum of 10 family members allowed.'], 422);
         }
 
-        // Link to existing user account if phone matches
         $linkedUser = \App\Models\User::where('phone', $data['phone'])->first();
 
         $member = FamilyMember::create([
@@ -86,11 +84,11 @@ class FamilyController extends ApiController
         return response()->json(['data' => $this->formatMember($member), 'message' => 'Family member added.'], 201);
     }
 
-    // ── Update a family member ────────────────────────────────────────────────
-
     public function updateMember(Request $request, FamilyMember $member): JsonResponse
     {
-        $user  = $this->authUser();
+        $user  = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
         $group = FamilyGroup::where('owner_user_id', $user->id)->first();
 
         if (! $group || $member->family_group_id !== $group->id) {
@@ -112,11 +110,11 @@ class FamilyController extends ApiController
         return response()->json(['data' => $this->formatMember($member->fresh()), 'message' => 'Member updated.']);
     }
 
-    // ── Remove a family member ────────────────────────────────────────────────
-
-    public function removeMember(FamilyMember $member): JsonResponse
+    public function removeMember(Request $request, FamilyMember $member): JsonResponse
     {
-        $user  = $this->authUser();
+        $user  = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
         $group = FamilyGroup::where('owner_user_id', $user->id)->first();
 
         if (! $group || $member->family_group_id !== $group->id) {
@@ -127,8 +125,6 @@ class FamilyController extends ApiController
 
         return response()->json(['message' => 'Member removed.']);
     }
-
-    // ── Helper ────────────────────────────────────────────────────────────────
 
     private function formatMember(FamilyMember $m): array
     {

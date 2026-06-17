@@ -10,11 +10,11 @@ use Illuminate\Http\Request;
 
 class BusinessController extends ApiController
 {
-    // ── My business account ───────────────────────────────────────────────────
-
-    public function myAccount(): JsonResponse
+    public function myAccount(Request $request): JsonResponse
     {
-        $user = $this->authUser();
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
         $member = BusinessMember::with('account.owner')
             ->where('user_id', $user->id)
             ->where('active', true)
@@ -28,21 +28,20 @@ class BusinessController extends ApiController
 
         return response()->json([
             'data' => [
-                'account'         => $this->formatAccount($account),
-                'my_role'         => $member->role,
-                'my_department'   => $member->department,
-                'my_cost_center'  => $member->cost_center,
-                'monthly_limit'   => $member->monthly_limit_khr,
-                'joined_at'       => $member->joined_at,
+                'account'        => $this->formatAccount($account),
+                'my_role'        => $member->role,
+                'my_department'  => $member->department,
+                'my_cost_center' => $member->cost_center,
+                'monthly_limit'  => $member->monthly_limit_khr,
+                'joined_at'      => $member->joined_at,
             ],
         ]);
     }
 
-    // ── Register new business account ─────────────────────────────────────────
-
     public function register(Request $request): JsonResponse
     {
-        $user = $this->authUser();
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
 
         $existing = BusinessMember::where('user_id', $user->id)->where('active', true)->first();
         if ($existing) {
@@ -50,14 +49,14 @@ class BusinessController extends ApiController
         }
 
         $data = $request->validate([
-            'name'            => 'required|string|max:150',
-            'tax_id'          => 'nullable|string|max:50',
-            'industry'        => 'nullable|string|max:60',
-            'contact_name'    => 'nullable|string|max:100',
-            'contact_phone'   => 'nullable|string|max:20',
-            'billing_email'   => 'nullable|email|max:150',
-            'billing_cycle'   => 'in:weekly,monthly',
-            'address'         => 'nullable|string|max:255',
+            'name'          => 'required|string|max:150',
+            'tax_id'        => 'nullable|string|max:50',
+            'industry'      => 'nullable|string|max:60',
+            'contact_name'  => 'nullable|string|max:100',
+            'contact_phone' => 'nullable|string|max:20',
+            'billing_email' => 'nullable|email|max:150',
+            'billing_cycle' => 'in:weekly,monthly',
+            'address'       => 'nullable|string|max:255',
         ]);
 
         $account = BusinessAccount::create([
@@ -76,11 +75,10 @@ class BusinessController extends ApiController
         return response()->json(['data' => $this->formatAccount($account), 'message' => 'Business account created.'], 201);
     }
 
-    // ── Join by code ──────────────────────────────────────────────────────────
-
     public function join(Request $request): JsonResponse
     {
-        $user = $this->authUser();
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
 
         $data = $request->validate(['code' => 'required|string|size:8']);
 
@@ -104,11 +102,11 @@ class BusinessController extends ApiController
         return response()->json(['data' => $this->formatAccount($account), 'message' => 'Joined business account.']);
     }
 
-    // ── List members (admin only) ─────────────────────────────────────────────
-
-    public function members(): JsonResponse
+    public function members(Request $request): JsonResponse
     {
-        $user   = $this->authUser();
+        $user   = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
         $member = $this->requireAdminMember($user->id);
         if ($member instanceof JsonResponse) return $member;
 
@@ -116,25 +114,25 @@ class BusinessController extends ApiController
             ->where('business_account_id', $member->business_account_id)
             ->get()
             ->map(fn ($m) => [
-                'id'             => $m->id,
-                'user'           => $m->user ? ['id' => $m->user->id, 'name' => $m->user->name, 'email' => $m->user->email, 'phone' => $m->user->phone, 'avatar' => $m->user->avatar] : null,
-                'role'           => $m->role,
-                'department'     => $m->department,
-                'cost_center'    => $m->cost_center,
-                'employee_id'    => $m->employee_id,
-                'monthly_limit'  => $m->monthly_limit_khr,
-                'active'         => $m->active,
-                'joined_at'      => $m->joined_at,
+                'id'            => $m->id,
+                'user'          => $m->user ? ['id' => $m->user->id, 'name' => $m->user->name, 'email' => $m->user->email, 'phone' => $m->user->phone] : null,
+                'role'          => $m->role,
+                'department'    => $m->department,
+                'cost_center'   => $m->cost_center,
+                'employee_id'   => $m->employee_id,
+                'monthly_limit' => $m->monthly_limit_khr,
+                'active'        => $m->active,
+                'joined_at'     => $m->joined_at,
             ]);
 
         return response()->json(['data' => $members]);
     }
 
-    // ── Update member (admin only) ────────────────────────────────────────────
-
     public function updateMember(Request $request, BusinessMember $bMember): JsonResponse
     {
-        $user   = $this->authUser();
+        $user   = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
         $member = $this->requireAdminMember($user->id);
         if ($member instanceof JsonResponse) return $member;
 
@@ -143,12 +141,12 @@ class BusinessController extends ApiController
         }
 
         $data = $request->validate([
-            'role'             => 'in:admin,member',
-            'department'       => 'nullable|string|max:80',
-            'cost_center'      => 'nullable|string|max:60',
-            'employee_id'      => 'nullable|string|max:40',
+            'role'              => 'in:admin,member',
+            'department'        => 'nullable|string|max:80',
+            'cost_center'       => 'nullable|string|max:60',
+            'employee_id'       => 'nullable|string|max:40',
             'monthly_limit_khr' => 'nullable|integer|min:0',
-            'active'           => 'boolean',
+            'active'            => 'boolean',
         ]);
 
         $bMember->update($data);
@@ -156,11 +154,11 @@ class BusinessController extends ApiController
         return response()->json(['data' => $bMember->fresh(), 'message' => 'Member updated.']);
     }
 
-    // ── Remove member (admin only) ────────────────────────────────────────────
-
-    public function removeMember(BusinessMember $bMember): JsonResponse
+    public function removeMember(Request $request, BusinessMember $bMember): JsonResponse
     {
-        $user   = $this->authUser();
+        $user   = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
         $member = $this->requireAdminMember($user->id);
         if ($member instanceof JsonResponse) return $member;
 
@@ -177,11 +175,10 @@ class BusinessController extends ApiController
         return response()->json(['message' => 'Member removed.']);
     }
 
-    // ── Leave account ─────────────────────────────────────────────────────────
-
-    public function leave(): JsonResponse
+    public function leave(Request $request): JsonResponse
     {
-        $user = $this->authUser();
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
 
         $member = BusinessMember::where('user_id', $user->id)->where('active', true)->first();
         if (! $member) {
@@ -197,11 +194,11 @@ class BusinessController extends ApiController
         return response()->json(['message' => 'Left business account.']);
     }
 
-    // ── Business trip history ─────────────────────────────────────────────────
-
     public function trips(Request $request): JsonResponse
     {
-        $user   = $this->authUser();
+        $user   = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
         $member = BusinessMember::where('user_id', $user->id)->where('active', true)->first();
         if (! $member) {
             return response()->json(['message' => 'Not a member of any business account.'], 404);
@@ -217,11 +214,8 @@ class BusinessController extends ApiController
         if ($request->filled('to')) {
             $query->where('completed_at', '<=', $request->input('to'));
         }
-        if ($request->filled('department') && $member->role === 'admin') {
-            $query->whereHas('passenger', fn ($q) => $q->whereHas('businessMembership', fn ($bq) => $bq->where('department', $request->input('department'))));
-        }
 
-        $rides = $query->orderByDesc('completed_at')->paginate(20);
+        $rides    = $query->orderByDesc('completed_at')->paginate(20);
         $totalKhr = (clone $query)->sum('fare');
 
         return response()->json([
@@ -230,11 +224,11 @@ class BusinessController extends ApiController
         ]);
     }
 
-    // ── Update account (admin only) ───────────────────────────────────────────
-
     public function updateAccount(Request $request): JsonResponse
     {
-        $user   = $this->authUser();
+        $user   = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
         $member = $this->requireAdminMember($user->id);
         if ($member instanceof JsonResponse) return $member;
 
@@ -254,11 +248,10 @@ class BusinessController extends ApiController
         return response()->json(['data' => $this->formatAccount($member->account->fresh()), 'message' => 'Account updated.']);
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
     private function requireAdminMember(int $userId): BusinessMember|JsonResponse
     {
-        $member = BusinessMember::where('user_id', $userId)
+        $member = BusinessMember::with('account')
+            ->where('user_id', $userId)
             ->where('role', 'admin')
             ->where('active', true)
             ->first();
