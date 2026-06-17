@@ -30,9 +30,19 @@ class RideController extends ApiController
         $user = $this->authUser($request);
         if (! $user) return $this->unauthorized();
 
-        $rides = $user->role === 'driver'
-            ? Ride::with(['passenger', 'vehicle'])->where('driver_id', $user->id)->orderBy('created_at')->paginate(20)
-            : Ride::with(['driver', 'vehicle'])->where('passenger_id', $user->id)->orderBy('created_at')->paginate(20);
+        $status  = $request->query('status');
+        $perPage = (int) ($request->query('per_page', 20));
+        $perPage = min(max($perPage, 1), 100);
+
+        $query = $user->role === 'driver'
+            ? Ride::with(['passenger', 'vehicle'])->where('driver_id', $user->id)
+            : Ride::with(['driver', 'vehicle'])->where('passenger_id', $user->id);
+
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        $rides = $query->orderByDesc('id')->paginate($perPage);
 
         return $this->success(['rides' => $rides]);
     }
