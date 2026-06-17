@@ -118,6 +118,21 @@ Route::prefix('admin')->group(function () {
     Route::get('topups', [AdminController::class, 'topups'])->name('admin.topups');
     Route::post('topups/{topup}/approve', [AdminController::class, 'approveTopUp'])->name('admin.topups.approve');
     Route::post('topups/{topup}/reject', [AdminController::class, 'rejectTopUp'])->name('admin.topups.reject');
+
+    // Fare Management
+    Route::get('fare-management', [AdminController::class, 'fareManagement'])->name('admin.fare-management');
+    Route::post('fare-management', [AdminController::class, 'updateFareManagement'])->name('admin.fare-management.update');
+
+    // Driver Withdrawal Payouts
+    Route::get('withdrawals', [AdminController::class, 'withdrawals'])->name('admin.withdrawals');
+    Route::post('withdrawals/{withdrawal}/approve', [AdminController::class, 'approveWithdrawal'])->name('admin.withdrawals.approve');
+    Route::post('withdrawals/{withdrawal}/reject', [AdminController::class, 'rejectWithdrawal'])->name('admin.withdrawals.reject');
+
+    // Promotional Banners
+    Route::get('banners', [AdminController::class, 'banners'])->name('admin.banners');
+    Route::post('banners', [AdminController::class, 'storeBanner'])->name('admin.banners.store');
+    Route::put('banners/{banner}', [AdminController::class, 'updateBanner'])->name('admin.banners.update');
+    Route::delete('banners/{banner}', [AdminController::class, 'destroyBanner'])->name('admin.banners.destroy');
 });
 
 // ── Seller Portal ─────────────────────────────────────────────────────────────

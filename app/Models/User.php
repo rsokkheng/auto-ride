@@ -11,7 +11,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['name', 'email', 'password', 'phone', 'avatar', 'role', 'driver_type', 'company_name', 'company_id', 'salary', 'commission_rate', 'api_token', 'refresh_token', 'token_expires_at', 'refresh_token_expires_at', 'available', 'status_note', 'wallet_balance', 'current_latitude', 'current_longitude', 'rating', 'total_ratings', 'approval_status', 'approved_at', 'cancellation_count', 'cancellation_penalty_until', 'proxy_phone', 'fcm_token', 'referral_code', 'referred_by', 'city', 'service_zone'])]
+#[Fillable(['name', 'email', 'password', 'phone', 'avatar', 'role', 'driver_type', 'company_name', 'company_id', 'salary', 'commission_rate', 'api_token', 'refresh_token', 'token_expires_at', 'refresh_token_expires_at', 'available', 'status_note', 'wallet_balance', 'current_latitude', 'current_longitude', 'rating', 'total_ratings', 'approval_status', 'approved_at', 'cancellation_count', 'cancellation_penalty_until', 'proxy_phone', 'fcm_token', 'referral_code', 'referred_by', 'city', 'service_zone', 'social_provider', 'social_id', 'current_streak', 'longest_streak', 'last_trip_date', 'loyalty_points', 'membership_tier_id', 'onboarding_completed_at', 'onboarding_steps', 'accessibility_settings'])]
 #[Hidden(['password', 'remember_token', 'api_token', 'refresh_token'])]
 class User extends Authenticatable
 {
@@ -36,6 +36,14 @@ class User extends Authenticatable
             'approved_at'                 => 'datetime',
             'cancellation_penalty_until'  => 'datetime',
             'cancellation_count'          => 'integer',
+            'current_streak'              => 'integer',
+            'longest_streak'              => 'integer',
+            'last_trip_date'              => 'date',
+            'loyalty_points'              => 'integer',
+            'membership_tier_id'          => 'integer',
+            'onboarding_completed_at'     => 'datetime',
+            'onboarding_steps'            => 'array',
+            'accessibility_settings'      => 'array',
         ];
     }
 
@@ -151,5 +159,25 @@ class User extends Authenticatable
     public function driverDocuments(): HasMany
     {
         return $this->hasMany(\App\Models\DriverDocument::class, 'driver_id');
+    }
+
+    public function userVouchers(): HasMany
+    {
+        return $this->hasMany(UserVoucher::class);
+    }
+
+    public function membershipTier(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(MembershipTier::class);
+    }
+
+    public function biometricDevices(): HasMany
+    {
+        return $this->hasMany(BiometricDevice::class);
+    }
+
+    public function linkedAccounts(): HasMany
+    {
+        return $this->hasMany(LinkedAccount::class, 'primary_user_id');
     }
 }

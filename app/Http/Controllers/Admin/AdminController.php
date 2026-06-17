@@ -21,6 +21,9 @@ use App\Models\TransactionRecord;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\WalletTransaction;
+use App\Models\WithdrawalRequest;
+use App\Models\Banner;
+use App\Models\MembershipTier;
 use App\Services\PaymentService;
 use App\Services\WalletService;
 use Illuminate\Http\Request;
@@ -104,21 +107,92 @@ class AdminController extends Controller
 
     public function dashboard()
     {
+        $today     = now()->startOfDay();
+        $yesterday = now()->subDay()->startOfDay();
+        $week      = now()->subDays(6)->startOfDay();
+
+        // Revenue last 7 days for chart
+        $revenueChart = [];
+        $ridesChart   = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $day   = now()->subDays($i)->toDateString();
+            $start = now()->subDays($i)->startOfDay();
+            $end   = now()->subDays($i)->endOfDay();
+            $revenueChart[$day] = (int) Ride::where('status', 'completed')
+                ->whereBetween('completed_at', [$start, $end])
+                ->sum('fare');
+            $ridesChart[$day]   = Ride::where('status', 'completed')
+                ->whereBetween('completed_at', [$start, $end])
+                ->count();
+        }
+
+        $todayRevenue     = $revenueChart[now()->toDateString()] ?? 0;
+        $yesterdayRevenue = $revenueChart[now()->subDay()->toDateString()] ?? 0;
+        $revenueGrowth    = $yesterdayRevenue > 0
+            ? round(($todayRevenue - $yesterdayRevenue) / $yesterdayRevenue * 100, 1)
+            : null;
+
         return view('admin.dashboard', [
             'metrics' => [
-                'users'            => User::count(),
-                'drivers'          => User::where('role', 'driver')->count(),
-                'vehicles'         => Vehicle::count(),
-                'rides'            => Ride::count(),
-                'deliveries'       => Delivery::count(),
-                'marketplace'      => MarketplaceItem::count(),
-                'charging_stations'=> ChargingStation::count(),
-                'support_tickets'  => SupportTicket::count(),
-                'safety_incidents' => SafetyIncident::count(),
+                'users'               => User::where('role', 'passenger')->count(),
+                'drivers'             => User::where('role', 'driver')->count(),
+                'drivers_online'      => User::where('role', 'driver')->where('available', true)->count(),
+                'drivers_pending'     => User::where('role', 'driver')->where('approval_status', 'pending')->count(),
+                'vehicles'            => Vehicle::count(),
+                'rides_total'         => Ride::count(),
+                'rides_today'         => Ride::where('created_at', '>=', $today)->count(),
+                'rides_active'        => Ride::whereIn('status', ['accepted','driver_arrived','in_progress'])->count(),
+                'deliveries_total'    => Delivery::count(),
+                'deliveries_today'    => Delivery::where('created_at', '>=', $today)->count(),
+                'revenue_today'       => $todayRevenue,
+                'revenue_week'        => (int) Ride::where('status','completed')->where('completed_at','>=',$week)->sum('fare'),
+                'revenue_growth'      => $revenueGrowth,
+                'marketplace'         => MarketplaceItem::count(),
+                'support_open'        => SupportTicket::whereIn('status', ['open','in_progress'])->count(),
+                'withdrawals_pending' => WithdrawalRequest::where('status','pending')->count(),
+                'safety_incidents'    => SafetyIncident::count(),
             ],
-            'latestUsers' => User::latest()->take(5)->get(),
-            'latestRides' => Ride::latest()->take(5)->get(),
+            'revenueChart'   => $revenueChart,
+            'ridesChart'     => $ridesChart,
+            'latestUsers'    => User::latest()->take(8)->get(),
+            'latestRides'    => Ride::with('passenger:id,name','driver:id,name')->latest()->take(8)->get(),
+            'pendingDrivers' => User::where('role','driver')->where('approval_status','pending')->latest()->take(5)->get(),
+            'openTickets'    => SupportTicket::whereIn('status',['open','in_progress'])->latest()->take(5)->get(),
         ]);
+    }
+
+    public function fareManagement()
+    {
+        $settings = PricingSetting::all()->keyBy('key');
+        $tiers    = MembershipTier::orderBy('sort_order')->get();
+
+        return view('admin.fare-management', compact('settings', 'tiers'));
+    }
+
+    public function updateFareManagement(Request $request)
+    {
+        $data = $request->validate([
+            'cancel_fee_after_arrival'        => 'required|integer|min:0',
+            'cancel_fee_after_accepted'        => 'required|integer|min:0',
+            'cancel_free_minutes'              => 'required|integer|min:0',
+            'waiting_free_minutes'             => 'required|integer|min:0',
+            'waiting_rate_khr_per_min'         => 'required|integer|min:0',
+            'night_surcharge_rate'             => 'required|numeric|min:0|max:2',
+            'delivery_night_surcharge_rate'    => 'required|numeric|min:0|max:2',
+            'delivery_express_multiplier'      => 'required|numeric|min:1|max:10',
+            'avg_city_speed_kmh'               => 'required|integer|min:5|max:200',
+            'traffic_speed_threshold_kmh'      => 'required|integer|min:5|max:100',
+            'loyalty_points_per_ride'          => 'required|integer|min:0',
+            'loyalty_points_per_delivery'      => 'required|integer|min:0',
+            'loyalty_min_redeem_points'        => 'required|integer|min:0',
+            'loyalty_redeem_rate_khr'          => 'required|integer|min:0',
+        ]);
+
+        foreach ($data as $key => $value) {
+            PricingSetting::updateOrCreate(['key' => $key], ['value' => $value]);
+        }
+
+        return back()->with('success', 'Fee settings saved successfully.');
     }
 
     // ─── Users ───────────────────────────────────────────────────────────────
@@ -1290,5 +1364,135 @@ class AdminController extends Controller
         ]);
 
         return back()->with('success', 'Document ' . $data['action'] . 'd.');
+    }
+
+    // ─── Withdrawal Requests ─────────────────────────────────────────────────
+
+    public function withdrawals(Request $request)
+    {
+        $status = $request->input('status', 'pending');
+
+        return view('admin.withdrawals', [
+            'withdrawals' => WithdrawalRequest::with('driver')
+                ->where('status', $status)
+                ->orderBy('created_at')
+                ->paginate(20),
+            'status' => $status,
+            'counts' => [
+                'pending'  => WithdrawalRequest::where('status', 'pending')->count(),
+                'approved' => WithdrawalRequest::where('status', 'approved')->count(),
+                'rejected' => WithdrawalRequest::where('status', 'rejected')->count(),
+            ],
+        ]);
+    }
+
+    public function approveWithdrawal(Request $request, WithdrawalRequest $withdrawal)
+    {
+        if ($withdrawal->status !== 'pending') {
+            return redirect()->route('admin.withdrawals')->with('error', 'Already processed.');
+        }
+
+        $data = $request->validate(['admin_note' => 'nullable|string|max:500']);
+
+        $withdrawal->update([
+            'status'       => 'approved',
+            'admin_note'   => $data['admin_note'] ?? null,
+            'processed_at' => now(),
+            'processed_by' => Auth::id(),
+        ]);
+
+        return redirect()->route('admin.withdrawals')
+            ->with('success', number_format($withdrawal->amount_khr) . ' ៛ withdrawal approved for ' . $withdrawal->driver->name . '.');
+    }
+
+    public function rejectWithdrawal(Request $request, WithdrawalRequest $withdrawal)
+    {
+        if ($withdrawal->status !== 'pending') {
+            return redirect()->route('admin.withdrawals')->with('error', 'Already processed.');
+        }
+
+        $data = $request->validate(['admin_note' => 'nullable|string|max:500']);
+
+        // Return funds to driver wallet
+        app(\App\Services\WalletService::class)->credit(
+            $withdrawal->driver,
+            $withdrawal->amount_khr,
+            'withdrawal_rejected',
+            'Withdrawal request rejected — funds returned'
+        );
+
+        $withdrawal->update([
+            'status'       => 'rejected',
+            'admin_note'   => $data['admin_note'] ?? null,
+            'processed_at' => now(),
+            'processed_by' => Auth::id(),
+        ]);
+
+        return redirect()->route('admin.withdrawals')
+            ->with('success', 'Withdrawal rejected and funds returned to driver wallet.');
+    }
+
+    // ─── Banners ─────────────────────────────────────────────────────────────
+
+    public function banners()
+    {
+        return view('admin.banners', [
+            'banners' => Banner::orderBy('sort_order')->orderByDesc('created_at')->paginate(20),
+        ]);
+    }
+
+    public function storeBanner(Request $request)
+    {
+        $data = $request->validate([
+            'title'       => 'required|string|max:100',
+            'deeplink'    => 'nullable|string|max:255',
+            'target_role' => 'required|in:all,passenger,driver',
+            'sort_order'  => 'nullable|integer|min:0',
+            'valid_from'  => 'nullable|date',
+            'valid_until' => 'nullable|date|after_or_equal:valid_from',
+            'active'      => 'boolean',
+            'image'       => 'required|image|mimes:jpg,jpeg,png,webp|max:4096',
+        ]);
+
+        $data['image']      = $request->file('image')->store('banners', 'public');
+        $data['active']     = $request->boolean('active', true);
+        $data['sort_order'] = $data['sort_order'] ?? 0;
+
+        Banner::create($data);
+
+        return redirect()->route('admin.banners')->with('success', 'Banner created.');
+    }
+
+    public function updateBanner(Request $request, Banner $banner)
+    {
+        $data = $request->validate([
+            'title'       => 'required|string|max:100',
+            'deeplink'    => 'nullable|string|max:255',
+            'target_role' => 'required|in:all,passenger,driver',
+            'sort_order'  => 'nullable|integer|min:0',
+            'valid_from'  => 'nullable|date',
+            'valid_until' => 'nullable|date|after_or_equal:valid_from',
+            'active'      => 'boolean',
+            'image'       => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
+        ]);
+
+        if ($request->hasFile('image')) {
+            $data['image'] = $request->file('image')->store('banners', 'public');
+        } else {
+            unset($data['image']);
+        }
+
+        $data['active']     = $request->boolean('active');
+        $data['sort_order'] = $data['sort_order'] ?? $banner->sort_order;
+
+        $banner->update($data);
+
+        return redirect()->route('admin.banners')->with('success', 'Banner updated.');
+    }
+
+    public function destroyBanner(Banner $banner)
+    {
+        $banner->delete();
+        return redirect()->route('admin.banners')->with('success', 'Banner deleted.');
     }
 }

@@ -218,6 +218,25 @@
                         </a>
                     </li>
 
+                    <li class="nav-item">
+                        <a href="{{ route('admin.withdrawals') }}" class="nav-link {{ request()->routeIs('admin.withdrawals') ? 'active' : '' }}">
+                            @php $pendingWithdrawals = \App\Models\WithdrawalRequest::where('status','pending')->count(); @endphp
+                            <i class="nav-icon fas fa-money-check-alt"></i>
+                            <p>
+                                Driver Payouts
+                                @if($pendingWithdrawals)
+                                    <span class="right badge badge-danger">{{ $pendingWithdrawals }}</span>
+                                @endif
+                            </p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ route('admin.banners') }}" class="nav-link {{ request()->routeIs('admin.banners') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-images"></i>
+                            <p>Promo Banners</p>
+                        </a>
+                    </li>
+
                     <li class="nav-header" style="font-size:.65rem;color:#475569;letter-spacing:.1em;padding:8px 16px 4px;">SERVICES</li>
 
                     <li class="nav-item">
@@ -236,6 +255,12 @@
                         <a href="{{ route('admin.ride-pricing') }}" class="nav-link {{ request()->routeIs('admin.ride-pricing') ? 'active' : '' }}">
                             <i class="nav-icon fas fa-tags"></i>
                             <p>Ride Pricing</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ route('admin.fare-management') }}" class="nav-link {{ request()->routeIs('admin.fare-management') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-sliders-h"></i>
+                            <p>Fare Management</p>
                         </a>
                     </li>
                     <li class="nav-item">

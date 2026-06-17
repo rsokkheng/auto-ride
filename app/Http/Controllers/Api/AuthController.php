@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
 class AuthController extends ApiController
@@ -247,6 +248,97 @@ class AuthController extends ApiController
         $user->update(['fcm_token' => $data['fcm_token']]);
 
         return $this->success(['message' => 'FCM token saved.']);
+    }
+
+    // ── Social Login ─────────────────────────────────────────────────────────
+
+    /** POST /v1/auth/social  Body: { provider: "google"|"facebook", token: "..." } */
+    public function socialLogin(Request $request)
+    {
+        $data = $request->validate([
+            'provider' => 'required|in:google,facebook',
+            'token'    => 'required|string',
+        ]);
+
+        [$socialId, $name, $email, $avatar] = match ($data['provider']) {
+            'google'   => $this->verifyGoogle($data['token']),
+            'facebook' => $this->verifyFacebook($data['token']),
+        };
+
+        if (! $socialId) {
+            return response()->json(['data' => null, 'message' => 'Invalid social token.'], 401);
+        }
+
+        $user = User::where('social_provider', $data['provider'])
+                    ->where('social_id', $socialId)
+                    ->first();
+
+        if (! $user && $email) {
+            $user = User::where('email', $email)->first();
+        }
+
+        if (! $user) {
+            $user = User::create([
+                'name'            => $name ?? 'User',
+                'email'           => $email ?? $data['provider'] . '_' . $socialId . '@auto-ride.local',
+                'password'        => Str::random(40),
+                'role'            => 'passenger',
+                'social_provider' => $data['provider'],
+                'social_id'       => $socialId,
+                'avatar'          => null,
+                'api_token'       => bin2hex(random_bytes(40)),
+                'refresh_token'   => bin2hex(random_bytes(40)),
+                'token_expires_at'=> now()->addMinutes(self::ACCESS_TTL),
+                'refresh_token_expires_at' => now()->addMinutes(self::REFRESH_TTL),
+            ]);
+        } else {
+            $user->update([
+                'social_provider'          => $data['provider'],
+                'social_id'                => $socialId,
+                'api_token'                => bin2hex(random_bytes(40)),
+                'refresh_token'            => bin2hex(random_bytes(40)),
+                'token_expires_at'         => now()->addMinutes(self::ACCESS_TTL),
+                'refresh_token_expires_at' => now()->addMinutes(self::REFRESH_TTL),
+            ]);
+        }
+
+        return $this->success($this->tokenResponse($user));
+    }
+
+    private function verifyGoogle(string $token): array
+    {
+        $res = Http::get('https://oauth2.googleapis.com/tokeninfo', ['id_token' => $token]);
+        if (! $res->successful()) return [null, null, null, null];
+
+        $payload  = $res->json();
+        $audience = $payload['aud'] ?? '';
+        if (! str_starts_with($audience, config('services.google.client_id', ''))) {
+            return [null, null, null, null];
+        }
+
+        return [
+            $payload['sub']     ?? null,
+            $payload['name']    ?? null,
+            $payload['email']   ?? null,
+            $payload['picture'] ?? null,
+        ];
+    }
+
+    private function verifyFacebook(string $token): array
+    {
+        $res = Http::get('https://graph.facebook.com/me', [
+            'fields'       => 'id,name,email,picture',
+            'access_token' => $token,
+        ]);
+        if (! $res->successful()) return [null, null, null, null];
+
+        $data = $res->json();
+        return [
+            $data['id']              ?? null,
+            $data['name']            ?? null,
+            $data['email']           ?? null,
+            $data['picture']['data']['url'] ?? null,
+        ];
     }
 
     protected function tokenResponse(User $user): array

@@ -11,7 +11,9 @@ use App\Services\FcmService;
 use App\Services\FirestoreService;
 use App\Services\MovingFareService;
 use App\Services\PaymentService;
+use App\Mail\TripReceipt;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 
 class DeliveryController extends ApiController
@@ -671,6 +673,15 @@ class DeliveryController extends ApiController
             }
         } catch (\Throwable $e) {
             report($e);
+        }
+
+        // Email receipt to sender
+        if ($fresh->sender?->email) {
+            try {
+                Mail::to($fresh->sender->email)->queue(TripReceipt::fromDelivery($fresh));
+            } catch (\Throwable $e) {
+                report($e);
+            }
         }
 
         return $this->success([

@@ -12,7 +12,9 @@ use App\Services\FcmService;
 use App\Services\FirestoreService;
 use App\Services\PaymentService;
 use App\Services\WalletService;
+use App\Mail\TripReceipt;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 
 class RideController extends ApiController
 {
@@ -420,9 +422,23 @@ class RideController extends ApiController
             ], 422);
         }
 
+        // Waiting time surcharge: free minutes then charge per minute
+        $waitingFee      = 0;
+        $waitingMinutes  = 0;
+        $freeWaitMinutes = (int) \App\Models\PricingSetting::get('waiting_free_minutes', 3);
+        $waitingRateKhr  = (int) \App\Models\PricingSetting::get('waiting_rate_per_min', 500);
+
+        if ($ride->driver_arrived_at) {
+            $waitingMinutes = (int) now()->diffInMinutes($ride->driver_arrived_at);
+            $chargeMinutes  = max(0, $waitingMinutes - $freeWaitMinutes);
+            $waitingFee     = $chargeMinutes * $waitingRateKhr;
+        }
+
         $ride->update([
-            'status'     => Ride::STATUS_IN_PROGRESS,
-            'started_at' => now(),
+            'status'      => Ride::STATUS_IN_PROGRESS,
+            'started_at'  => now(),
+            'fare'        => $ride->fare + $waitingFee,
+            'waiting_fee' => $waitingFee,
         ]);
 
         $fresh = $ride->fresh()->load('passenger', 'driver', 'vehicle');
@@ -433,6 +449,8 @@ class RideController extends ApiController
         }
 
         return $this->success([
+            'waiting_minutes' => $waitingMinutes,
+            'waiting_fee'     => $waitingFee,
             'ride'    => $fresh,
             'message' => 'Trip started.',
         ]);
@@ -475,6 +493,15 @@ class RideController extends ApiController
             $this->fcm->rideCompleted($fresh->passenger, $fresh->id, (int) $fresh->fare);
         }
 
+        // Email receipt to passenger
+        if ($fresh->passenger?->email) {
+            try {
+                Mail::to($fresh->passenger->email)->queue(TripReceipt::fromRide($fresh));
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
         return $this->success([
             'ride'        => $fresh,
             'transaction' => $transaction,
@@ -499,13 +526,29 @@ class RideController extends ApiController
             ], 422);
         }
 
-        // Cancellation fee: charge passenger if driver already arrived
+        // Cancellation fee: charged to passenger based on how late they cancel
         $cancellationFee = 0;
         $isByPassenger   = $user->id === $ride->passenger_id;
-        $isAfterArrival  = in_array($ride->status, [Ride::STATUS_DRIVER_ARRIVED], true);
 
-        if ($isByPassenger && $isAfterArrival) {
-            $cancellationFee = (int) config('ride.cancellation_fee', 2000); // 2000 KHR default
+        if ($isByPassenger) {
+            $feeAfterArrival  = (int) \App\Models\PricingSetting::get('cancel_fee_after_arrival', 3000);
+            $feeAfterAccepted = (int) \App\Models\PricingSetting::get('cancel_fee_after_accepted', 1000);
+            $freeMinutes      = (int) \App\Models\PricingSetting::get('cancel_free_minutes', 3);
+
+            if ($ride->status === Ride::STATUS_DRIVER_ARRIVED) {
+                $cancellationFee = $feeAfterArrival;
+            } elseif ($ride->status === Ride::STATUS_ACCEPTED && $ride->accepted_at) {
+                $minutesSinceAccept = (int) now()->diffInMinutes($ride->accepted_at);
+                if ($minutesSinceAccept >= $freeMinutes) {
+                    $cancellationFee = $feeAfterAccepted;
+                }
+            }
+
+            if ($cancellationFee > 0 && $user->wallet_balance >= $cancellationFee) {
+                $this->wallet->debit($user, $cancellationFee, 'cancellation_fee', "Cancellation fee for ride #{$ride->id}");
+            } elseif ($cancellationFee > 0) {
+                $cancellationFee = 0; // Don't charge if insufficient balance
+            }
         }
 
         // Track driver cancellations

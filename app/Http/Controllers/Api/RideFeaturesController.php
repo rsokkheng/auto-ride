@@ -6,6 +6,7 @@ use App\Models\Ride;
 use App\Models\RideStop;
 use App\Models\PromoCode;
 use App\Models\UserEmergencyContact;
+use App\Services\AgoraService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -379,9 +380,39 @@ class RideFeaturesController extends ApiController
         return $earthRadius * 2 * asin(sqrt($a));
     }
 
-    private function notifyEmergencyContactsOfShare(int $userId): void
+    // ── Agora in-app voice call token ────────────────────────────────────────
+
+    /** POST /v1/rides/{ride}/call-token */
+    public function callToken(Request $request, Ride $ride)
     {
-        // UserEmergencyContact::where('user_id', $userId)->where('notify_on_trip_share', true)->get()
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
+        $allowed = [$ride->passenger_id, $ride->driver_id];
+        if (! in_array($user->id, $allowed, true)) {
+            return $this->unauthorized();
+        }
+
+        $activeStatuses = ['accepted', 'driver_arrived', 'in_progress'];
+        if (! in_array($ride->status, $activeStatuses, true)) {
+            return response()->json(['data' => null, 'message' => 'Ride is not active.'], 422);
+        }
+
+        $agora   = app(AgoraService::class);
+        $channel = 'ride_' . $ride->id;
+        $token   = $agora->rtcToken($channel, $user->id);
+
+        return $this->success([
+            'token'   => $token,
+            'channel' => $channel,
+            'app_id'  => config('services.agora.app_id'),
+            'uid'     => $user->id,
+        ]);
+    }
+
+    private function notifyEmergencyContactsOfShare(int $_userId): void
+    {
+        // UserEmergencyContact::where('user_id', $_userId)->where('notify_on_trip_share', true)->get()
         // → dispatch(new NotifyEmergencyContactJob($contact, $ride))
     }
 }

@@ -26,6 +26,17 @@ use App\Http\Controllers\Api\SupportController;
 use App\Http\Controllers\Api\TripHistoryController;
 use App\Http\Controllers\Api\UserProfileController;
 use App\Http\Controllers\Api\VehicleController;
+use App\Http\Controllers\Api\AccessibilityController;
+use App\Http\Controllers\Api\AdminApiController;
+use App\Http\Controllers\Api\BannerController;
+use App\Http\Controllers\Api\BiometricController;
+use App\Http\Controllers\Api\HelmetDetectionController;
+use App\Http\Controllers\Api\MembershipController;
+use App\Http\Controllers\Api\MultiAccountController;
+use App\Http\Controllers\Api\OnboardingController;
+use App\Http\Controllers\Api\QrPaymentController;
+use App\Http\Controllers\Api\VoucherController;
+use App\Http\Controllers\Api\WithdrawalController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -284,4 +295,129 @@ Route::prefix('v1')->group(function () {
 
     // ── Public trip tracking (no auth required) ───────────────────────────────
     Route::get('track/{token}', [RideFeaturesController::class, 'trackByToken']);
+
+    // ── Social login ──────────────────────────────────────────────────────────
+    Route::post('auth/social', [AuthController::class, 'socialLogin']);
+
+    // ── In-app call token (Agora RTC) ─────────────────────────────────────────
+    Route::post('rides/{ride}/call-token', [RideFeaturesController::class, 'callToken']);
+
+    // ── Helmet detection ──────────────────────────────────────────────────────
+    Route::post('driver/helmet-check', [HelmetDetectionController::class, 'check']);
+
+    // ── Voucher store ─────────────────────────────────────────────────────────
+    Route::get('vouchers', [VoucherController::class, 'index']);
+    Route::post('vouchers/apply', [VoucherController::class, 'apply']);
+    Route::get('vouchers/mine', [VoucherController::class, 'mine']);
+    Route::post('vouchers/{voucher}/claim', [VoucherController::class, 'claim']);
+
+    // ── Promotional banners ───────────────────────────────────────────────────
+    Route::get('banners', [BannerController::class, 'index']);
+
+    // ── Driver withdrawals ────────────────────────────────────────────────────
+    Route::post('driver/withdraw', [WithdrawalController::class, 'store']);
+    Route::get('driver/withdrawals', [WithdrawalController::class, 'index']);
+
+    // ── QR Payment ────────────────────────────────────────────────────────────
+    Route::post('payments/qr/generate', [QrPaymentController::class, 'generate']);
+    Route::get('payments/qr', [QrPaymentController::class, 'index']);
+    Route::get('payments/qr/{reference}/status', [QrPaymentController::class, 'status']);
+    Route::post('payments/qr/webhook', [QrPaymentController::class, 'webhook']);
+
+    // ── Biometric / Face ID ───────────────────────────────────────────────────
+    Route::post('auth/biometric/register', [BiometricController::class, 'register']);
+    Route::post('auth/biometric/challenge', [BiometricController::class, 'challenge']);
+    Route::post('auth/biometric/verify', [BiometricController::class, 'verify']);
+    Route::get('auth/biometric/devices', [BiometricController::class, 'devices']);
+    Route::delete('auth/biometric/devices/{device}', [BiometricController::class, 'revoke']);
+
+    // ── Multi-account ─────────────────────────────────────────────────────────
+    Route::get('accounts', [MultiAccountController::class, 'index']);
+    Route::post('accounts/link', [MultiAccountController::class, 'link']);
+    Route::post('accounts/switch/{linkId}', [MultiAccountController::class, 'switchAccount']);
+    Route::delete('accounts/{linkId}', [MultiAccountController::class, 'unlink']);
+
+    // ── Membership tiers ──────────────────────────────────────────────────────
+    Route::get('membership', [MembershipController::class, 'index']);
+    Route::get('membership/tiers', [MembershipController::class, 'tiers']);
+
+    // ── Onboarding tour ───────────────────────────────────────────────────────
+    Route::get('onboarding', [OnboardingController::class, 'show']);
+    Route::post('onboarding/step', [OnboardingController::class, 'completeStep']);
+    Route::post('onboarding/skip', [OnboardingController::class, 'skip']);
+
+    // ── Accessibility settings ────────────────────────────────────────────────
+    Route::get('accessibility', [AccessibilityController::class, 'show']);
+    Route::put('accessibility', [AccessibilityController::class, 'update']);
+
+    // ── Mobile Admin API ──────────────────────────────────────────────────────
+    // Auth (no bearer token required)
+    Route::post('admin/login', [AdminApiController::class, 'login']);
+
+    // All routes below require Bearer token with role=admin (enforced inside controller)
+    Route::post('admin/logout',  [AdminApiController::class, 'logout']);
+
+    // Dashboard
+    Route::get('admin/stats',    [AdminApiController::class, 'stats']);
+
+    // Users
+    Route::get('admin/users',                       [AdminApiController::class, 'users']);
+    Route::get('admin/users/{user}',                [AdminApiController::class, 'showUser']);
+    Route::put('admin/users/{user}',                [AdminApiController::class, 'updateUser']);
+    Route::delete('admin/users/{user}',             [AdminApiController::class, 'deleteUser']);
+    Route::post('admin/users/{user}/credit',        [AdminApiController::class, 'creditUser']);
+
+    // Drivers
+    Route::get('admin/drivers',                                              [AdminApiController::class, 'drivers']);
+    Route::get('admin/drivers/{driver}',                                     [AdminApiController::class, 'showDriver']);
+    Route::post('admin/drivers/{driver}/approve',                            [AdminApiController::class, 'approveDriver']);
+    Route::post('admin/drivers/{driver}/documents/{document}/review',        [AdminApiController::class, 'reviewDocument']);
+
+    // Rides
+    Route::get('admin/rides',              [AdminApiController::class, 'rides']);
+    Route::get('admin/rides/{ride}',       [AdminApiController::class, 'showRide']);
+    Route::post('admin/rides/{ride}/cancel', [AdminApiController::class, 'cancelRide']);
+
+    // Deliveries
+    Route::get('admin/deliveries',              [AdminApiController::class, 'deliveries']);
+    Route::get('admin/deliveries/{delivery}',   [AdminApiController::class, 'showDelivery']);
+
+    // Withdrawals
+    Route::get('admin/withdrawals',                              [AdminApiController::class, 'withdrawals']);
+    Route::post('admin/withdrawals/{withdrawal}/approve',        [AdminApiController::class, 'approveWithdrawal']);
+    Route::post('admin/withdrawals/{withdrawal}/reject',         [AdminApiController::class, 'rejectWithdrawal']);
+
+    // Top-ups
+    Route::get('admin/topups',                       [AdminApiController::class, 'topups']);
+    Route::post('admin/topups/{topup}/approve',      [AdminApiController::class, 'approveTopUp']);
+    Route::post('admin/topups/{topup}/reject',       [AdminApiController::class, 'rejectTopUp']);
+
+    // Support tickets
+    Route::get('admin/support',                           [AdminApiController::class, 'support']);
+    Route::get('admin/support/{ticket}',                  [AdminApiController::class, 'showTicket']);
+    Route::post('admin/support/{ticket}/reply',           [AdminApiController::class, 'replyTicket']);
+    Route::put('admin/support/{ticket}/status',           [AdminApiController::class, 'updateTicketStatus']);
+
+    // Transactions
+    Route::get('admin/transactions', [AdminApiController::class, 'transactions']);
+
+    // Banners
+    Route::get('admin/banners',              [AdminApiController::class, 'banners']);
+    Route::post('admin/banners',             [AdminApiController::class, 'storeBanner']);
+    Route::put('admin/banners/{banner}',     [AdminApiController::class, 'updateBanner']);
+    Route::delete('admin/banners/{banner}',  [AdminApiController::class, 'destroyBanner']);
+
+    // Surge zones
+    Route::get('admin/surge-zones',                    [AdminApiController::class, 'surgeZones']);
+    Route::post('admin/surge-zones',                   [AdminApiController::class, 'storeSurgeZone']);
+    Route::put('admin/surge-zones/{zone}',             [AdminApiController::class, 'updateSurgeZone']);
+    Route::delete('admin/surge-zones/{zone}',          [AdminApiController::class, 'destroySurgeZone']);
+    Route::post('admin/surge-zones/{zone}/toggle',     [AdminApiController::class, 'toggleSurgeZone']);
+
+    // Pricing settings
+    Route::get('admin/pricing',         [AdminApiController::class, 'pricing']);
+    Route::put('admin/pricing/settings', [AdminApiController::class, 'updatePricing']);
+
+    // Safety incidents
+    Route::get('admin/safety', [AdminApiController::class, 'safety']);
 });

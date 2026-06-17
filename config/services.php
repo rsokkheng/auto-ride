@@ -39,4 +39,23 @@ return [
         'key' => env('GOOGLE_MAPS_API_KEY'),
     ],
 
+    'google' => [
+        'client_id'     => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+    ],
+
+    'facebook' => [
+        'app_id' => env('FACEBOOK_APP_ID'),
+    ],
+
+    'google_vision' => [
+        'key' => env('GOOGLE_VISION_API_KEY'),
+    ],
+
+    'agora' => [
+        'app_id'      => env('AGORA_APP_ID'),
+        'certificate' => env('AGORA_APP_CERTIFICATE'),
+        'ttl'         => (int) env('AGORA_TOKEN_TTL', 3600),
+    ],
+
 ];
