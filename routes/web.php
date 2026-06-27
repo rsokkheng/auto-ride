@@ -59,6 +59,12 @@ Route::prefix('admin')->group(function () {
     Route::delete('marketplace/{item}', [AdminController::class, 'destroyMarketplace'])->name('admin.marketplace.destroy');
     Route::delete('marketplace-images/{image}', [AdminController::class, 'destroyMarketplaceImage'])->name('admin.marketplace.images.destroy');
 
+    // Marketplace Orders
+    Route::get('marketplace-orders', [AdminController::class, 'marketplaceOrders'])->name('admin.marketplace-orders');
+    Route::post('marketplace-orders/{order}/confirm', [AdminController::class, 'confirmMarketplaceOrder'])->name('admin.marketplace-orders.confirm');
+    Route::post('marketplace-orders/{order}/complete', [AdminController::class, 'completeMarketplaceOrder'])->name('admin.marketplace-orders.complete');
+    Route::post('marketplace-orders/{order}/cancel', [AdminController::class, 'cancelMarketplaceOrder'])->name('admin.marketplace-orders.cancel');
+
     // Ride Pricing
     Route::get('ride-pricing', [AdminController::class, 'ridePricing'])->name('admin.ride-pricing');
     Route::put('ride-pricing/{pricing}', [AdminController::class, 'updateRidePricing'])->name('admin.ride-pricing.update');

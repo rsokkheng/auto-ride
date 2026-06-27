@@ -777,6 +777,57 @@ class AdminController extends Controller
         return response()->json(['message' => 'Image deleted.']);
     }
 
+    // ─── Marketplace Orders ──────────────────────────────────────────────────
+
+    public function marketplaceOrders(Request $request)
+    {
+        $query = \App\Models\MarketplaceOrder::with(['product', 'buyer', 'seller'])
+            ->latest();
+
+        if ($request->filled('order_type')) {
+            $query->where('order_type', $request->order_type);
+        }
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        return view('admin.marketplace-orders', [
+            'orders' => $query->paginate(20)->appends($request->query()),
+        ]);
+    }
+
+    public function confirmMarketplaceOrder(\App\Models\MarketplaceOrder $order)
+    {
+        if ($order->status === 'pending') {
+            $order->update(['status' => 'confirmed']);
+        }
+        return back()->with('success', 'Order #' . $order->id . ' confirmed.');
+    }
+
+    public function completeMarketplaceOrder(\App\Models\MarketplaceOrder $order)
+    {
+        if ($order->status === 'confirmed') {
+            $order->update(['status' => 'completed', 'payment_status' => 'paid']);
+            if ($order->order_type === 'purchase') {
+                $product   = $order->product;
+                $remaining = $product->quantity - $order->quantity;
+                $product->update([
+                    'quantity' => max(0, $remaining),
+                    'status'   => $remaining <= 0 ? 'sold' : $product->status,
+                ]);
+            }
+        }
+        return back()->with('success', 'Order #' . $order->id . ' completed.');
+    }
+
+    public function cancelMarketplaceOrder(\App\Models\MarketplaceOrder $order)
+    {
+        if (! in_array($order->status, ['completed', 'cancelled'])) {
+            $order->update(['status' => 'cancelled']);
+        }
+        return back()->with('success', 'Order #' . $order->id . ' cancelled.');
+    }
+
     // ─── Ride Pricing ────────────────────────────────────────────────────────
 
     public function ridePricing()

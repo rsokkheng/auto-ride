@@ -290,12 +290,44 @@ class MarketplaceController extends ApiController
         $query = MarketplaceOrder::with(['product.images', 'buyer', 'seller']);
 
         if ($request->query('type') === 'selling') {
-            $query->where('seller_id', $user->id);
+            // Orders where I am the seller (direct) OR where my product was ordered (guest products)
+            $query->where(function ($q) use ($user) {
+                $q->where('seller_id', $user->id)
+                  ->orWhereHas('product', fn($p) => $p->where('seller_id', $user->id));
+            });
         } else {
+            // type=buying or default
             $query->where('buyer_id', $user->id);
         }
 
-        return $this->success(['orders' => $query->latest()->paginate(20)]);
+        $orders = $query->latest()->paginate(20);
+
+        return $this->success([
+            'total'  => $orders->total(),
+            'orders' => $orders->map(fn($o) => [
+                'id'              => $o->id,
+                'order_type'      => $o->order_type,
+                'status'          => $o->status,
+                'payment_status'  => $o->payment_status,
+                'payment_method'  => $o->payment_method,
+                'quantity'        => $o->quantity,
+                'unit_price'      => (float) $o->unit_price,
+                'total_price'     => (float) $o->total_price,
+                'rent_start_date' => $o->rent_start_date,
+                'rent_end_date'   => $o->rent_end_date,
+                'notes'           => $o->notes,
+                'created_at'      => $o->created_at->toDateTimeString(),
+                'product' => $o->product ? [
+                    'id'           => $o->product->id,
+                    'title'        => $o->product->title,
+                    'listing_type' => $o->product->listing_type,
+                    'condition'    => $o->product->condition,
+                    'image'        => $o->product->images->first()?->full_url,
+                ] : null,
+                'buyer'  => $o->buyer  ? ['id' => $o->buyer->id,  'name' => $o->buyer->name,  'phone' => $o->buyer->phone]  : null,
+                'seller' => $o->seller ? ['id' => $o->seller->id, 'name' => $o->seller->name, 'phone' => $o->seller->phone] : null,
+            ]),
+        ]);
     }
 
     public function confirmOrder(Request $request, MarketplaceOrder $order)

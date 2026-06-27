@@ -165,6 +165,12 @@
                             <p>Marketplace</p>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a href="{{ route('admin.marketplace-orders') }}" class="nav-link {{ request()->routeIs('admin.marketplace-orders*') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-shopping-bag"></i>
+                            <p>Market Orders</p>
+                        </a>
+                    </li>
 
                     <li class="nav-item">
                         <a href="{{ route('admin.drivers') }}" class="nav-link {{ request()->routeIs('admin.drivers*') ? 'active' : '' }}">
