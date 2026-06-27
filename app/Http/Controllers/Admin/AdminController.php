@@ -647,21 +647,36 @@ class AdminController extends Controller
 
     public function storeMarketplace(Request $request)
     {
+        $isSale    = $request->boolean('is_sale');
+        $isRent    = $request->boolean('is_rent');
+        $isGuest   = $request->input('entry_type') === 'guest';
+
+        if (!$isSale && !$isRent) {
+            return back()->withErrors(['type' => 'Please select at least one listing type (Sale or Rent).'])->withInput();
+        }
+        $type = ($isSale && $isRent) ? 'both' : ($isSale ? 'sale' : 'rent');
+
         $data = $request->validate([
-            'seller_id'   => 'required|exists:users,id',
+            'entry_type'  => 'required|in:user,guest',
+            'seller_id'   => $isGuest ? 'nullable' : 'required|exists:users,id',
             'vehicle_id'  => 'nullable|exists:vehicles,id',
+            'guest_name'  => $isGuest ? 'required|string|max:100' : 'nullable',
+            'guest_phone' => $isGuest ? 'required|string|max:20'  : 'nullable',
             'title'       => 'required|string|max:255',
             'description' => 'nullable|string',
-            'type'        => 'required|in:rent,sale',
-            'price'       => 'nullable|numeric|min:0',
-            'rent_rate'   => 'nullable|numeric|min:0',
+            'price'       => $isSale ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
+            'rent_rate'   => $isRent ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
             'available'   => 'boolean',
             'condition'   => 'required|in:excellent,good,fair,poor',
             'images'      => 'nullable|array|max:10',
             'images.*'    => 'image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
+        $data['type']      = $type;
         $data['available'] = $request->boolean('available');
+        if ($isGuest) {
+            $data['seller_id'] = null;
+        }
         unset($data['images']);
 
         $item = MarketplaceItem::create($data);
@@ -683,21 +698,36 @@ class AdminController extends Controller
 
     public function updateMarketplace(Request $request, MarketplaceItem $item)
     {
+        $isSale  = $request->boolean('is_sale');
+        $isRent  = $request->boolean('is_rent');
+        $isGuest = $request->input('entry_type') === 'guest';
+
+        if (!$isSale && !$isRent) {
+            return back()->withErrors(['type' => 'Please select at least one listing type (Sale or Rent).'])->withInput();
+        }
+        $type = ($isSale && $isRent) ? 'both' : ($isSale ? 'sale' : 'rent');
+
         $data = $request->validate([
-            'seller_id'   => 'required|exists:users,id',
+            'entry_type'  => 'required|in:user,guest',
+            'seller_id'   => $isGuest ? 'nullable' : 'required|exists:users,id',
             'vehicle_id'  => 'nullable|exists:vehicles,id',
+            'guest_name'  => $isGuest ? 'required|string|max:100' : 'nullable',
+            'guest_phone' => $isGuest ? 'required|string|max:20'  : 'nullable',
             'title'       => 'required|string|max:255',
             'description' => 'nullable|string',
-            'type'        => 'required|in:rent,sale',
-            'price'       => 'nullable|numeric|min:0',
-            'rent_rate'   => 'nullable|numeric|min:0',
+            'price'       => $isSale ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
+            'rent_rate'   => $isRent ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
             'available'   => 'boolean',
             'condition'   => 'required|in:excellent,good,fair,poor',
             'images'      => 'nullable|array|max:10',
             'images.*'    => 'image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
+        $data['type']      = $type;
         $data['available'] = $request->boolean('available');
+        if ($isGuest) {
+            $data['seller_id'] = null;
+        }
         unset($data['images']);
 
         $item->update($data);

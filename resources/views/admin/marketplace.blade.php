@@ -46,8 +46,25 @@
                         @endif
                     </td>
                     <td>{{ \Illuminate\Support\Str::limit($item->title, 28) }}</td>
-                    <td>{{ $item->seller?->name ?? '—' }}</td>
-                    <td><span class="badge badge-{{ $item->type === 'rent' ? 'info' : 'success' }}">{{ ucfirst($item->type) }}</span></td>
+                    <td>
+                        @if($item->entry_type === 'guest')
+                            <span class="badge badge-warning">Guest</span><br>
+                            <small>{{ $item->guest_name }}</small><br>
+                            <small class="text-muted">{{ $item->guest_phone }}</small>
+                        @else
+                            {{ $item->seller?->name ?? '—' }}
+                        @endif
+                    </td>
+                    <td>
+                        @if($item->type === 'both')
+                            <span class="badge badge-success">Sale</span>
+                            <span class="badge badge-info">Rent</span>
+                        @elseif($item->type === 'rent')
+                            <span class="badge badge-info">Rent</span>
+                        @else
+                            <span class="badge badge-success">Sale</span>
+                        @endif
+                    </td>
                     <td>{{ $item->price ? '$'.number_format($item->price, 2) : '—' }}</td>
                     <td>{{ $item->rent_rate ? '$'.number_format($item->rent_rate, 2) : '—' }}</td>
                     <td>{{ ucfirst($item->condition) }}</td>
@@ -94,25 +111,55 @@
                 {{-- Scrollable body --}}
                 <div class="modal-body" style="max-height:72vh;overflow-y:auto">
 
-                    {{-- ── Seller / Vehicle ────────────────────────────── --}}
-                    <div class="form-row">
-                        <div class="form-group col-md-6">
-                            <label>Seller <span class="text-danger">*</span></label>
-                            <select name="seller_id" id="f-seller" class="form-control" required>
-                                <option value="">— Select seller —</option>
-                                @foreach($sellers as $s)
-                                    <option value="{{ $s->id }}">{{ $s->name }}</option>
-                                @endforeach
-                            </select>
+                    {{-- ── Entry Type ───────────────────────────────────── --}}
+                    <div class="form-group">
+                        <label class="d-block">Entry By</label>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" id="btn-entry-user" class="btn btn-primary" onclick="setEntryType('user')">
+                                <i class="fas fa-user mr-1"></i> Registered User
+                            </button>
+                            <button type="button" id="btn-entry-guest" class="btn btn-outline-secondary" onclick="setEntryType('guest')">
+                                <i class="fas fa-user-clock mr-1"></i> Guest
+                            </button>
                         </div>
-                        <div class="form-group col-md-6">
-                            <label>Vehicle</label>
-                            <select name="vehicle_id" id="f-vehicle" class="form-control">
-                                <option value="">— None —</option>
-                                @foreach($vehicles as $v)
-                                    <option value="{{ $v->id }}">{{ $v->make }} {{ $v->model }} ({{ $v->license_plate }})</option>
-                                @endforeach
-                            </select>
+                        <input type="hidden" name="entry_type" id="f-entry-type" value="user">
+                    </div>
+
+                    {{-- ── User Seller (entry_type = user) ─────────────────── --}}
+                    <div id="sellerSection">
+                        <div class="form-row">
+                            <div class="form-group col-md-6">
+                                <label>Seller <span class="text-danger">*</span></label>
+                                <select name="seller_id" id="f-seller" class="form-control">
+                                    <option value="">— Select seller —</option>
+                                    @foreach($sellers as $s)
+                                        <option value="{{ $s->id }}">{{ $s->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="form-group col-md-6">
+                                <label>Vehicle</label>
+                                <select name="vehicle_id" id="f-vehicle" class="form-control">
+                                    <option value="">— None —</option>
+                                    @foreach($vehicles as $v)
+                                        <option value="{{ $v->id }}">{{ $v->make }} {{ $v->model }} ({{ $v->license_plate }})</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- ── Guest Info (entry_type = guest) ─────────────────── --}}
+                    <div id="guestSection" style="display:none">
+                        <div class="form-row">
+                            <div class="form-group col-md-6">
+                                <label>Guest Name <span class="text-danger">*</span></label>
+                                <input type="text" name="guest_name" id="f-guest-name" class="form-control" maxlength="100" placeholder="Full name">
+                            </div>
+                            <div class="form-group col-md-6">
+                                <label>Guest Phone <span class="text-danger">*</span></label>
+                                <input type="text" name="guest_phone" id="f-guest-phone" class="form-control" maxlength="20" placeholder="+855...">
+                            </div>
                         </div>
                     </div>
 
@@ -126,24 +173,33 @@
                         <textarea name="description" id="f-desc" class="form-control" rows="2"></textarea>
                     </div>
 
-                    {{-- ── Type / Price / Rent ──────────────────────────── --}}
-                    <div class="form-row">
-                        <div class="form-group col-md-4">
-                            <label>Type <span class="text-danger">*</span></label>
-                            <select name="type" id="f-type" class="form-control" required>
-                                <option value="sale">Sale</option>
-                                <option value="rent">Rent</option>
-                            </select>
+                    {{-- ── Listing Type ─────────────────────────────────── --}}
+                    <div class="form-group">
+                        <label>Listing Type <span class="text-danger">*</span></label>
+                        <div class="d-flex" style="gap:24px">
+                            <div class="custom-control custom-checkbox">
+                                <input type="checkbox" class="custom-control-input" id="f-is-sale" name="is_sale" value="1" onchange="togglePriceFields()">
+                                <label class="custom-control-label font-weight-bold" for="f-is-sale">For Sale</label>
+                            </div>
+                            <div class="custom-control custom-checkbox">
+                                <input type="checkbox" class="custom-control-input" id="f-is-rent" name="is_rent" value="1" onchange="togglePriceFields()">
+                                <label class="custom-control-label font-weight-bold" for="f-is-rent">For Rent</label>
+                            </div>
                         </div>
-                        <div class="form-group col-md-4">
-                            <label>Price (USD $)</label>
+                        <small id="typeError" class="text-danger d-none">Please select at least one listing type.</small>
+                    </div>
+
+                    {{-- ── Price / Rent Rate (shown based on type selection) ── --}}
+                    <div class="form-row">
+                        <div class="form-group col-md-6" id="priceWrap" style="display:none">
+                            <label>Sale Price (USD) <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 <div class="input-group-prepend"><span class="input-group-text">$</span></div>
                                 <input type="number" name="price" id="f-price" class="form-control" min="0" step="0.01" placeholder="0.00">
                             </div>
                         </div>
-                        <div class="form-group col-md-4">
-                            <label>Rent Rate ($/day)</label>
+                        <div class="form-group col-md-6" id="rentWrap" style="display:none">
+                            <label>Rent Rate ($/day) <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 <div class="input-group-prepend"><span class="input-group-text">$</span></div>
                                 <input type="number" name="rent_rate" id="f-rent" class="form-control" min="0" step="0.01" placeholder="0.00">
@@ -313,6 +369,63 @@ function deleteExistingImage(id) {
     .catch(() => alert('Failed to delete image. Please try again.'));
 }
 
+// ── Entry type (user vs guest) ───────────────────────────────────────────────
+
+function setEntryType(type) {
+    document.getElementById('f-entry-type').value = type;
+
+    const isGuest = type === 'guest';
+    document.getElementById('sellerSection').style.display = isGuest ? 'none' : '';
+    document.getElementById('guestSection').style.display  = isGuest ? ''     : 'none';
+
+    document.getElementById('f-seller').required      = !isGuest;
+    document.getElementById('f-guest-name').required  = isGuest;
+    document.getElementById('f-guest-phone').required = isGuest;
+
+    document.getElementById('btn-entry-user').className  = isGuest
+        ? 'btn btn-outline-secondary' : 'btn btn-primary';
+    document.getElementById('btn-entry-guest').className = isGuest
+        ? 'btn btn-warning'           : 'btn btn-outline-secondary';
+}
+
+// ── Listing type toggles ─────────────────────────────────────────────────────
+
+function togglePriceFields() {
+    const isSale = document.getElementById('f-is-sale').checked;
+    const isRent = document.getElementById('f-is-rent').checked;
+
+    const priceWrap = document.getElementById('priceWrap');
+    const rentWrap  = document.getElementById('rentWrap');
+    const errMsg    = document.getElementById('typeError');
+
+    priceWrap.style.display = isSale ? '' : 'none';
+    rentWrap.style.display  = isRent ? '' : 'none';
+
+    document.getElementById('f-price').required = isSale;
+    document.getElementById('f-rent').required  = isRent;
+
+    errMsg.classList.toggle('d-none', isSale || isRent);
+}
+
+function setTypeCheckboxes(type) {
+    const isSale = type === 'sale' || type === 'both';
+    const isRent = type === 'rent' || type === 'both';
+    document.getElementById('f-is-sale').checked = isSale;
+    document.getElementById('f-is-rent').checked = isRent;
+    togglePriceFields();
+}
+
+// Guard form submit so at least one type must be selected
+document.getElementById('itemForm').addEventListener('submit', function (e) {
+    const isSale = document.getElementById('f-is-sale').checked;
+    const isRent = document.getElementById('f-is-rent').checked;
+    if (!isSale && !isRent) {
+        e.preventDefault();
+        document.getElementById('typeError').classList.remove('d-none');
+        document.getElementById('f-is-sale').focus();
+    }
+});
+
 // ── Reset helpers ────────────────────────────────────────────────────────────
 
 function resetImageSection() {
@@ -331,6 +444,10 @@ function openCreate() {
     document.getElementById('formMethod').value        = 'POST';
     document.getElementById('itemForm').reset();
     document.getElementById('f-available').checked     = true;
+    document.getElementById('f-is-sale').checked       = false;
+    document.getElementById('f-is-rent').checked       = false;
+    setEntryType('user');
+    togglePriceFields();
     resetImageSection();
     $('#formModal').modal('show');
 }
@@ -339,15 +456,24 @@ function openEdit(id, d) {
     document.getElementById('modalTitle').textContent   = 'Edit Item #' + id;
     document.getElementById('itemForm').action          = updateBase + id;
     document.getElementById('formMethod').value         = 'PUT';
-    document.getElementById('f-seller').value           = d.seller_id   || '';
-    document.getElementById('f-vehicle').value          = d.vehicle_id  || '';
     document.getElementById('f-title').value            = d.title       || '';
     document.getElementById('f-desc').value             = d.description || '';
-    document.getElementById('f-type').value             = d.type        || 'sale';
     document.getElementById('f-price').value            = d.price       || '';
     document.getElementById('f-rent').value             = d.rent_rate   || '';
     document.getElementById('f-condition').value        = d.condition   || 'good';
     document.getElementById('f-available').checked      = !!d.available;
+
+    const entryType = d.entry_type || 'user';
+    setEntryType(entryType);
+    if (entryType === 'user') {
+        document.getElementById('f-seller').value  = d.seller_id  || '';
+        document.getElementById('f-vehicle').value = d.vehicle_id || '';
+    } else {
+        document.getElementById('f-guest-name').value  = d.guest_name  || '';
+        document.getElementById('f-guest-phone').value = d.guest_phone || '';
+    }
+
+    setTypeCheckboxes(d.type || 'sale');
     resetImageSection();
     renderExistingImages(d.images || []);
     $('#formModal').modal('show');
