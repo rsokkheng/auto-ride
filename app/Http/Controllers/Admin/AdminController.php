@@ -11,7 +11,8 @@ use App\Models\RidePricing;
 use App\Services\FareService;
 use App\Models\Company;
 use App\Models\Delivery;
-use App\Models\MarketplaceItem;
+use App\Models\MarketplaceProduct;
+use App\Models\MarketplaceProductImage;
 use App\Models\Ride;
 use App\Models\SafetyIncident;
 use App\Models\SupportTicket;
@@ -158,7 +159,7 @@ class AdminController extends Controller
                 'revenue_today'       => $todayRevenue,
                 'revenue_week'        => $safe(fn () => (int) Ride::where('status','completed')->where('completed_at','>=',$week)->sum('fare')),
                 'revenue_growth'      => $revenueGrowth,
-                'marketplace'         => MarketplaceItem::count(),
+                'marketplace'         => MarketplaceProduct::count(),
                 'support_open'        => SupportTicket::whereIn('status', ['open','in_progress'])->count(),
                 'withdrawals_pending' => $safe(fn () => WithdrawalRequest::where('status','pending')->count()),
                 'safety_incidents'    => SafetyIncident::count(),
@@ -639,7 +640,7 @@ class AdminController extends Controller
     public function marketplace()
     {
         return view('admin.marketplace', [
-            'items'    => MarketplaceItem::with(['seller', 'images'])->orderByDesc('created_at')->paginate(20),
+            'items'    => MarketplaceProduct::with(['seller', 'images'])->orderByDesc('created_at')->paginate(20),
             'sellers'  => User::orderBy('name')->get(),
             'vehicles' => Vehicle::orderBy('make')->get(),
         ]);
@@ -647,35 +648,34 @@ class AdminController extends Controller
 
     public function storeMarketplace(Request $request)
     {
-        $isSale    = $request->boolean('is_sale');
-        $isRent    = $request->boolean('is_rent');
-        $isGuest   = $request->input('entry_type') === 'guest';
+        $isSale  = $request->boolean('is_sale');
+        $isRent  = $request->boolean('is_rent');
+        $isGuest = $request->input('entry_type') === 'guest';
 
         if (!$isSale && !$isRent) {
-            return back()->withErrors(['type' => 'Please select at least one listing type (Sale or Rent).'])->withInput();
+            return back()->withErrors(['listing_type' => 'Please select at least one listing type.'])->withInput();
         }
-        $type = ($isSale && $isRent) ? 'both' : ($isSale ? 'sale' : 'rent');
+        $listingType = ($isSale && $isRent) ? 'both' : ($isSale ? 'sale' : 'rent');
 
         $data = $request->validate([
-            'entry_type'  => 'required|in:user,guest',
-            'seller_id'   => $isGuest ? 'nullable' : 'required|exists:users,id',
-            'vehicle_id'  => 'nullable|exists:vehicles,id',
-            'guest_name'  => $isGuest ? 'required|string|max:100' : 'nullable',
-            'guest_phone' => $isGuest ? 'required|string|max:20'  : 'nullable',
-            'title'       => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'price'       => $isSale ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
-            'rent_rate'   => $isRent ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
-            'available'   => 'boolean',
-            'condition'   => 'required|in:excellent,good,fair,poor',
-            'images'      => 'nullable|array|max:10',
-            'images.*'    => 'image|mimes:jpg,jpeg,png,webp|max:5120',
+            'entry_type'         => 'required|in:user,guest',
+            'seller_id'          => $isGuest ? 'nullable' : 'required|exists:users,id',
+            'vehicle_id'         => 'nullable|exists:vehicles,id',
+            'guest_name'         => $isGuest ? 'required|string|max:100' : 'nullable',
+            'guest_phone'        => $isGuest ? 'required|string|max:20'  : 'nullable',
+            'title'              => 'required|string|max:255',
+            'description'        => 'nullable|string',
+            'price'              => $isSale ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
+            'rent_price_per_day' => $isRent ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
+            'condition'          => 'required|in:new,used,refurbished',
+            'status'             => 'required|in:active,paused,draft',
+            'images'             => 'nullable|array|max:10',
+            'images.*'           => 'image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
-        $data['type']       = $type;
-        $data['available']  = $request->boolean('available');
-        $data['seller_id']  = $isGuest ? null : ($data['seller_id']  ?: null);
-        $data['vehicle_id'] = $data['vehicle_id'] ?: null;
+        $data['listing_type'] = $listingType;
+        $data['seller_id']    = $isGuest ? null : ($data['seller_id']  ?: null);
+        $data['vehicle_id']   = $data['vehicle_id'] ?: null;
         if ($isGuest) {
             $data['guest_name']  = $request->input('guest_name');
             $data['guest_phone'] = $request->input('guest_phone');
@@ -683,16 +683,16 @@ class AdminController extends Controller
         unset($data['images']);
 
         try {
-            $item = MarketplaceItem::create($data);
+            $product = MarketplaceProduct::create($data);
 
             if ($request->hasFile('images')) {
                 foreach ($request->file('images') as $i => $file) {
-                    $path = $file->store('marketplace/items', 'public');
-                    \App\Models\MarketplaceItemImage::create([
-                        'marketplace_item_id' => $item->id,
-                        'path'                => $path,
-                        'disk'                => 'public',
-                        'sort_order'          => $i,
+                    $url = $file->store('marketplace/products', 'public');
+                    MarketplaceProductImage::create([
+                        'product_id' => $product->id,
+                        'url'        => $url,
+                        'disk'       => 'public',
+                        'sort_order' => $i,
                     ]);
                 }
             }
@@ -703,37 +703,36 @@ class AdminController extends Controller
         return redirect()->route('admin.marketplace')->with('success', 'Item created successfully.');
     }
 
-    public function updateMarketplace(Request $request, MarketplaceItem $item)
+    public function updateMarketplace(Request $request, MarketplaceProduct $item)
     {
         $isSale  = $request->boolean('is_sale');
         $isRent  = $request->boolean('is_rent');
         $isGuest = $request->input('entry_type') === 'guest';
 
         if (!$isSale && !$isRent) {
-            return back()->withErrors(['type' => 'Please select at least one listing type (Sale or Rent).'])->withInput();
+            return back()->withErrors(['listing_type' => 'Please select at least one listing type.'])->withInput();
         }
-        $type = ($isSale && $isRent) ? 'both' : ($isSale ? 'sale' : 'rent');
+        $listingType = ($isSale && $isRent) ? 'both' : ($isSale ? 'sale' : 'rent');
 
         $data = $request->validate([
-            'entry_type'  => 'required|in:user,guest',
-            'seller_id'   => $isGuest ? 'nullable' : 'required|exists:users,id',
-            'vehicle_id'  => 'nullable|exists:vehicles,id',
-            'guest_name'  => $isGuest ? 'required|string|max:100' : 'nullable',
-            'guest_phone' => $isGuest ? 'required|string|max:20'  : 'nullable',
-            'title'       => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'price'       => $isSale ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
-            'rent_rate'   => $isRent ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
-            'available'   => 'boolean',
-            'condition'   => 'required|in:excellent,good,fair,poor',
-            'images'      => 'nullable|array|max:10',
-            'images.*'    => 'image|mimes:jpg,jpeg,png,webp|max:5120',
+            'entry_type'         => 'required|in:user,guest',
+            'seller_id'          => $isGuest ? 'nullable' : 'required|exists:users,id',
+            'vehicle_id'         => 'nullable|exists:vehicles,id',
+            'guest_name'         => $isGuest ? 'required|string|max:100' : 'nullable',
+            'guest_phone'        => $isGuest ? 'required|string|max:20'  : 'nullable',
+            'title'              => 'required|string|max:255',
+            'description'        => 'nullable|string',
+            'price'              => $isSale ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
+            'rent_price_per_day' => $isRent ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
+            'condition'          => 'required|in:new,used,refurbished',
+            'status'             => 'required|in:active,paused,draft',
+            'images'             => 'nullable|array|max:10',
+            'images.*'           => 'image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
-        $data['type']       = $type;
-        $data['available']  = $request->boolean('available');
-        $data['seller_id']  = $isGuest ? null : ($data['seller_id']  ?: null);
-        $data['vehicle_id'] = $data['vehicle_id'] ?: null;
+        $data['listing_type'] = $listingType;
+        $data['seller_id']    = $isGuest ? null : ($data['seller_id']  ?: null);
+        $data['vehicle_id']   = $data['vehicle_id'] ?: null;
         if ($isGuest) {
             $data['guest_name']  = $request->input('guest_name');
             $data['guest_phone'] = $request->input('guest_phone');
@@ -746,12 +745,12 @@ class AdminController extends Controller
             if ($request->hasFile('images')) {
                 $next = ($item->images()->max('sort_order') ?? -1) + 1;
                 foreach ($request->file('images') as $i => $file) {
-                    $path = $file->store('marketplace/items', 'public');
-                    \App\Models\MarketplaceItemImage::create([
-                        'marketplace_item_id' => $item->id,
-                        'path'                => $path,
-                        'disk'                => 'public',
-                        'sort_order'          => $next + $i,
+                    $url = $file->store('marketplace/products', 'public');
+                    MarketplaceProductImage::create([
+                        'product_id' => $item->id,
+                        'url'        => $url,
+                        'disk'       => 'public',
+                        'sort_order' => $next + $i,
                     ]);
                 }
             }
@@ -762,18 +761,18 @@ class AdminController extends Controller
         return redirect()->route('admin.marketplace')->with('success', 'Item updated successfully.');
     }
 
-    public function destroyMarketplace(MarketplaceItem $item)
+    public function destroyMarketplace(MarketplaceProduct $item)
     {
         foreach ($item->images as $img) {
-            \Illuminate\Support\Facades\Storage::disk($img->disk)->delete($img->path);
+            \Illuminate\Support\Facades\Storage::disk($img->disk ?? 'public')->delete($img->url);
         }
         $item->delete();
         return redirect()->route('admin.marketplace')->with('success', 'Item deleted.');
     }
 
-    public function destroyMarketplaceImage(\App\Models\MarketplaceItemImage $image)
+    public function destroyMarketplaceImage(MarketplaceProductImage $image)
     {
-        \Illuminate\Support\Facades\Storage::disk($image->disk)->delete($image->path);
+        \Illuminate\Support\Facades\Storage::disk($image->disk ?? 'public')->delete($image->url);
         $image->delete();
         return response()->json(['message' => 'Image deleted.']);
     }

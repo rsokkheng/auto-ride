@@ -11,6 +11,9 @@ class MarketplaceProduct extends Model
 {
     protected $fillable = [
         'seller_id',
+        'entry_type',
+        'guest_name',
+        'guest_phone',
         'category_id',
         'vehicle_id',
         'title',
@@ -30,8 +33,8 @@ class MarketplaceProduct extends Model
     ];
 
     protected $casts = [
-        'price'             => 'decimal:2',
-        'rent_price_per_day'=> 'decimal:2',
+        'price'              => 'decimal:2',
+        'rent_price_per_day' => 'decimal:2',
         'quantity'          => 'integer',
         'views_count'       => 'integer',
         'location_lat'      => 'float',
