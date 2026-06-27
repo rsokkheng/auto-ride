@@ -9,6 +9,9 @@ class CarRental extends Model
 {
     protected $fillable = [
         'user_id',
+        'entry_type',
+        'guest_name',
+        'guest_phone',
         'vehicle_id',
         'vehicle_type',
         'pickup_location',
@@ -37,6 +40,21 @@ class CarRental extends Model
         'confirmed_at'     => 'datetime',
         'cancelled_at'     => 'datetime',
     ];
+
+    public function isGuest(): bool
+    {
+        return $this->entry_type === 'guest';
+    }
+
+    public function renterName(): string
+    {
+        return $this->isGuest() ? ($this->guest_name ?? 'Guest') : ($this->user?->name ?? '—');
+    }
+
+    public function renterPhone(): ?string
+    {
+        return $this->isGuest() ? $this->guest_phone : $this->user?->phone;
+    }
 
     public function user(): BelongsTo
     {

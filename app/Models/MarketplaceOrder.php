@@ -10,6 +10,9 @@ class MarketplaceOrder extends Model
     protected $fillable = [
         'product_id',
         'buyer_id',
+        'entry_type',
+        'guest_name',
+        'guest_phone',
         'seller_id',
         'order_type',
         'quantity',
@@ -34,6 +37,21 @@ class MarketplaceOrder extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(MarketplaceProduct::class, 'product_id');
+    }
+
+    public function isGuest(): bool
+    {
+        return $this->entry_type === 'guest';
+    }
+
+    public function buyerName(): string
+    {
+        return $this->isGuest() ? ($this->guest_name ?? 'Guest') : ($this->buyer?->name ?? '—');
+    }
+
+    public function buyerPhone(): ?string
+    {
+        return $this->isGuest() ? $this->guest_phone : $this->buyer?->phone;
     }
 
     public function buyer(): BelongsTo
