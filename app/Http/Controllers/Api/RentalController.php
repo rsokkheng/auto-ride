@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\CarRental;
-use App\Models\PricingSetting;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -115,7 +114,7 @@ class RentalController extends ApiController
         if (! $user) return $this->unauthorized();
 
         $data = $request->validate([
-            'vehicle_type'    => 'required|in:sedan,suv,van,motorcycle,truck,tuk_tuk,electric',
+            'vehicle_type'    => 'required|string|max:50',
             'pickup_location' => 'required|string|max:255',
             'pickup_lat'      => 'nullable|numeric|between:-90,90',
             'pickup_lng'      => 'nullable|numeric|between:-180,180',
