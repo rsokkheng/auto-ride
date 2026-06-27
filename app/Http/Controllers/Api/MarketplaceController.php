@@ -40,7 +40,13 @@ class MarketplaceController extends ApiController
                 $query->where('seller_id', $request->seller_id);
             }
             if ($request->filled('listing_type')) {
-                $query->where('listing_type', $request->listing_type);
+                $type = $request->listing_type;
+                if ($type === 'both') {
+                    $query->where('listing_type', 'both');
+                } else {
+                    // include items listed as exactly that type OR as both
+                    $query->whereIn('listing_type', [$type, 'both']);
+                }
             }
             if ($request->filled('condition')) {
                 $query->where('condition', $request->condition);
