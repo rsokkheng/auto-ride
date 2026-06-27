@@ -32,13 +32,19 @@
                     <td>{{ $item->id }}</td>
                     <td>
                         @if($item->images->count())
+                            @php $allUrls = $item->images->map(fn($img) => Storage::url($img->path))->toJson(); @endphp
                             <div class="d-flex flex-wrap" style="gap:3px">
-                                @foreach($item->images->take(3) as $img)
+                                @foreach($item->images->take(3) as $loop => $img)
                                     <img src="{{ Storage::url($img->path) }}"
-                                         style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid #dee2e6">
+                                         onclick="openLightbox({{ $allUrls }}, {{ $loop }})"
+                                         style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid #dee2e6;cursor:pointer"
+                                         title="Click to view">
                                 @endforeach
                                 @if($item->images->count() > 3)
-                                    <span class="badge badge-secondary align-self-center">+{{ $item->images->count() - 3 }}</span>
+                                    <span class="badge badge-secondary align-self-center" style="cursor:pointer"
+                                          onclick="openLightbox({{ $allUrls }}, 0)">
+                                        +{{ $item->images->count() - 3 }}
+                                    </span>
                                 @endif
                             </div>
                         @else
@@ -301,6 +307,38 @@
 </div>
 @endif
 
+{{-- ── Lightbox ──────────────────────────────────────────────────────────────── --}}
+<div id="lightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:99999;flex-direction:column;align-items:center;justify-content:center" onclick="closeLightboxOnBackdrop(event)">
+
+    {{-- Toolbar --}}
+    <div style="position:absolute;top:12px;right:16px;display:flex;gap:8px;z-index:1">
+        <button onclick="lbZoom(0.25)"  title="Zoom In"  style="background:#fff;border:none;border-radius:6px;width:36px;height:36px;font-size:18px;cursor:pointer;line-height:1">+</button>
+        <button onclick="lbZoom(-0.25)" title="Zoom Out" style="background:#fff;border:none;border-radius:6px;width:36px;height:36px;font-size:18px;cursor:pointer;line-height:1">−</button>
+        <button onclick="lbReset()"     title="Reset"    style="background:#fff;border:none;border-radius:6px;width:36px;height:36px;font-size:15px;cursor:pointer">⊙</button>
+        <button onclick="closeLightbox()" title="Close"  style="background:#e74c3c;color:#fff;border:none;border-radius:6px;width:36px;height:36px;font-size:20px;cursor:pointer;line-height:1">&times;</button>
+    </div>
+
+    {{-- Counter --}}
+    <div id="lbCounter" style="position:absolute;top:16px;left:16px;color:#fff;font-size:13px;background:rgba(0,0,0,.5);padding:4px 10px;border-radius:12px"></div>
+
+    {{-- Prev --}}
+    <button id="lbPrev" onclick="lbNav(-1)"
+            style="position:absolute;left:12px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:50%;width:44px;height:44px;font-size:22px;cursor:pointer;display:none">&#8249;</button>
+
+    {{-- Image wrapper (handles pan) --}}
+    <div id="lbWrap" style="overflow:hidden;max-width:92vw;max-height:88vh;display:flex;align-items:center;justify-content:center">
+        <img id="lbImg"
+             style="max-width:88vw;max-height:84vh;object-fit:contain;border-radius:6px;transform-origin:center center;transition:transform .15s ease;cursor:grab;user-select:none">
+    </div>
+
+    {{-- Next --}}
+    <button id="lbNext" onclick="lbNav(1)"
+            style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:50%;width:44px;height:44px;font-size:22px;cursor:pointer;display:none">&#8250;</button>
+
+    {{-- Thumbnail strip --}}
+    <div id="lbStrip" style="position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:6px;max-width:90vw;overflow-x:auto;padding:4px 8px"></div>
+</div>
+
 @endsection
 
 @push('scripts')
@@ -495,6 +533,84 @@ function openEdit(id, d) {
     resetImageSection();
     renderExistingImages(d.images || []);
     $('#formModal').modal('show');
+}
+
+// ── Lightbox ─────────────────────────────────────────────────────────────────
+
+let _lbUrls  = [];
+let _lbIndex = 0;
+let _lbScale = 1;
+
+function openLightbox(urls, index) {
+    _lbUrls  = urls;
+    _lbIndex = index;
+    _lbScale = 1;
+    _lbRender();
+    document.getElementById('lightbox').style.display = 'flex';
+    document.addEventListener('keydown', _lbKey);
+}
+
+function closeLightbox() {
+    document.getElementById('lightbox').style.display = 'none';
+    document.removeEventListener('keydown', _lbKey);
+}
+
+function closeLightboxOnBackdrop(e) {
+    if (e.target === document.getElementById('lightbox')) closeLightbox();
+}
+
+function lbNav(dir) {
+    _lbIndex = (_lbIndex + dir + _lbUrls.length) % _lbUrls.length;
+    _lbScale = 1;
+    _lbRender();
+}
+
+function lbZoom(delta) {
+    _lbScale = Math.min(5, Math.max(0.2, _lbScale + delta));
+    document.getElementById('lbImg').style.transform = `scale(${_lbScale})`;
+}
+
+function lbReset() {
+    _lbScale = 1;
+    document.getElementById('lbImg').style.transform = 'scale(1)';
+}
+
+function _lbRender() {
+    const img     = document.getElementById('lbImg');
+    const counter = document.getElementById('lbCounter');
+    const strip   = document.getElementById('lbStrip');
+    const prev    = document.getElementById('lbPrev');
+    const next    = document.getElementById('lbNext');
+
+    img.src = _lbUrls[_lbIndex];
+    img.style.transform = 'scale(1)';
+    counter.textContent = (_lbIndex + 1) + ' / ' + _lbUrls.length;
+
+    const multiImg = _lbUrls.length > 1;
+    prev.style.display = multiImg ? '' : 'none';
+    next.style.display = multiImg ? '' : 'none';
+
+    strip.innerHTML = '';
+    _lbUrls.forEach((url, i) => {
+        const th = document.createElement('img');
+        th.src = url;
+        th.onclick = () => { _lbIndex = i; _lbScale = 1; _lbRender(); };
+        th.style.cssText = [
+            'width:52px', 'height:52px', 'object-fit:cover',
+            'border-radius:4px', 'cursor:pointer',
+            'border:2px solid ' + (i === _lbIndex ? '#3b82f6' : 'rgba(255,255,255,.3)'),
+            'transition:border-color .15s',
+        ].join(';');
+        strip.appendChild(th);
+    });
+}
+
+function _lbKey(e) {
+    if (e.key === 'ArrowRight')   lbNav(1);
+    else if (e.key === 'ArrowLeft')  lbNav(-1);
+    else if (e.key === 'Escape')      closeLightbox();
+    else if (e.key === '+' || e.key === '=') lbZoom(0.25);
+    else if (e.key === '-')           lbZoom(-0.25);
 }
 </script>
 @endpush
