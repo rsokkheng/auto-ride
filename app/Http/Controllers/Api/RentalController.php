@@ -177,6 +177,57 @@ class RentalController extends ApiController
         ]);
     }
 
+    /**
+     * POST /v1/rentals/{rental}/cancel
+     * User cancels their own pending booking.
+     */
+    public function cancel(Request $request, CarRental $rental)
+    {
+        $user = $this->authUser($request);
+        if (! $user || $rental->user_id !== $user->id) return $this->unauthorized();
+
+        if (in_array($rental->status, ['completed', 'cancelled'])) {
+            return response()->json(['message' => 'Booking cannot be cancelled'], 422);
+        }
+
+        $rental->update(['status' => 'cancelled']);
+        return $this->success(['rental' => $this->formatRental($rental->fresh())]);
+    }
+
+    /**
+     * POST /v1/rentals/{rental}/confirm
+     * Admin confirms a pending booking.
+     */
+    public function confirm(Request $request, CarRental $rental)
+    {
+        $user = $this->authUser($request);
+        if (! $user || $user->role !== 'admin') return $this->unauthorized();
+
+        if ($rental->status !== 'pending') {
+            return response()->json(['message' => 'Only pending bookings can be confirmed'], 422);
+        }
+
+        $rental->update(['status' => 'confirmed']);
+        return $this->success(['rental' => $this->formatRental($rental->fresh())]);
+    }
+
+    /**
+     * DELETE /v1/rentals/{rental}
+     * User deletes a cancelled booking from their history.
+     */
+    public function destroy(Request $request, CarRental $rental)
+    {
+        $user = $this->authUser($request);
+        if (! $user || $rental->user_id !== $user->id) return $this->unauthorized();
+
+        if (! in_array($rental->status, ['cancelled', 'completed'])) {
+            return response()->json(['message' => 'Only cancelled or completed bookings can be deleted'], 422);
+        }
+
+        $rental->delete();
+        return $this->success(['message' => 'Booking deleted']);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private function dailyRateUsd(string $vehicleType): float
@@ -203,8 +254,10 @@ class RentalController extends ApiController
         $dailyUsd = $this->dailyRateUsd($r->vehicle_type);
         $totalUsd = round($dailyUsd * $r->total_days, 2);
 
+        $r->loadMissing('user');
+
         return [
-            'id'               => $r->id,
+            'rental_id'        => $r->id,
             'vehicle_type'     => $r->vehicle_type,
             'pickup_location'  => $r->pickup_location,
             'pickup_lat'       => $r->pickup_lat,
@@ -218,6 +271,11 @@ class RentalController extends ApiController
             'notes'            => $r->notes,
             'status'           => $r->status,
             'created_at'       => $r->created_at->toDateTimeString(),
+            'user' => $r->user ? [
+                'id'    => $r->user->id,
+                'name'  => $r->user->name,
+                'phone' => $r->user->phone,
+            ] : null,
         ];
     }
 }
