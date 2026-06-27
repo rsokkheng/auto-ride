@@ -114,14 +114,15 @@ class RentalController extends ApiController
         if (! $user) return $this->unauthorized();
 
         $data = $request->validate([
-            'vehicle_type'    => 'required|string|max:50',
-            'pickup_location' => 'required|string|max:255',
-            'pickup_lat'      => 'nullable|numeric|between:-90,90',
-            'pickup_lng'      => 'nullable|numeric|between:-180,180',
-            'start_date'      => 'required|date|after_or_equal:today',
-            'end_date'        => 'required|date|after_or_equal:start_date',
-            'payment_method'  => 'nullable|in:cash,wallet,aba,wing,other_online',
-            'notes'           => 'nullable|string|max:500',
+            'marketplace_product_id' => 'nullable|exists:marketplace_products,id',
+            'vehicle_type'           => 'required|string|max:50',
+            'pickup_location'        => 'required|string|max:255',
+            'pickup_lat'             => 'nullable|numeric|between:-90,90',
+            'pickup_lng'             => 'nullable|numeric|between:-180,180',
+            'start_date'             => 'required|date|after_or_equal:today',
+            'end_date'               => 'required|date|after_or_equal:start_date',
+            'payment_method'         => 'nullable|in:cash,wallet,aba,wing,other_online',
+            'notes'                  => 'nullable|string|max:500',
         ]);
 
         $start     = Carbon::parse($data['start_date']);
@@ -132,19 +133,20 @@ class RentalController extends ApiController
         $totalKhr     = $dailyRateKhr * $totalDays;
 
         $rental = CarRental::create([
-            'user_id'          => $user->id,
-            'vehicle_type'     => $data['vehicle_type'],
-            'pickup_location'  => $data['pickup_location'],
-            'pickup_lat'       => $data['pickup_lat'] ?? null,
-            'pickup_lng'       => $data['pickup_lng'] ?? null,
-            'start_date'       => $data['start_date'],
-            'end_date'         => $data['end_date'],
-            'total_days'       => $totalDays,
-            'daily_rate_khr'   => $dailyRateKhr,
-            'total_amount_khr' => $totalKhr,
-            'payment_method'   => $data['payment_method'] ?? 'cash',
-            'notes'            => $data['notes'] ?? null,
-            'status'           => 'pending',
+            'user_id'                => $user->id,
+            'marketplace_product_id' => $data['marketplace_product_id'] ?? null,
+            'vehicle_type'           => $data['vehicle_type'],
+            'pickup_location'        => $data['pickup_location'],
+            'pickup_lat'             => $data['pickup_lat'] ?? null,
+            'pickup_lng'             => $data['pickup_lng'] ?? null,
+            'start_date'             => $data['start_date'],
+            'end_date'               => $data['end_date'],
+            'total_days'             => $totalDays,
+            'daily_rate_khr'         => $dailyRateKhr,
+            'total_amount_khr'       => $totalKhr,
+            'payment_method'         => $data['payment_method'] ?? 'cash',
+            'notes'                  => $data['notes'] ?? null,
+            'status'                 => 'pending',
         ]);
 
         return $this->success([
@@ -254,27 +256,38 @@ class RentalController extends ApiController
         $dailyUsd = $this->dailyRateUsd($r->vehicle_type);
         $totalUsd = round($dailyUsd * $r->total_days, 2);
 
-        $r->loadMissing('user');
+        $r->loadMissing(['user', 'marketplaceProduct.images']);
+
+        $product = $r->marketplaceProduct;
 
         return [
-            'rental_id'        => $r->id,
-            'vehicle_type'     => $r->vehicle_type,
-            'pickup_location'  => $r->pickup_location,
-            'pickup_lat'       => $r->pickup_lat,
-            'pickup_lng'       => $r->pickup_lng,
-            'start_date'       => $r->start_date->toDateString(),
-            'end_date'         => $r->end_date->toDateString(),
-            'total_days'       => $r->total_days,
-            'daily_rate_usd'   => $dailyUsd,
-            'total_amount_usd' => $totalUsd,
-            'payment_method'   => $r->payment_method,
-            'notes'            => $r->notes,
-            'status'           => $r->status,
-            'created_at'       => $r->created_at->toDateTimeString(),
+            'rental_id'              => $r->id,
+            'marketplace_product_id' => $r->marketplace_product_id,
+            'vehicle_type'           => $r->vehicle_type,
+            'pickup_location'        => $r->pickup_location,
+            'pickup_lat'             => $r->pickup_lat,
+            'pickup_lng'             => $r->pickup_lng,
+            'start_date'             => $r->start_date->toDateString(),
+            'end_date'               => $r->end_date->toDateString(),
+            'total_days'             => $r->total_days,
+            'daily_rate_usd'         => $dailyUsd,
+            'total_amount_usd'       => $totalUsd,
+            'payment_method'         => $r->payment_method,
+            'notes'                  => $r->notes,
+            'status'                 => $r->status,
+            'created_at'             => $r->created_at->toDateTimeString(),
             'user' => $r->user ? [
                 'id'    => $r->user->id,
                 'name'  => $r->user->name,
                 'phone' => $r->user->phone,
+            ] : null,
+            'product' => $product ? [
+                'id'                 => $product->id,
+                'title'              => $product->title,
+                'listing_type'       => $product->listing_type,
+                'condition'          => $product->condition,
+                'rent_price_per_day' => (float) $product->rent_price_per_day,
+                'image'              => $product->images->first()?->full_url,
             ] : null,
         ];
     }

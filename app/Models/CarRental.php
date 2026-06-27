@@ -13,6 +13,7 @@ class CarRental extends Model
         'guest_name',
         'guest_phone',
         'vehicle_id',
+        'marketplace_product_id',
         'vehicle_type',
         'pickup_location',
         'pickup_lat',
@@ -64,5 +65,10 @@ class CarRental extends Model
     public function vehicle(): BelongsTo
     {
         return $this->belongsTo(Vehicle::class);
+    }
+
+    public function marketplaceProduct(): BelongsTo
+    {
+        return $this->belongsTo(MarketplaceProduct::class, 'marketplace_product_id');
     }
 }
