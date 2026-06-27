@@ -117,7 +117,7 @@ class RentalController extends ApiController
 
         $data = $request->validate([
             'marketplace_product_id' => 'nullable|exists:marketplace_products,id',
-            'vehicle_type'           => $hasProduct ? 'nullable|string|max:50' : 'required|string|max:50',
+            'vehicle_type'           => $hasProduct ? 'nullable|in:motorcycle,tuk_tuk,electric,sedan,suv,van,truck' : 'required|in:motorcycle,tuk_tuk,electric,sedan,suv,van,truck',
             'pickup_location'        => 'required|string|max:255',
             'pickup_lat'             => 'nullable|numeric|between:-90,90',
             'pickup_lng'             => 'nullable|numeric|between:-180,180',
@@ -127,10 +127,12 @@ class RentalController extends ApiController
             'notes'                  => 'nullable|string|max:500',
         ]);
 
-        // If booking a marketplace product, derive vehicle_type from its linked vehicle (fallback: 'sedan')
+        // If booking a marketplace product, derive vehicle_type from its linked vehicle (fallback: 'suv')
         if ($hasProduct && empty($data['vehicle_type'])) {
             $product = \App\Models\MarketplaceProduct::with('vehicle')->find($data['marketplace_product_id']);
-            $data['vehicle_type'] = $product?->vehicle?->type ?? 'sedan';
+            $type = $product?->vehicle?->type;
+            $allowed = ['motorcycle','tuk_tuk','electric','sedan','suv','van','truck'];
+            $data['vehicle_type'] = in_array($type, $allowed) ? $type : 'suv';
         }
 
         $start     = Carbon::parse($data['start_date']);
