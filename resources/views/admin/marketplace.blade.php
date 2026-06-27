@@ -111,6 +111,24 @@
                 {{-- Scrollable body --}}
                 <div class="modal-body" style="max-height:72vh;overflow-y:auto">
 
+                    @if(session('error'))
+                    <div class="alert alert-danger alert-dismissible">
+                        <button type="button" class="close" data-dismiss="alert">&times;</button>
+                        <strong>Error:</strong> {{ session('error') }}
+                    </div>
+                    @endif
+
+                    @if($errors->any())
+                    <div class="alert alert-danger alert-dismissible">
+                        <button type="button" class="close" data-dismiss="alert">&times;</button>
+                        <ul class="mb-0 pl-3">
+                            @foreach($errors->all() as $e)
+                                <li>{{ $e }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                    @endif
+
                     {{-- ── Entry Type ───────────────────────────────────── --}}
                     <div class="form-group">
                         <label class="d-block">Entry By</label>

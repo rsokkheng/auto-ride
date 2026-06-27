@@ -682,18 +682,22 @@ class AdminController extends Controller
         }
         unset($data['images']);
 
-        $item = MarketplaceItem::create($data);
+        try {
+            $item = MarketplaceItem::create($data);
 
-        if ($request->hasFile('images')) {
-            foreach ($request->file('images') as $i => $file) {
-                $path = $file->store('marketplace/items', 'public');
-                \App\Models\MarketplaceItemImage::create([
-                    'marketplace_item_id' => $item->id,
-                    'path'                => $path,
-                    'disk'                => 'public',
-                    'sort_order'          => $i,
-                ]);
+            if ($request->hasFile('images')) {
+                foreach ($request->file('images') as $i => $file) {
+                    $path = $file->store('marketplace/items', 'public');
+                    \App\Models\MarketplaceItemImage::create([
+                        'marketplace_item_id' => $item->id,
+                        'path'                => $path,
+                        'disk'                => 'public',
+                        'sort_order'          => $i,
+                    ]);
+                }
             }
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', 'Save failed: ' . $e->getMessage());
         }
 
         return redirect()->route('admin.marketplace')->with('success', 'Item created successfully.');
@@ -736,19 +740,23 @@ class AdminController extends Controller
         }
         unset($data['images']);
 
-        $item->update($data);
+        try {
+            $item->update($data);
 
-        if ($request->hasFile('images')) {
-            $next = ($item->images()->max('sort_order') ?? -1) + 1;
-            foreach ($request->file('images') as $i => $file) {
-                $path = $file->store('marketplace/items', 'public');
-                \App\Models\MarketplaceItemImage::create([
-                    'marketplace_item_id' => $item->id,
-                    'path'                => $path,
-                    'disk'                => 'public',
-                    'sort_order'          => $next + $i,
-                ]);
+            if ($request->hasFile('images')) {
+                $next = ($item->images()->max('sort_order') ?? -1) + 1;
+                foreach ($request->file('images') as $i => $file) {
+                    $path = $file->store('marketplace/items', 'public');
+                    \App\Models\MarketplaceItemImage::create([
+                        'marketplace_item_id' => $item->id,
+                        'path'                => $path,
+                        'disk'                => 'public',
+                        'sort_order'          => $next + $i,
+                    ]);
+                }
             }
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', 'Save failed: ' . $e->getMessage());
         }
 
         return redirect()->route('admin.marketplace')->with('success', 'Item updated successfully.');
