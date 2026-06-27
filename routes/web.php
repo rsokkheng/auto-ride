@@ -57,6 +57,7 @@ Route::prefix('admin')->group(function () {
     Route::post('marketplace', [AdminController::class, 'storeMarketplace'])->name('admin.marketplace.store');
     Route::put('marketplace/{item}', [AdminController::class, 'updateMarketplace'])->name('admin.marketplace.update');
     Route::delete('marketplace/{item}', [AdminController::class, 'destroyMarketplace'])->name('admin.marketplace.destroy');
+    Route::delete('marketplace-images/{image}', [AdminController::class, 'destroyMarketplaceImage'])->name('admin.marketplace.images.destroy');
 
     // Ride Pricing
     Route::get('ride-pricing', [AdminController::class, 'ridePricing'])->name('admin.ride-pricing');

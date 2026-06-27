@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MarketplaceItem extends Model
 {
@@ -26,8 +27,8 @@ class MarketplaceItem extends Model
     ];
 
     protected $casts = [
-        'price'     => 'integer',
-        'rent_rate' => 'integer',
+        'price'     => 'decimal:2',
+        'rent_rate' => 'decimal:2',
         'available' => 'boolean',
     ];
 
@@ -44,6 +45,11 @@ class MarketplaceItem extends Model
     public function sellerPhone(): ?string
     {
         return $this->isGuest() ? $this->guest_phone : $this->seller?->phone;
+    }
+
+    public function images(): HasMany
+    {
+        return $this->hasMany(MarketplaceItemImage::class)->orderBy('sort_order');
     }
 
     public function seller(): BelongsTo

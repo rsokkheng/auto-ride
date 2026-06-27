@@ -27,8 +27,8 @@ class MarketplaceOrder extends Model
     ];
 
     protected $casts = [
-        'unit_price'      => 'integer',
-        'total_price'     => 'integer',
+        'unit_price'      => 'decimal:2',
+        'total_price'     => 'decimal:2',
         'quantity'        => 'integer',
         'rent_start_date' => 'date',
         'rent_end_date'   => 'date',

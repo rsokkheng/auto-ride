@@ -30,8 +30,8 @@ class MarketplaceProduct extends Model
     ];
 
     protected $casts = [
-        'price'             => 'integer',
-        'rent_price_per_day'=> 'integer',
+        'price'             => 'decimal:2',
+        'rent_price_per_day'=> 'decimal:2',
         'quantity'          => 'integer',
         'views_count'       => 'integer',
         'location_lat'      => 'float',

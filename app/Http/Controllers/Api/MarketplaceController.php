@@ -45,10 +45,10 @@ class MarketplaceController extends ApiController
             $query->where('condition', $request->condition);
         }
         if ($request->filled('min_price')) {
-            $query->where('price', '>=', (int) $request->min_price);
+            $query->where('price', '>=', (float) $request->min_price);
         }
         if ($request->filled('max_price')) {
-            $query->where('price', '<=', (int) $request->max_price);
+            $query->where('price', '<=', (float) $request->max_price);
         }
         if ($request->filled('search')) {
             $query->where(function ($q) use ($request) {
@@ -95,8 +95,8 @@ class MarketplaceController extends ApiController
             'vehicle_id'         => 'nullable|exists:vehicles,id',
             'condition'          => 'nullable|in:new,used,refurbished',
             'listing_type'       => 'nullable|in:sale,rent,both',
-            'price'              => 'required|integer|min:0',
-            'rent_price_per_day' => 'nullable|integer|min:0',
+            'price'              => 'required|numeric|min:0',
+            'rent_price_per_day' => 'nullable|numeric|min:0',
             'quantity'           => 'nullable|integer|min:1',
             'status'             => 'nullable|in:draft,active',
             'location_text'      => 'nullable|string|max:255',
@@ -140,8 +140,8 @@ class MarketplaceController extends ApiController
             'category_id'        => 'nullable|exists:marketplace_categories,id',
             'condition'          => 'nullable|in:new,used,refurbished',
             'listing_type'       => 'nullable|in:sale,rent,both',
-            'price'              => 'nullable|integer|min:0',
-            'rent_price_per_day' => 'nullable|integer|min:0',
+            'price'              => 'nullable|numeric|min:0',
+            'rent_price_per_day' => 'nullable|numeric|min:0',
             'quantity'           => 'nullable|integer|min:1',
             'status'             => 'nullable|in:draft,active,paused',
             'location_text'      => 'nullable|string|max:255',

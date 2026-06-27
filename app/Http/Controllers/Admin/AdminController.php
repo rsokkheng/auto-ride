@@ -639,7 +639,7 @@ class AdminController extends Controller
     public function marketplace()
     {
         return view('admin.marketplace', [
-            'items'    => MarketplaceItem::with('seller')->orderBy('created_at')->paginate(20),
+            'items'    => MarketplaceItem::with(['seller', 'images'])->orderByDesc('created_at')->paginate(20),
             'sellers'  => User::orderBy('name')->get(),
             'vehicles' => Vehicle::orderBy('make')->get(),
         ]);
@@ -657,11 +657,26 @@ class AdminController extends Controller
             'rent_rate'   => 'nullable|numeric|min:0',
             'available'   => 'boolean',
             'condition'   => 'required|in:excellent,good,fair,poor',
+            'images'      => 'nullable|array|max:10',
+            'images.*'    => 'image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
         $data['available'] = $request->boolean('available');
+        unset($data['images']);
 
-        MarketplaceItem::create($data);
+        $item = MarketplaceItem::create($data);
+
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $i => $file) {
+                $path = $file->store('marketplace/items', 'public');
+                \App\Models\MarketplaceItemImage::create([
+                    'marketplace_item_id' => $item->id,
+                    'path'                => $path,
+                    'disk'                => 'public',
+                    'sort_order'          => $i,
+                ]);
+            }
+        }
 
         return redirect()->route('admin.marketplace')->with('success', 'Item created successfully.');
     }
@@ -678,19 +693,45 @@ class AdminController extends Controller
             'rent_rate'   => 'nullable|numeric|min:0',
             'available'   => 'boolean',
             'condition'   => 'required|in:excellent,good,fair,poor',
+            'images'      => 'nullable|array|max:10',
+            'images.*'    => 'image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
         $data['available'] = $request->boolean('available');
+        unset($data['images']);
 
         $item->update($data);
+
+        if ($request->hasFile('images')) {
+            $next = ($item->images()->max('sort_order') ?? -1) + 1;
+            foreach ($request->file('images') as $i => $file) {
+                $path = $file->store('marketplace/items', 'public');
+                \App\Models\MarketplaceItemImage::create([
+                    'marketplace_item_id' => $item->id,
+                    'path'                => $path,
+                    'disk'                => 'public',
+                    'sort_order'          => $next + $i,
+                ]);
+            }
+        }
 
         return redirect()->route('admin.marketplace')->with('success', 'Item updated successfully.');
     }
 
     public function destroyMarketplace(MarketplaceItem $item)
     {
+        foreach ($item->images as $img) {
+            \Illuminate\Support\Facades\Storage::disk($img->disk)->delete($img->path);
+        }
         $item->delete();
         return redirect()->route('admin.marketplace')->with('success', 'Item deleted.');
+    }
+
+    public function destroyMarketplaceImage(\App\Models\MarketplaceItemImage $image)
+    {
+        \Illuminate\Support\Facades\Storage::disk($image->disk)->delete($image->path);
+        $image->delete();
+        return response()->json(['message' => 'Image deleted.']);
     }
 
     // ─── Ride Pricing ────────────────────────────────────────────────────────
