@@ -32,11 +32,11 @@
                     <td>{{ $item->id }}</td>
                     <td>
                         @if($item->images->count())
-                            @php $allUrls = $item->images->map(fn($img) => Storage::url($img->path))->toJson(); @endphp
+                            @php $allUrls = $item->images->map(fn($i) => Storage::url($i->path))->toJson(); @endphp
                             <div class="d-flex flex-wrap" style="gap:3px">
-                                @foreach($item->images->take(3) as $loop => $img)
+                                @foreach($item->images->take(3) as $imgIdx => $img)
                                     <img src="{{ Storage::url($img->path) }}"
-                                         onclick="openLightbox({{ $allUrls }}, {{ $loop }})"
+                                         onclick="openLightbox({{ $allUrls }}, {{ $imgIdx }})"
                                          style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid #dee2e6;cursor:pointer"
                                          title="Click to view">
                                 @endforeach
