@@ -32,17 +32,21 @@
                     <td>{{ $item->id }}</td>
                     <td>
                         @if($item->images->count())
-                            @php $allUrls = $item->images->map(fn($i) => Storage::url($i->path))->toJson(); @endphp
-                            <div class="d-flex flex-wrap" style="gap:3px">
+                            @php
+                                $allUrls = $item->images->map(fn($i) => Storage::url($i->path))->values()->toJson();
+                            @endphp
+                            <div class="d-flex flex-wrap" style="gap:3px"
+                                 data-urls='{!! $allUrls !!}'>
                                 @foreach($item->images->take(3) as $imgIdx => $img)
                                     <img src="{{ Storage::url($img->path) }}"
-                                         onclick="openLightbox({{ $allUrls }}, {{ $imgIdx }})"
-                                         style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid #dee2e6;cursor:pointer"
-                                         title="Click to view">
+                                         data-idx="{{ $imgIdx }}"
+                                         onclick="openLightboxFromEl(this)"
+                                         style="width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid #dee2e6;cursor:zoom-in"
+                                         title="View images">
                                 @endforeach
                                 @if($item->images->count() > 3)
                                     <span class="badge badge-secondary align-self-center" style="cursor:pointer"
-                                          onclick="openLightbox({{ $allUrls }}, 0)">
+                                          onclick="openLightboxFromEl(this.parentElement.querySelector('img'))">
                                         +{{ $item->images->count() - 3 }}
                                     </span>
                                 @endif
@@ -533,6 +537,16 @@ function openEdit(id, d) {
     resetImageSection();
     renderExistingImages(d.images || []);
     $('#formModal').modal('show');
+}
+
+// ── Lightbox helpers ────────────────────────────────────────────────────────
+
+function openLightboxFromEl(el) {
+    const wrap = el.closest('[data-urls]');
+    if (!wrap) return;
+    const urls  = JSON.parse(wrap.dataset.urls);
+    const index = parseInt(el.dataset.idx ?? 0, 10);
+    openLightbox(urls, index);
 }
 
 // ── Lightbox ─────────────────────────────────────────────────────────────────
