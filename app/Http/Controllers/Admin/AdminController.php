@@ -828,6 +828,48 @@ class AdminController extends Controller
         return back()->with('success', 'Order #' . $order->id . ' cancelled.');
     }
 
+    // ─── Car Rentals ─────────────────────────────────────────────────────────
+
+    public function carRentals(Request $request)
+    {
+        $query = \App\Models\CarRental::with(['user', 'marketplaceProduct.images'])->latest();
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+        if ($request->filled('vehicle_type')) {
+            $query->where('vehicle_type', $request->vehicle_type);
+        }
+
+        return view('admin.car-rentals', [
+            'rentals' => $query->paginate(20)->appends($request->query()),
+        ]);
+    }
+
+    public function confirmCarRental(\App\Models\CarRental $rental)
+    {
+        if ($rental->status === 'pending') {
+            $rental->update(['status' => 'confirmed', 'confirmed_at' => now()]);
+        }
+        return back()->with('success', 'Rental #' . $rental->id . ' confirmed.');
+    }
+
+    public function completeCarRental(\App\Models\CarRental $rental)
+    {
+        if ($rental->status === 'confirmed') {
+            $rental->update(['status' => 'completed']);
+        }
+        return back()->with('success', 'Rental #' . $rental->id . ' completed.');
+    }
+
+    public function cancelCarRental(\App\Models\CarRental $rental)
+    {
+        if (! in_array($rental->status, ['completed', 'cancelled'])) {
+            $rental->update(['status' => 'cancelled', 'cancelled_at' => now()]);
+        }
+        return back()->with('success', 'Rental #' . $rental->id . ' cancelled.');
+    }
+
     // ─── Ride Pricing ────────────────────────────────────────────────────────
 
     public function ridePricing()

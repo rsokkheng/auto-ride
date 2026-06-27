@@ -65,6 +65,12 @@ Route::prefix('admin')->group(function () {
     Route::post('marketplace-orders/{order}/complete', [AdminController::class, 'completeMarketplaceOrder'])->name('admin.marketplace-orders.complete');
     Route::post('marketplace-orders/{order}/cancel', [AdminController::class, 'cancelMarketplaceOrder'])->name('admin.marketplace-orders.cancel');
 
+    // Car Rentals
+    Route::get('car-rentals', [AdminController::class, 'carRentals'])->name('admin.car-rentals');
+    Route::post('car-rentals/{rental}/confirm', [AdminController::class, 'confirmCarRental'])->name('admin.car-rentals.confirm');
+    Route::post('car-rentals/{rental}/complete', [AdminController::class, 'completeCarRental'])->name('admin.car-rentals.complete');
+    Route::post('car-rentals/{rental}/cancel', [AdminController::class, 'cancelCarRental'])->name('admin.car-rentals.cancel');
+
     // Ride Pricing
     Route::get('ride-pricing', [AdminController::class, 'ridePricing'])->name('admin.ride-pricing');
     Route::put('ride-pricing/{pricing}', [AdminController::class, 'updateRidePricing'])->name('admin.ride-pricing.update');

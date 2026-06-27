@@ -171,6 +171,12 @@
                             <p>Market Orders</p>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a href="{{ route('admin.car-rentals') }}" class="nav-link {{ request()->routeIs('admin.car-rentals*') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-car"></i>
+                            <p>Car Rentals</p>
+                        </a>
+                    </li>
 
                     <li class="nav-item">
                         <a href="{{ route('admin.drivers') }}" class="nav-link {{ request()->routeIs('admin.drivers*') ? 'active' : '' }}">
