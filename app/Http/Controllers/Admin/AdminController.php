@@ -672,10 +672,13 @@ class AdminController extends Controller
             'images.*'    => 'image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
-        $data['type']      = $type;
-        $data['available'] = $request->boolean('available');
+        $data['type']       = $type;
+        $data['available']  = $request->boolean('available');
+        $data['seller_id']  = $isGuest ? null : ($data['seller_id']  ?: null);
+        $data['vehicle_id'] = $data['vehicle_id'] ?: null;
         if ($isGuest) {
-            $data['seller_id'] = null;
+            $data['guest_name']  = $request->input('guest_name');
+            $data['guest_phone'] = $request->input('guest_phone');
         }
         unset($data['images']);
 
@@ -723,10 +726,13 @@ class AdminController extends Controller
             'images.*'    => 'image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
-        $data['type']      = $type;
-        $data['available'] = $request->boolean('available');
+        $data['type']       = $type;
+        $data['available']  = $request->boolean('available');
+        $data['seller_id']  = $isGuest ? null : ($data['seller_id']  ?: null);
+        $data['vehicle_id'] = $data['vehicle_id'] ?: null;
         if ($isGuest) {
-            $data['seller_id'] = null;
+            $data['guest_name']  = $request->input('guest_name');
+            $data['guest_phone'] = $request->input('guest_phone');
         }
         unset($data['images']);
 
