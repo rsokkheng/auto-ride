@@ -10,6 +10,99 @@ use Illuminate\Http\Request;
 class RentalController extends ApiController
 {
     /**
+     * GET /v1/rentals/catalog
+     * Browse available vehicle types and pricing — no auth required.
+     */
+    public function catalog(Request $request)
+    {
+        $catalog = [
+            [
+                'vehicle_type'     => 'motorcycle',
+                'label'            => 'Motorcycle',
+                'seats'            => 1,
+                'daily_rate_usd'   => $this->dailyRateUsd('motorcycle'),
+                'description'      => 'Lightweight & fuel-efficient for city trips',
+                'icon'             => 'motorcycle',
+            ],
+            [
+                'vehicle_type'     => 'tuk_tuk',
+                'label'            => 'Tuk Tuk',
+                'seats'            => 3,
+                'daily_rate_usd'   => $this->dailyRateUsd('tuk_tuk'),
+                'description'      => 'Classic Cambodian 3-wheeler for short rides',
+                'icon'             => 'tuk_tuk',
+            ],
+            [
+                'vehicle_type'     => 'electric',
+                'label'            => 'Electric Car',
+                'seats'            => 4,
+                'daily_rate_usd'   => $this->dailyRateUsd('electric'),
+                'description'      => 'Eco-friendly electric vehicle',
+                'icon'             => 'electric',
+            ],
+            [
+                'vehicle_type'     => 'sedan',
+                'label'            => 'Sedan',
+                'seats'            => 4,
+                'daily_rate_usd'   => $this->dailyRateUsd('sedan'),
+                'description'      => 'Comfortable sedan for city and highway',
+                'icon'             => 'sedan',
+            ],
+            [
+                'vehicle_type'     => 'suv',
+                'label'            => 'SUV',
+                'seats'            => 7,
+                'daily_rate_usd'   => $this->dailyRateUsd('suv'),
+                'description'      => 'Spacious SUV for families and groups',
+                'icon'             => 'suv',
+            ],
+            [
+                'vehicle_type'     => 'van',
+                'label'            => 'Van',
+                'seats'            => 12,
+                'daily_rate_usd'   => $this->dailyRateUsd('van'),
+                'description'      => 'Large van for group travel',
+                'icon'             => 'van',
+            ],
+            [
+                'vehicle_type'     => 'truck',
+                'label'            => 'Truck',
+                'seats'            => 2,
+                'daily_rate_usd'   => $this->dailyRateUsd('truck'),
+                'description'      => 'Heavy-duty truck for cargo',
+                'icon'             => 'truck',
+            ],
+        ];
+
+        // Optional: estimate total if dates provided
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $start = \Carbon\Carbon::parse($request->start_date);
+            $end   = \Carbon\Carbon::parse($request->end_date);
+            $days  = max(1, $start->diffInDays($end) + 1);
+
+            $catalog = array_map(function ($item) use ($days) {
+                $item['days']           = $days;
+                $item['total_usd']      = round($item['daily_rate_usd'] * $days, 2);
+                return $item;
+            }, $catalog);
+        }
+
+        return $this->success(['catalog' => $catalog]);
+    }
+
+    /**
+     * GET /v1/rentals/{rental}
+     * Single booking detail.
+     */
+    public function show(Request $request, CarRental $rental)
+    {
+        $user = $this->authUser($request);
+        if (! $user || $rental->user_id !== $user->id) return $this->unauthorized();
+
+        return $this->success(['rental' => $this->formatRental($rental)]);
+    }
+
+    /**
      * POST /v1/rentals
      * Book a car rental.
      * Body: vehicle_type, pickup_location, pickup_lat?, pickup_lng?,
@@ -36,8 +129,8 @@ class RentalController extends ApiController
         $end       = Carbon::parse($data['end_date']);
         $totalDays = max(1, $start->diffInDays($end) + 1);
 
-        $dailyRate = $this->dailyRate($data['vehicle_type']);
-        $total     = $dailyRate * $totalDays;
+        $dailyRateKhr = $this->dailyRate($data['vehicle_type']);
+        $totalKhr     = $dailyRateKhr * $totalDays;
 
         $rental = CarRental::create([
             'user_id'          => $user->id,
@@ -48,26 +141,16 @@ class RentalController extends ApiController
             'start_date'       => $data['start_date'],
             'end_date'         => $data['end_date'],
             'total_days'       => $totalDays,
-            'daily_rate_khr'   => $dailyRate,
-            'total_amount_khr' => $total,
+            'daily_rate_khr'   => $dailyRateKhr,
+            'total_amount_khr' => $totalKhr,
             'payment_method'   => $data['payment_method'] ?? 'cash',
             'notes'            => $data['notes'] ?? null,
             'status'           => 'pending',
         ]);
 
         return $this->success([
-            'rental_id'        => $rental->id,
-            'vehicle_type'     => $rental->vehicle_type,
-            'pickup_location'  => $rental->pickup_location,
-            'start_date'       => $rental->start_date->toDateString(),
-            'end_date'         => $rental->end_date->toDateString(),
-            'total_days'       => $rental->total_days,
-            'daily_rate_khr'   => $rental->daily_rate_khr,
-            'total_amount_khr' => $rental->total_amount_khr,
-            'total_amount_usd' => round($rental->total_amount_khr / 4000, 2),
-            'payment_method'   => $rental->payment_method,
-            'status'           => $rental->status,
-            'message'          => 'Rental request submitted. We will confirm within 1 hour.',
+            'rental'  => $this->formatRental($rental),
+            'message' => 'Rental request submitted. We will confirm within 1 hour.',
         ], 201);
     }
 
@@ -83,17 +166,7 @@ class RentalController extends ApiController
         $rentals = CarRental::where('user_id', $user->id)
             ->latest()
             ->paginate(15)
-            ->through(fn($r) => [
-                'id'               => $r->id,
-                'vehicle_type'     => $r->vehicle_type,
-                'pickup_location'  => $r->pickup_location,
-                'start_date'       => $r->start_date->toDateString(),
-                'end_date'         => $r->end_date->toDateString(),
-                'total_days'       => $r->total_days,
-                'total_amount_khr' => $r->total_amount_khr,
-                'status'           => $r->status,
-                'created_at'       => $r->created_at->toDateTimeString(),
-            ]);
+            ->through(fn($r) => $this->formatRental($r));
 
         return $this->success([
             'rentals'    => $rentals->items(),
@@ -107,18 +180,45 @@ class RentalController extends ApiController
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    private function dailyRateUsd(string $vehicleType): float
+    {
+        return match ($vehicleType) {
+            'motorcycle' => 5.00,
+            'tuk_tuk'   => 7.00,
+            'electric'  => 9.00,
+            'sedan'     => 10.00,
+            'suv'       => 15.00,
+            'van'       => 18.00,
+            'truck'     => 25.00,
+            default     => 10.00,
+        };
+    }
+
     private function dailyRate(string $vehicleType): int
     {
-        // Rates in KHR per day. Can be moved to pricing_settings table.
-        return match ($vehicleType) {
-            'motorcycle' => 20_000,
-            'tuk_tuk'   => 25_000,
-            'electric'  => 35_000,
-            'sedan'     => 40_000,
-            'suv'       => 60_000,
-            'van'       => 70_000,
-            'truck'     => 100_000,
-            default     => 40_000,
-        };
+        return (int) round($this->dailyRateUsd($vehicleType) * 4000);
+    }
+
+    private function formatRental(CarRental $r): array
+    {
+        $dailyUsd = $this->dailyRateUsd($r->vehicle_type);
+        $totalUsd = round($dailyUsd * $r->total_days, 2);
+
+        return [
+            'id'               => $r->id,
+            'vehicle_type'     => $r->vehicle_type,
+            'pickup_location'  => $r->pickup_location,
+            'pickup_lat'       => $r->pickup_lat,
+            'pickup_lng'       => $r->pickup_lng,
+            'start_date'       => $r->start_date->toDateString(),
+            'end_date'         => $r->end_date->toDateString(),
+            'total_days'       => $r->total_days,
+            'daily_rate_usd'   => $dailyUsd,
+            'total_amount_usd' => $totalUsd,
+            'payment_method'   => $r->payment_method,
+            'notes'            => $r->notes,
+            'status'           => $r->status,
+            'created_at'       => $r->created_at->toDateTimeString(),
+        ];
     }
 }

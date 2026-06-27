@@ -291,8 +291,10 @@ Route::prefix('v1')->group(function () {
     Route::get('referrals', [ReferralController::class, 'index']);
 
     // ── Car rentals ───────────────────────────────────────────────────────────
-    Route::get('rentals', [RentalController::class, 'index']);
-    Route::post('rentals', [RentalController::class, 'store']);
+    Route::get('rentals/catalog',     [RentalController::class, 'catalog']);   // browse available cars (no auth)
+    Route::get('rentals',             [RentalController::class, 'index']);     // my booking history (auth)
+    Route::post('rentals',            [RentalController::class, 'store']);     // book a car (auth)
+    Route::get('rentals/{rental}',    [RentalController::class, 'show']);      // single booking detail (auth)
 
     // ── Promo apply (alias to validate — same logic, booking-time friendly) ──
     Route::post('promo/apply', [PromoCodeController::class, 'check']);
