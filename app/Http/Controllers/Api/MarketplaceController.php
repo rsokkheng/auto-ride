@@ -29,35 +29,48 @@ class MarketplaceController extends ApiController
 
     public function index(Request $request)
     {
-        $query = MarketplaceProduct::with(['seller', 'category', 'images'])
-            ->where('status', 'active');
+        try {
+            $query = MarketplaceProduct::with(['seller', 'category', 'images'])
+                ->where('status', 'active');
 
-        if ($request->filled('category_id')) {
-            $query->where('category_id', $request->category_id);
-        }
-        if ($request->filled('seller_id')) {
-            $query->where('seller_id', $request->seller_id);
-        }
-        if ($request->filled('listing_type')) {
-            $query->where('listing_type', $request->listing_type);
-        }
-        if ($request->filled('condition')) {
-            $query->where('condition', $request->condition);
-        }
-        if ($request->filled('min_price')) {
-            $query->where('price', '>=', (float) $request->min_price);
-        }
-        if ($request->filled('max_price')) {
-            $query->where('price', '<=', (float) $request->max_price);
-        }
-        if ($request->filled('search')) {
-            $query->where(function ($q) use ($request) {
-                $q->where('title', 'like', '%' . $request->search . '%')
-                  ->orWhere('description', 'like', '%' . $request->search . '%');
-            });
-        }
+            if ($request->filled('category_id')) {
+                $query->where('category_id', $request->category_id);
+            }
+            if ($request->filled('seller_id')) {
+                $query->where('seller_id', $request->seller_id);
+            }
+            if ($request->filled('listing_type')) {
+                $query->where('listing_type', $request->listing_type);
+            }
+            if ($request->filled('condition')) {
+                $query->where('condition', $request->condition);
+            }
+            if ($request->filled('min_price')) {
+                $query->where('price', '>=', (float) $request->min_price);
+            }
+            if ($request->filled('max_price')) {
+                $query->where('price', '<=', (float) $request->max_price);
+            }
+            if ($request->filled('search')) {
+                $query->where(function ($q) use ($request) {
+                    $q->where('title', 'like', '%' . $request->search . '%')
+                      ->orWhere('description', 'like', '%' . $request->search . '%');
+                });
+            }
 
-        return $this->success(['products' => $query->latest()->paginate(20)]);
+            $products = $query->latest()->paginate(20);
+
+            return $this->success([
+                'total'    => $products->total(),
+                'products' => $products,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'debug'   => 'marketplace_products table may be missing columns — run: php artisan migrate --force',
+            ], 500);
+        }
     }
 
     public function show(MarketplaceProduct $product)
