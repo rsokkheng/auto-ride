@@ -107,7 +107,12 @@ class MarketplaceController extends ApiController
         $user = $this->authUser($request);
         if (! $user) return $this->unauthorized();
 
+        $isGuest = $request->input('entry_type') === 'guest';
+
         $data = $request->validate([
+            'entry_type'         => 'nullable|in:user,guest',
+            'guest_name'         => $isGuest ? 'required|string|max:100' : 'nullable|string|max:100',
+            'guest_phone'        => $isGuest ? 'required|string|max:20'  : 'nullable|string|max:20',
             'title'              => 'required|string|max:200',
             'description'        => 'nullable|string',
             'category_id'        => 'nullable|exists:marketplace_categories,id',
@@ -128,7 +133,10 @@ class MarketplaceController extends ApiController
 
         $product = MarketplaceProduct::create(array_merge(
             collect($data)->except('images')->toArray(),
-            ['seller_id' => $user->id]
+            [
+                'seller_id'  => $isGuest ? null : $user->id,
+                'entry_type' => $isGuest ? 'guest' : 'user',
+            ]
         ));
 
         if ($request->hasFile('images')) {

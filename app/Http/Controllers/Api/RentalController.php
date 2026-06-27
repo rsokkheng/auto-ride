@@ -113,9 +113,11 @@ class RentalController extends ApiController
         $user = $this->authUser($request);
         if (! $user) return $this->unauthorized();
 
+        $hasProduct = $request->filled('marketplace_product_id');
+
         $data = $request->validate([
             'marketplace_product_id' => 'nullable|exists:marketplace_products,id',
-            'vehicle_type'           => 'required|string|max:50',
+            'vehicle_type'           => $hasProduct ? 'nullable|string|max:50' : 'required|string|max:50',
             'pickup_location'        => 'required|string|max:255',
             'pickup_lat'             => 'nullable|numeric|between:-90,90',
             'pickup_lng'             => 'nullable|numeric|between:-180,180',
@@ -124,6 +126,12 @@ class RentalController extends ApiController
             'payment_method'         => 'nullable|in:cash,wallet,aba,wing,other_online',
             'notes'                  => 'nullable|string|max:500',
         ]);
+
+        // If booking a marketplace product, derive vehicle_type from its linked vehicle (fallback: 'sedan')
+        if ($hasProduct && empty($data['vehicle_type'])) {
+            $product = \App\Models\MarketplaceProduct::with('vehicle')->find($data['marketplace_product_id']);
+            $data['vehicle_type'] = $product?->vehicle?->type ?? 'sedan';
+        }
 
         $start     = Carbon::parse($data['start_date']);
         $end       = Carbon::parse($data['end_date']);
