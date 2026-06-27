@@ -279,7 +279,42 @@ class MarketplaceController extends ApiController
             'notes'           => $data['notes'] ?? null,
         ]);
 
-        return $this->success(['order' => $order->load('product', 'seller')], 201);
+        $order->load(['product.images', 'buyer', 'seller']);
+
+        return $this->success([
+            'order' => [
+                'id'             => $order->id,
+                'order_type'     => $order->order_type,
+                'status'         => $order->status,
+                'payment_status' => $order->payment_status,
+                'payment_method' => $order->payment_method,
+                'quantity'       => $order->quantity,
+                'unit_price_usd' => (float) $order->unit_price,
+                'total_price_usd'=> (float) $order->total_price,
+                'days'           => $orderType === 'rent' ? $days : null,
+                'rent_start_date'=> $order->rent_start_date?->toDateString(),
+                'rent_end_date'  => $order->rent_end_date?->toDateString(),
+                'notes'          => $order->notes,
+                'created_at'     => $order->created_at->toDateTimeString(),
+                'product' => [
+                    'id'           => $product->id,
+                    'title'        => $product->title,
+                    'listing_type' => $product->listing_type,
+                    'condition'    => $product->condition,
+                    'image'        => $product->images->first()?->full_url,
+                ],
+                'renter' => [
+                    'id'    => $user->id,
+                    'name'  => $user->name,
+                    'phone' => $user->phone,
+                ],
+                'seller' => $order->seller ? [
+                    'id'    => $order->seller->id,
+                    'name'  => $order->seller->name,
+                    'phone' => $order->seller->phone,
+                ] : null,
+            ],
+        ], 201);
     }
 
     public function myOrders(Request $request)
