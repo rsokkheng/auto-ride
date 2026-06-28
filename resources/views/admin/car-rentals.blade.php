@@ -32,7 +32,9 @@
             <select name="vehicle_type" class="form-control form-control-sm mr-2 mb-1">
                 <option value="">All Vehicles</option>
                 @foreach(['motorcycle','tuk_tuk','electric','sedan','suv','van','truck'] as $vt)
-                    <option value="{{ $vt }}" {{ request('vehicle_type') == $vt ? 'selected' : '' }}>{{ ucfirst(str_replace('_',' ',$vt)) }}</option>
+                    <option value="{{ $vt }}" {{ request('vehicle_type') == $vt ? 'selected' : '' }}>
+                        {{ ucfirst(str_replace('_',' ', $vt)) }}
+                    </option>
                 @endforeach
             </select>
             <button class="btn btn-sm btn-primary mr-1 mb-1"><i class="fas fa-filter mr-1"></i>Filter</button>
@@ -43,9 +45,7 @@
 
 {{-- Summary --}}
 <div class="row mb-3">
-    @php
-        $all = $rentals->getCollection();
-    @endphp
+    @php $all = $rentals->getCollection(); @endphp
     <div class="col-6 col-md-3 mb-2">
         <div class="info-box mb-0 shadow-sm">
             <span class="info-box-icon bg-warning"><i class="fas fa-clock"></i></span>
@@ -106,29 +106,21 @@
                     <th>Payment</th>
                     <th>Status</th>
                     <th>Booked At</th>
-                    <th>Actions</th>
+                    <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
             @forelse($rentals as $rental)
                 @php
                     $dailyUsd = match($rental->vehicle_type) {
-                        'motorcycle' => 5,
-                        'tuk_tuk'   => 7,
-                        'electric'  => 9,
-                        'sedan'     => 10,
-                        'suv'       => 15,
-                        'van'       => 18,
-                        'truck'     => 25,
-                        default     => 10,
+                        'motorcycle' => 5, 'tuk_tuk' => 7, 'electric' => 9,
+                        'sedan' => 10, 'suv' => 15, 'van' => 18, 'truck' => 25, default => 10,
                     };
                     $totalUsd = $dailyUsd * $rental->total_days;
                 @endphp
                 <tr>
-                    {{-- ID --}}
                     <td class="align-middle font-weight-bold">#{{ $rental->id }}</td>
 
-                    {{-- Customer --}}
                     <td class="align-middle" style="max-width:140px;white-space:normal;">
                         @if($rental->user)
                             <div>{{ $rental->user->name }}</div>
@@ -138,13 +130,12 @@
                         @endif
                     </td>
 
-                    {{-- Marketplace Product --}}
                     <td class="align-middle" style="max-width:160px;white-space:normal;">
                         @if($rental->marketplaceProduct)
                             <div class="d-flex align-items-center">
                                 @if($rental->marketplaceProduct->images->first())
                                     <img src="{{ $rental->marketplaceProduct->images->first()->full_url }}"
-                                         class="img-thumbnail mr-2" style="width:36px;height:36px;object-fit:cover;" alt="">
+                                         class="img-thumbnail mr-1" style="width:36px;height:36px;object-fit:cover;">
                                 @endif
                                 <small>{{ $rental->marketplaceProduct->title }}</small>
                             </div>
@@ -153,19 +144,16 @@
                         @endif
                     </td>
 
-                    {{-- Vehicle Type --}}
                     <td class="align-middle">
                         <span class="badge badge-secondary">
-                            {{ ucfirst(str_replace('_',' ', $rental->vehicle_type)) }}
+                            <i class="fas fa-car mr-1"></i>{{ ucfirst(str_replace('_',' ', $rental->vehicle_type)) }}
                         </span>
                     </td>
 
-                    {{-- Pickup --}}
                     <td class="align-middle" style="max-width:180px;white-space:normal;">
                         <small>{{ $rental->pickup_location }}</small>
                     </td>
 
-                    {{-- Dates --}}
                     <td class="align-middle">
                         <small>
                             {{ $rental->start_date->format('d M Y') }}<br>
@@ -173,72 +161,58 @@
                         </small>
                     </td>
 
-                    {{-- Days --}}
                     <td class="align-middle text-center">{{ $rental->total_days }}</td>
-
-                    {{-- Total KHR --}}
                     <td class="align-middle">{{ number_format($rental->total_amount_khr) }}</td>
-
-                    {{-- Total USD --}}
                     <td class="align-middle font-weight-bold">${{ number_format($totalUsd, 2) }}</td>
 
-                    {{-- Payment --}}
                     <td class="align-middle">
                         <span class="text-capitalize">{{ str_replace('_',' ', $rental->payment_method) }}</span>
                     </td>
 
-                    {{-- Status --}}
                     <td class="align-middle">
                         @php
                             $cls = match($rental->status) {
-                                'pending'   => 'badge-warning',
-                                'confirmed' => 'badge-info',
-                                'active'    => 'badge-primary',
-                                'completed' => 'badge-success',
-                                'cancelled' => 'badge-danger',
-                                default     => 'badge-secondary',
+                                'pending'  =>'badge-warning','confirmed'=>'badge-info',
+                                'active'   =>'badge-primary','completed'=>'badge-success',
+                                'cancelled'=>'badge-danger', default=>'badge-secondary',
                             };
                         @endphp
                         <span class="badge {{ $cls }}">{{ ucfirst($rental->status) }}</span>
                     </td>
 
-                    {{-- Booked At --}}
                     <td class="align-middle">
                         <small>{{ $rental->created_at->format('d M Y') }}<br>{{ $rental->created_at->format('H:i') }}</small>
                     </td>
 
-                    {{-- Actions --}}
-                    <td class="align-middle" style="min-width:140px;">
-                        <div class="btn-group-vertical btn-group-sm">
+                    {{-- Actions: icon buttons --}}
+                    <td class="align-middle text-center" style="min-width:110px;">
+                        <div class="btn-group">
                             @if($rental->status === 'pending')
-                                <form method="POST" action="{{ route('admin.car-rentals.confirm', $rental) }}" class="mb-1">
-                                    @csrf
-                                    <button class="btn btn-sm btn-info btn-block"
-                                            onclick="return confirm('Confirm rental #{{ $rental->id }}?')">
-                                        <i class="fas fa-check mr-1"></i> Confirm
-                                    </button>
-                                </form>
+                                <button type="button"
+                                    class="btn btn-sm btn-info mr-1"
+                                    title="Confirm"
+                                    onclick="showConfirm('confirm','#{{ $rental->id }}','{{ route('admin.car-rentals.confirm', $rental) }}')">
+                                    <i class="fas fa-check"></i>
+                                </button>
                             @endif
                             @if($rental->status === 'confirmed')
-                                <form method="POST" action="{{ route('admin.car-rentals.complete', $rental) }}" class="mb-1">
-                                    @csrf
-                                    <button class="btn btn-sm btn-success btn-block"
-                                            onclick="return confirm('Mark rental #{{ $rental->id }} as completed?')">
-                                        <i class="fas fa-check-double mr-1"></i> Complete
-                                    </button>
-                                </form>
+                                <button type="button"
+                                    class="btn btn-sm btn-success mr-1"
+                                    title="Complete"
+                                    onclick="showConfirm('complete','#{{ $rental->id }}','{{ route('admin.car-rentals.complete', $rental) }}')">
+                                    <i class="fas fa-check-double"></i>
+                                </button>
                             @endif
-                            @if(! in_array($rental->status, ['completed', 'cancelled']))
-                                <form method="POST" action="{{ route('admin.car-rentals.cancel', $rental) }}">
-                                    @csrf
-                                    <button class="btn btn-sm btn-danger btn-block"
-                                            onclick="return confirm('Cancel rental #{{ $rental->id }}?')">
-                                        <i class="fas fa-times mr-1"></i> Cancel
-                                    </button>
-                                </form>
+                            @if(! in_array($rental->status, ['completed','cancelled']))
+                                <button type="button"
+                                    class="btn btn-sm btn-danger"
+                                    title="Cancel"
+                                    onclick="showConfirm('cancel','#{{ $rental->id }}','{{ route('admin.car-rentals.cancel', $rental) }}')">
+                                    <i class="fas fa-times"></i>
+                                </button>
                             @endif
                             @if(in_array($rental->status, ['completed','cancelled']))
-                                <span class="text-muted small">No actions</span>
+                                <span class="text-muted">—</span>
                             @endif
                         </div>
                     </td>
@@ -246,8 +220,7 @@
             @empty
                 <tr>
                     <td colspan="13" class="text-center text-muted py-4">
-                        <i class="fas fa-car fa-2x mb-2 d-block"></i>
-                        No rentals found.
+                        <i class="fas fa-car fa-2x mb-2 d-block"></i>No rentals found.
                     </td>
                 </tr>
             @endforelse
@@ -255,10 +228,58 @@
         </table>
     </div>
     @if($rentals->hasPages())
-    <div class="card-footer clearfix">
-        {{ $rentals->links() }}
-    </div>
+    <div class="card-footer clearfix">{{ $rentals->links() }}</div>
     @endif
 </div>
+
+{{-- Confirm Modal --}}
+<div class="modal fade" id="actionModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">Confirm Action</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body text-center py-4">
+                <i id="modalIcon" class="fas fa-question-circle fa-3x mb-3"></i>
+                <p id="modalMessage" class="mb-0 font-weight-bold"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times mr-1"></i> Cancel
+                </button>
+                <form id="actionForm" method="POST">
+                    @csrf
+                    <button type="submit" id="modalBtn" class="btn btn-primary">
+                        <i id="modalBtnIcon" class="fas fa-check mr-1"></i>
+                        <span id="modalBtnText">Confirm</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@push('scripts')
+<script>
+function showConfirm(action, label, url) {
+    const config = {
+        confirm:  { title:'Confirm Rental',   msg:'Confirm rental ' + label + '?',           icon:'fa-check-circle',  iconColor:'#17a2b8', btnClass:'btn-info',    btnIcon:'fa-check',        btnText:'Yes, Confirm'  },
+        complete: { title:'Complete Rental',   msg:'Mark rental ' + label + ' as completed?', icon:'fa-check-double',  iconColor:'#28a745', btnClass:'btn-success', btnIcon:'fa-check-double', btnText:'Yes, Complete' },
+        cancel:   { title:'Cancel Rental',     msg:'Cancel rental ' + label + '? This cannot be undone.', icon:'fa-times-circle', iconColor:'#dc3545', btnClass:'btn-danger',  btnIcon:'fa-times',        btnText:'Yes, Cancel'   },
+    };
+    const c = config[action];
+    document.getElementById('modalTitle').textContent   = c.title;
+    document.getElementById('modalMessage').textContent = c.msg;
+    document.getElementById('modalIcon').className      = 'fas ' + c.icon + ' fa-3x mb-3';
+    document.getElementById('modalIcon').style.color    = c.iconColor;
+    document.getElementById('modalBtn').className       = 'btn ' + c.btnClass;
+    document.getElementById('modalBtnIcon').className   = 'fas ' + c.btnIcon + ' mr-1';
+    document.getElementById('modalBtnText').textContent = c.btnText;
+    document.getElementById('actionForm').action        = url;
+    $('#actionModal').modal('show');
+}
+</script>
+@endpush
 
 @endsection

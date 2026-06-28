@@ -271,7 +271,10 @@ class RentalController extends ApiController
         $product = $r->marketplaceProduct;
 
         return [
+            // ID — both variants
+            'id'                     => $r->id,
             'rental_id'              => $r->id,
+
             'marketplace_product_id' => $r->marketplace_product_id,
             'vehicle_type'           => $r->vehicle_type,
             'pickup_location'        => $r->pickup_location,
@@ -279,9 +282,25 @@ class RentalController extends ApiController
             'pickup_lng'             => $r->pickup_lng,
             'start_date'             => $r->start_date->toDateString(),
             'end_date'               => $r->end_date->toDateString(),
+
+            // Days — all variants
             'total_days'             => $r->total_days,
+            'days'                   => $r->total_days,
+            'duration'               => $r->total_days,
+            'duration_days'          => $r->total_days,
+
+            // Daily rate — all variants
             'daily_rate_usd'         => $dailyUsd,
+            'daily_rate'             => $dailyUsd,
+            'rate'                   => $dailyUsd,
+            'price_per_day'          => $dailyUsd,
+
+            // Total — all variants
             'total_amount_usd'       => $totalUsd,
+            'total_amount'           => $totalUsd,
+            'total'                  => $totalUsd,
+            'total_price'            => $totalUsd,
+
             'payment_method'         => $r->payment_method,
             'notes'                  => $r->notes,
             'status'                 => $r->status,
