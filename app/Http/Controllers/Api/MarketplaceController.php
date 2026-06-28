@@ -331,15 +331,19 @@ class MarketplaceController extends ApiController
         if (! $user) return $this->unauthorized();
 
         $query = MarketplaceOrder::with(['product.images', 'buyer', 'seller']);
+        $type  = $request->query('type', 'buying');
 
-        if ($request->query('type') === 'selling') {
-            // Orders where I am the seller (direct) OR where my product was ordered (guest products)
+        if ($type === 'selling') {
             $query->where(function ($q) use ($user) {
                 $q->where('seller_id', $user->id)
                   ->orWhereHas('product', fn($p) => $p->where('seller_id', $user->id));
             });
+        } elseif ($type === 'rental') {
+            // My rental orders (order_type = rent, buyer = me)
+            $query->where('buyer_id', $user->id)
+                  ->where('order_type', 'rent');
         } else {
-            // type=buying or default
+            // type=buying — all orders where I am the buyer
             $query->where('buyer_id', $user->id);
         }
 

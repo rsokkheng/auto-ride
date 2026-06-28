@@ -166,6 +166,99 @@ class RentalController extends ApiController
     }
 
     /**
+     * GET /v1/rentals/my-rentals
+     * All rental bookings by the user — car rentals + marketplace rent orders combined.
+     */
+    public function myRentals(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
+        $status = $request->query('status');
+
+        // 1. Car rentals from car_rentals table
+        $carQuery = CarRental::with(['marketplaceProduct.images'])
+            ->where('user_id', $user->id);
+        if ($status) $carQuery->where('status', $status);
+
+        $carRentals = $carQuery->latest()->get()->map(function ($r) {
+            $dailyUsd = $this->dailyRateUsd($r->vehicle_type);
+            $product  = $r->marketplaceProduct;
+            return [
+                'source'                 => 'car_rental',
+                'id'                     => $r->id,
+                'rental_id'              => $r->id,
+                'marketplace_product_id' => $r->marketplace_product_id,
+                'vehicle_type'           => $r->vehicle_type,
+                'pickup_location'        => $r->pickup_location,
+                'start_date'             => $r->start_date->toDateString(),
+                'end_date'               => $r->end_date->toDateString(),
+                'days'                   => $r->total_days,
+                'total_days'             => $r->total_days,
+                'daily_rate'             => $dailyUsd,
+                'daily_rate_usd'         => $dailyUsd,
+                'total'                  => round($dailyUsd * $r->total_days, 2),
+                'total_amount_usd'       => round($dailyUsd * $r->total_days, 2),
+                'payment_method'         => $r->payment_method,
+                'status'                 => $r->status,
+                'notes'                  => $r->notes,
+                'created_at'             => $r->created_at->toDateTimeString(),
+                'product' => $product ? [
+                    'id'    => $product->id,
+                    'title' => $product->title,
+                    'image' => $product->images->first()?->full_url,
+                ] : null,
+            ];
+        });
+
+        // 2. Marketplace rental orders from marketplace_orders table
+        $orderQuery = \App\Models\MarketplaceOrder::with(['product.images', 'seller'])
+            ->where('buyer_id', $user->id)
+            ->where('order_type', 'rent');
+        if ($status) $orderQuery->where('status', $status);
+
+        $marketRentals = $orderQuery->latest()->get()->map(fn($o) => [
+            'source'                 => 'marketplace_order',
+            'id'                     => $o->id,
+            'order_id'               => $o->id,
+            'marketplace_product_id' => $o->product_id,
+            'vehicle_type'           => null,
+            'pickup_location'        => null,
+            'start_date'             => $o->rent_start_date?->toDateString(),
+            'end_date'               => $o->rent_end_date?->toDateString(),
+            'days'                   => ($o->rent_start_date && $o->rent_end_date)
+                                            ? $o->rent_start_date->diffInDays($o->rent_end_date) + 1
+                                            : null,
+            'total_days'             => ($o->rent_start_date && $o->rent_end_date)
+                                            ? $o->rent_start_date->diffInDays($o->rent_end_date) + 1
+                                            : null,
+            'daily_rate'             => (float) $o->unit_price,
+            'daily_rate_usd'         => (float) $o->unit_price,
+            'total'                  => (float) $o->total_price,
+            'total_amount_usd'       => (float) $o->total_price,
+            'payment_method'         => $o->payment_method,
+            'status'                 => $o->status,
+            'notes'                  => $o->notes,
+            'created_at'             => $o->created_at->toDateTimeString(),
+            'product' => $o->product ? [
+                'id'    => $o->product->id,
+                'title' => $o->product->title,
+                'image' => $o->product->images->first()?->full_url,
+            ] : null,
+        ]);
+
+        // Merge and sort by created_at descending
+        $all = $carRentals->concat($marketRentals)
+            ->sortByDesc('created_at')
+            ->values();
+
+        return $this->success([
+            'total'   => $all->count(),
+            'rentals' => $all,
+        ]);
+    }
+
+    /**
      * GET /v1/rentals
      * List the authenticated user's rentals.
      */

@@ -291,13 +291,14 @@ Route::prefix('v1')->group(function () {
     Route::get('referrals', [ReferralController::class, 'index']);
 
     // ── Car rentals ───────────────────────────────────────────────────────────
-    Route::get('rentals/catalog',               [RentalController::class, 'catalog']);  // browse available cars (no auth)
-    Route::get('rentals',                       [RentalController::class, 'index']);   // my booking history (auth)
-    Route::post('rentals',                      [RentalController::class, 'store']);   // book a car (auth)
-    Route::get('rentals/{rental}',              [RentalController::class, 'show']);    // single booking detail (auth)
-    Route::post('rentals/{rental}/cancel',      [RentalController::class, 'cancel']);  // cancel booking (auth)
-    Route::post('rentals/{rental}/confirm',     [RentalController::class, 'confirm']); // admin confirm (auth)
-    Route::delete('rentals/{rental}',           [RentalController::class, 'destroy']); // delete booking (auth)
+    Route::get('rentals/catalog',               [RentalController::class, 'catalog']);   // browse available cars (no auth)
+    Route::get('rentals/my-rentals',            [RentalController::class, 'myRentals']); // all my rentals combined (auth)
+    Route::get('rentals',                       [RentalController::class, 'index']);    // car rental bookings (auth)
+    Route::post('rentals',                      [RentalController::class, 'store']);    // book a car (auth)
+    Route::get('rentals/{rental}',              [RentalController::class, 'show']);     // single booking detail (auth)
+    Route::post('rentals/{rental}/cancel',      [RentalController::class, 'cancel']);   // cancel booking (auth)
+    Route::post('rentals/{rental}/confirm',     [RentalController::class, 'confirm']);  // admin confirm (auth)
+    Route::delete('rentals/{rental}',           [RentalController::class, 'destroy']);  // delete booking (auth)
 
     // ── Promo apply (alias to validate — same logic, booking-time friendly) ──
     Route::post('promo/apply', [PromoCodeController::class, 'check']);
