@@ -174,12 +174,16 @@ class RentalController extends ApiController
         $user = $this->authUser($request);
         if (! $user) return $this->unauthorized();
 
-        $rentals = CarRental::where('user_id', $user->id)
-            ->latest()
-            ->paginate(15)
-            ->through(fn($r) => $this->formatRental($r));
+        $query = CarRental::where('user_id', $user->id)->latest();
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $rentals = $query->paginate(15)->through(fn($r) => $this->formatRental($r));
 
         return $this->success([
+            'total'      => $rentals->total(),
             'rentals'    => $rentals->items(),
             'pagination' => [
                 'total'        => $rentals->total(),
