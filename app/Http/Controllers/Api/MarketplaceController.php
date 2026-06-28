@@ -261,6 +261,7 @@ class MarketplaceController extends ApiController
 
         $orderType = $data['order_type'] ?? 'purchase';
         $quantity  = $data['quantity']   ?? 1;
+        $days      = null;
 
         if ($orderType === 'rent') {
             $days      = now()->parse($data['rent_start_date'])->diffInDays($data['rent_end_date']) + 1;
@@ -334,17 +335,19 @@ class MarketplaceController extends ApiController
         $type  = $request->query('type', 'buying');
 
         if ($type === 'selling') {
+            // Orders placed on my products
             $query->where(function ($q) use ($user) {
                 $q->where('seller_id', $user->id)
                   ->orWhereHas('product', fn($p) => $p->where('seller_id', $user->id));
             });
         } elseif ($type === 'rental') {
-            // My rental orders (order_type = rent, buyer = me)
+            // My rent orders only (order_type = rent)
             $query->where('buyer_id', $user->id)
                   ->where('order_type', 'rent');
         } else {
-            // type=buying — all orders where I am the buyer
-            $query->where('buyer_id', $user->id);
+            // type=buying — purchase orders only (order_type = purchase)
+            $query->where('buyer_id', $user->id)
+                  ->where('order_type', 'purchase');
         }
 
         $orders = $query->latest()->paginate(20);
