@@ -81,6 +81,9 @@ class MarketplaceController extends ApiController
 
     public function show(MarketplaceProduct $product)
     {
+        if (! in_array($product->status, ['active'])) {
+            return response()->json(['success' => false, 'message' => 'This product is no longer available.'], 404);
+        }
         $product->increment('views_count');
         return $this->success(['product' => $product->load(['seller', 'category', 'images', 'vehicle'])]);
     }
@@ -243,11 +246,20 @@ class MarketplaceController extends ApiController
         $user = $this->authUser($request);
         if (! $user) return $this->unauthorized();
 
+        if ($product->status === 'sold') {
+            return response()->json(['success' => false, 'message' => 'This product has already been sold.'], 422);
+        }
+        if ($product->status === 'paused') {
+            return response()->json(['success' => false, 'message' => 'This product is currently paused by the seller.'], 422);
+        }
+        if ($product->status === 'draft') {
+            return response()->json(['success' => false, 'message' => 'This product is not available yet.'], 422);
+        }
         if ($product->status !== 'active') {
-            return response()->json(['message' => 'Product is not available'], 422);
+            return response()->json(['success' => false, 'message' => 'This product is not available.'], 422);
         }
         if ($product->seller_id === $user->id) {
-            return response()->json(['message' => 'Cannot order your own product'], 422);
+            return response()->json(['success' => false, 'message' => 'Cannot order your own product.'], 422);
         }
 
         $data = $request->validate([
@@ -261,6 +273,11 @@ class MarketplaceController extends ApiController
 
         $orderType = $data['order_type'] ?? 'purchase';
         $quantity  = $data['quantity']   ?? 1;
+
+        // Block if not enough stock for purchase
+        if ($orderType === 'purchase' && $product->quantity !== null && $product->quantity < $quantity) {
+            return response()->json(['success' => false, 'message' => 'Not enough stock. Available: ' . $product->quantity], 422);
+        }
         $days      = null;
 
         if ($orderType === 'rent') {
