@@ -274,11 +274,39 @@ class MarketplaceController extends ApiController
         $orderType = $data['order_type'] ?? 'purchase';
         $quantity  = $data['quantity']   ?? 1;
 
+        // Block purchase if product already has a completed purchase order
+        $hasSold = MarketplaceOrder::where('product_id', $product->id)
+            ->where('order_type', 'purchase')
+            ->where('status', 'completed')
+            ->exists();
+        if ($hasSold) {
+            $product->update(['status' => 'sold']);
+            return response()->json(['success' => false, 'message' => 'This product has already been sold and is no longer available.'], 422);
+        }
+
         // Block if not enough stock for purchase
         if ($orderType === 'purchase' && $product->quantity !== null && $product->quantity < $quantity) {
             return response()->json(['success' => false, 'message' => 'Not enough stock. Available: ' . $product->quantity], 422);
         }
-        $days      = null;
+
+        // Block rent if dates overlap with existing active rental
+        if ($orderType === 'rent') {
+            $startDate = $data['rent_start_date'];
+            $endDate   = $data['rent_end_date'];
+
+            $overlap = MarketplaceOrder::where('product_id', $product->id)
+                ->where('order_type', 'rent')
+                ->whereIn('status', ['pending', 'confirmed'])
+                ->where('rent_start_date', '<=', $endDate)
+                ->where('rent_end_date', '>=', $startDate)
+                ->exists();
+
+            if ($overlap) {
+                return response()->json(['success' => false, 'message' => 'This product is already booked for the selected dates. Please choose different dates.'], 422);
+            }
+        }
+
+        $days = null;
 
         if ($orderType === 'rent') {
             $days      = now()->parse($data['rent_start_date'])->diffInDays($data['rent_end_date']) + 1;
