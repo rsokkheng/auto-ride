@@ -44,9 +44,18 @@ class RideController extends ApiController
             $query->where('status', $status);
         }
 
-        $rides = $query->orderByDesc('id')->paginate($perPage);
+        $rides = $query->orderByDesc('id')->paginate($perPage)->appends($request->query());
 
-        return $this->success(['rides' => $rides]);
+        return $this->success([
+            'total' => $rides->total(),
+            'rides' => $rides->items(),
+            'pagination' => [
+                'total'        => $rides->total(),
+                'per_page'     => $rides->perPage(),
+                'current_page' => $rides->currentPage(),
+                'last_page'    => $rides->lastPage(),
+            ],
+        ]);
     }
 
     // ── Single ride ───────────────────────────────────────────────────────────
