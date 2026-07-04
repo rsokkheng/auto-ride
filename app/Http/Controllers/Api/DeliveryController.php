@@ -162,21 +162,35 @@ class DeliveryController extends ApiController
         $user = $this->authUser($request);
         if (! $user) return $this->unauthorized();
 
+        $perPage = min((int) ($request->query('per_page', 20)), 100);
+        $status  = $request->query('status');
+
         if ($user->role === 'driver') {
-            $movings = Delivery::with(['sender', 'vehicle'])
+            $query = Delivery::with(['sender', 'vehicle'])
                 ->where('driver_id', $user->id)
-                ->where('service_type', 'moving')
-                ->orderByDesc('created_at')
-                ->paginate(20);
+                ->where('service_type', 'moving');
         } else {
-            $movings = Delivery::with(['driver', 'vehicle'])
+            $query = Delivery::with(['driver', 'vehicle'])
                 ->where('sender_id', $user->id)
-                ->where('service_type', 'moving')
-                ->orderByDesc('created_at')
-                ->paginate(20);
+                ->where('service_type', 'moving');
         }
 
-        return $this->success(['movings' => $movings]);
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        $movings = $query->orderByDesc('id')->paginate($perPage)->appends($request->query());
+
+        return $this->success([
+            'total'   => $movings->total(),
+            'movings' => $movings->items(),
+            'pagination' => [
+                'total'        => $movings->total(),
+                'per_page'     => $movings->perPage(),
+                'current_page' => $movings->currentPage(),
+                'last_page'    => $movings->lastPage(),
+            ],
+        ]);
     }
 
     public function store(Request $request)
