@@ -31,18 +31,33 @@ class DeliveryController extends ApiController
     public function index(Request $request)
     {
         $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
 
-        if (! $user) {
-            return $this->unauthorized();
-        }
+        $perPage = min((int) ($request->query('per_page', 20)), 100);
+        $status  = $request->query('status');
 
         if ($user->role === 'driver') {
-            $deliveries = Delivery::with(['sender', 'vehicle'])->where('driver_id', $user->id)->paginate(20);
+            $query = Delivery::with(['sender', 'vehicle'])->where('driver_id', $user->id);
         } else {
-            $deliveries = Delivery::with(['driver', 'vehicle'])->where('sender_id', $user->id)->paginate(20);
+            $query = Delivery::with(['driver', 'vehicle'])->where('sender_id', $user->id);
         }
 
-        return $this->success(['deliveries' => $deliveries]);
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        $deliveries = $query->latest()->paginate($perPage)->appends($request->query());
+
+        return $this->success([
+            'total'      => $deliveries->total(),
+            'deliveries' => $deliveries->items(),
+            'pagination' => [
+                'total'        => $deliveries->total(),
+                'per_page'     => $deliveries->perPage(),
+                'current_page' => $deliveries->currentPage(),
+                'last_page'    => $deliveries->lastPage(),
+            ],
+        ]);
     }
 
     public function history(Request $request)
