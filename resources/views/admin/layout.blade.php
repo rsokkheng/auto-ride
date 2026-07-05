@@ -115,9 +115,24 @@
                 </div>
             </div>
 
-            <nav class="mt-1">
-                <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu">
+            @php
+                $pendingDrivers    = rescue(fn() => \App\Models\User::where('role','driver')->where('approval_status','pending')->count(), 0, false);
+                $pendingTx         = rescue(fn() => \App\Models\TransactionRecord::where('status','pending')->count(), 0, false);
+                $pendingTopup      = rescue(fn() => \App\Models\TopUpRequest::where('status','pending')->count(), 0, false);
+                $pendingWithdraw   = rescue(fn() => \App\Models\WithdrawalRequest::where('status','pending')->count(), 0, false);
 
+                $isSettings = request()->routeIs(
+                    'admin.ride-pricing', 'admin.fare-management', 'admin.moving-fare',
+                    'admin.surge-zones', 'admin.airport-zones*', 'admin.charging-stations',
+                    'admin.subscription-plans*', 'admin.business-accounts*',
+                    'admin.banners', 'admin.chat'
+                );
+            @endphp
+
+            <nav class="mt-1">
+                <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
+
+                    {{-- ── MAIN ── --}}
                     <li class="nav-header" style="font-size:.65rem;color:#475569;letter-spacing:.1em;padding:8px 16px 4px;">MAIN</li>
 
                     <li class="nav-item">
@@ -127,20 +142,9 @@
                         </a>
                     </li>
 
-                    <li class="nav-header" style="font-size:.65rem;color:#475569;letter-spacing:.1em;padding:8px 16px 4px;">MANAGEMENT</li>
+                    {{-- ── OPERATIONS ── --}}
+                    <li class="nav-header" style="font-size:.65rem;color:#475569;letter-spacing:.1em;padding:8px 16px 4px;">OPERATIONS</li>
 
-                    <li class="nav-item">
-                        <a href="{{ route('admin.users') }}" class="nav-link {{ request()->routeIs('admin.users') ? 'active' : '' }}">
-                            <i class="nav-icon fas fa-users"></i>
-                            <p>Users</p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{{ route('admin.vehicles') }}" class="nav-link {{ request()->routeIs('admin.vehicles') ? 'active' : '' }}">
-                            <i class="nav-icon fas fa-car"></i>
-                            <p>Vehicles</p>
-                        </a>
-                    </li>
                     <li class="nav-item">
                         <a href="{{ route('admin.rides') }}" class="nav-link {{ request()->routeIs('admin.rides') ? 'active' : '' }}">
                             <i class="nav-icon fas fa-route"></i>
@@ -154,9 +158,9 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="{{ route('admin.moving-fare') }}" class="nav-link {{ request()->routeIs('admin.moving-fare') ? 'active' : '' }}">
-                            <i class="nav-icon fas fa-truck-moving"></i>
-                            <p>Moving Fare</p>
+                        <a href="{{ route('admin.car-rentals') }}" class="nav-link {{ request()->routeIs('admin.car-rentals*') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-car-side"></i>
+                            <p>Car Rentals</p>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -171,31 +175,45 @@
                             <p>Market Orders</p>
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a href="{{ route('admin.car-rentals') }}" class="nav-link {{ request()->routeIs('admin.car-rentals*') ? 'active' : '' }}">
-                            <i class="nav-icon fas fa-car"></i>
-                            <p>Car Rentals</p>
-                        </a>
-                    </li>
+
+                    {{-- ── PEOPLE ── --}}
+                    <li class="nav-header" style="font-size:.65rem;color:#475569;letter-spacing:.1em;padding:8px 16px 4px;">PEOPLE</li>
 
                     <li class="nav-item">
+                        <a href="{{ route('admin.users') }}" class="nav-link {{ request()->routeIs('admin.users') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-users"></i>
+                            <p>Users</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ route('admin.drivers') }}" class="nav-link {{ request()->routeIs('admin.drivers*') ? 'active' : '' }}">
-                            @php $pendingDrivers = \App\Models\User::where('role','driver')->where('approval_status','pending')->count(); @endphp
                             <i class="nav-icon fas fa-id-card"></i>
                             <p>
-                                Driver Approvals
+                                Drivers
                                 @if($pendingDrivers)
                                     <span class="right badge badge-danger">{{ $pendingDrivers }}</span>
                                 @endif
                             </p>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a href="{{ route('admin.vehicles') }}" class="nav-link {{ request()->routeIs('admin.vehicles') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-car"></i>
+                            <p>Vehicles</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ route('admin.companies') }}" class="nav-link {{ request()->routeIs('admin.companies') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-building"></i>
+                            <p>Companies</p>
+                        </a>
+                    </li>
 
-                    <li class="nav-header" style="font-size:.65rem;color:#475569;letter-spacing:.1em;padding:8px 16px 4px;">DRIVER &amp; FINANCE</li>
+                    {{-- ── FINANCE ── --}}
+                    <li class="nav-header" style="font-size:.65rem;color:#475569;letter-spacing:.1em;padding:8px 16px 4px;">FINANCE</li>
 
                     <li class="nav-item">
                         <a href="{{ route('admin.transactions') }}" class="nav-link {{ request()->routeIs('admin.transactions') ? 'active' : '' }}">
-                            @php $pendingTx = rescue(fn() => \App\Models\TransactionRecord::where('status','pending')->count(), 0, false); @endphp
                             <i class="nav-icon fas fa-receipt"></i>
                             <p>
                                 Transactions
@@ -206,103 +224,41 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="{{ route('admin.companies') }}" class="nav-link {{ request()->routeIs('admin.companies') ? 'active' : '' }}">
-                            <i class="nav-icon fas fa-building"></i>
-                            <p>Companies</p>
+                        <a href="{{ route('admin.topups') }}" class="nav-link {{ request()->routeIs('admin.topups') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-money-bill-transfer"></i>
+                            <p>
+                                Top-up Requests
+                                @if($pendingTopup)
+                                    <span class="right badge badge-warning">{{ $pendingTopup }}</span>
+                                @endif
+                            </p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ route('admin.withdrawals') }}" class="nav-link {{ request()->routeIs('admin.withdrawals') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-money-check-alt"></i>
+                            <p>
+                                Driver Payouts
+                                @if($pendingWithdraw)
+                                    <span class="right badge badge-danger">{{ $pendingWithdraw }}</span>
+                                @endif
+                            </p>
                         </a>
                     </li>
                     <li class="nav-item">
                         <a href="{{ route('admin.wallet') }}" class="nav-link {{ request()->routeIs('admin.wallet') ? 'active' : '' }}">
                             <i class="nav-icon fas fa-wallet"></i>
-                            <p>Wallet &amp; Transactions</p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{{ route('admin.topups') }}" class="nav-link {{ request()->routeIs('admin.topups') ? 'active' : '' }}">
-                            @php $pendingCount = rescue(fn() => \App\Models\TopUpRequest::where('status','pending')->count(), 0, false); @endphp
-                            <i class="nav-icon fas fa-money-bill-transfer"></i>
-                            <p>
-                                Top-up Requests
-                                @if($pendingCount)
-                                    <span class="right badge badge-warning">{{ $pendingCount }}</span>
-                                @endif
-                            </p>
+                            <p>Wallet</p>
                         </a>
                     </li>
 
-                    <li class="nav-item">
-                        <a href="{{ route('admin.withdrawals') }}" class="nav-link {{ request()->routeIs('admin.withdrawals') ? 'active' : '' }}">
-                            @php $pendingWithdrawals = rescue(fn() => \App\Models\WithdrawalRequest::where('status','pending')->count(), 0, false); @endphp
-                            <i class="nav-icon fas fa-money-check-alt"></i>
-                            <p>
-                                Driver Payouts
-                                @if($pendingWithdrawals)
-                                    <span class="right badge badge-danger">{{ $pendingWithdrawals }}</span>
-                                @endif
-                            </p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{{ route('admin.banners') }}" class="nav-link {{ request()->routeIs('admin.banners') ? 'active' : '' }}">
-                            <i class="nav-icon fas fa-images"></i>
-                            <p>Promo Banners</p>
-                        </a>
-                    </li>
+                    {{-- ── SUPPORT ── --}}
+                    <li class="nav-header" style="font-size:.65rem;color:#475569;letter-spacing:.1em;padding:8px 16px 4px;">SUPPORT</li>
 
-                    <li class="nav-header" style="font-size:.65rem;color:#475569;letter-spacing:.1em;padding:8px 16px 4px;">SERVICES</li>
-
-                    <li class="nav-item">
-                        <a href="{{ route('admin.charging-stations') }}" class="nav-link {{ request()->routeIs('admin.charging-stations') ? 'active' : '' }}">
-                            <i class="nav-icon fas fa-charging-station"></i>
-                            <p>Charging Stations</p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{{ route('admin.surge-zones') }}" class="nav-link {{ request()->routeIs('admin.surge-zones') ? 'active' : '' }}">
-                            <i class="nav-icon fas fa-bolt"></i>
-                            <p>Surge Zones</p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{{ route('admin.ride-pricing') }}" class="nav-link {{ request()->routeIs('admin.ride-pricing') ? 'active' : '' }}">
-                            <i class="nav-icon fas fa-tags"></i>
-                            <p>Ride Pricing</p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{{ route('admin.fare-management') }}" class="nav-link {{ request()->routeIs('admin.fare-management') ? 'active' : '' }}">
-                            <i class="nav-icon fas fa-sliders-h"></i>
-                            <p>Fare Management</p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{{ route('admin.airport-zones') }}" class="nav-link {{ request()->routeIs('admin.airport-zones*') ? 'active' : '' }}">
-                            <i class="nav-icon fas fa-plane-departure"></i>
-                            <p>Airport Zones</p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{{ route('admin.business-accounts') }}" class="nav-link {{ request()->routeIs('admin.business-accounts*') ? 'active' : '' }}">
-                            <i class="nav-icon fas fa-building"></i>
-                            <p>Business Accounts</p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{{ route('admin.subscription-plans') }}" class="nav-link {{ request()->routeIs('admin.subscription-plans*') ? 'active' : '' }}">
-                            <i class="nav-icon fas fa-layer-group"></i>
-                            <p>Subscription Plans</p>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{{ route('admin.chat') }}" class="nav-link {{ request()->routeIs('admin.chat') ? 'active' : '' }}">
-                            <i class="nav-icon fas fa-comments"></i>
-                            <p>Chat Testing</p>
-                        </a>
-                    </li>
                     <li class="nav-item">
                         <a href="{{ route('admin.support') }}" class="nav-link {{ request()->routeIs('admin.support') ? 'active' : '' }}">
                             <i class="nav-icon fas fa-headset"></i>
-                            <p>Support</p>
+                            <p>Support Tickets</p>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -311,6 +267,82 @@
                             <p>Safety</p>
                         </a>
                     </li>
+
+                    {{-- ── SETTINGS (collapsible) ── --}}
+                    <li class="nav-header" style="font-size:.65rem;color:#475569;letter-spacing:.1em;padding:8px 16px 4px;">SETTINGS</li>
+
+                    <li class="nav-item {{ $isSettings ? 'menu-open' : '' }}">
+                        <a href="#" class="nav-link {{ $isSettings ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-cog"></i>
+                            <p>
+                                Settings
+                                <i class="right fas fa-angle-left"></i>
+                            </p>
+                        </a>
+                        <ul class="nav nav-treeview">
+                            <li class="nav-item">
+                                <a href="{{ route('admin.fare-management') }}" class="nav-link {{ request()->routeIs('admin.fare-management') ? 'active' : '' }}">
+                                    <i class="nav-icon fas fa-sliders-h"></i>
+                                    <p>Fare Management</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.ride-pricing') }}" class="nav-link {{ request()->routeIs('admin.ride-pricing') ? 'active' : '' }}">
+                                    <i class="nav-icon fas fa-tags"></i>
+                                    <p>Ride Pricing</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.moving-fare') }}" class="nav-link {{ request()->routeIs('admin.moving-fare') ? 'active' : '' }}">
+                                    <i class="nav-icon fas fa-truck-moving"></i>
+                                    <p>Moving Fare</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.surge-zones') }}" class="nav-link {{ request()->routeIs('admin.surge-zones') ? 'active' : '' }}">
+                                    <i class="nav-icon fas fa-bolt"></i>
+                                    <p>Surge Zones</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.airport-zones') }}" class="nav-link {{ request()->routeIs('admin.airport-zones*') ? 'active' : '' }}">
+                                    <i class="nav-icon fas fa-plane-departure"></i>
+                                    <p>Airport Zones</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.charging-stations') }}" class="nav-link {{ request()->routeIs('admin.charging-stations') ? 'active' : '' }}">
+                                    <i class="nav-icon fas fa-charging-station"></i>
+                                    <p>Charging Stations</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.subscription-plans') }}" class="nav-link {{ request()->routeIs('admin.subscription-plans*') ? 'active' : '' }}">
+                                    <i class="nav-icon fas fa-layer-group"></i>
+                                    <p>Subscription Plans</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.business-accounts') }}" class="nav-link {{ request()->routeIs('admin.business-accounts*') ? 'active' : '' }}">
+                                    <i class="nav-icon fas fa-briefcase"></i>
+                                    <p>Business Accounts</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.banners') }}" class="nav-link {{ request()->routeIs('admin.banners') ? 'active' : '' }}">
+                                    <i class="nav-icon fas fa-images"></i>
+                                    <p>Promo Banners</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.chat') }}" class="nav-link {{ request()->routeIs('admin.chat') ? 'active' : '' }}">
+                                    <i class="nav-icon fas fa-comments"></i>
+                                    <p>Chat Testing</p>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+
                 </ul>
             </nav>
         </div>
