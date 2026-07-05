@@ -139,6 +139,9 @@ Route::prefix('admin')->group(function () {
 
     // Driver Withdrawal Payouts
     Route::get('withdrawals', [AdminController::class, 'withdrawals'])->name('admin.withdrawals');
+    Route::get('withdrawals/export', [AdminController::class, 'exportWithdrawals'])->name('admin.withdrawals.export');
+    Route::post('withdrawals/bulk-approve', [AdminController::class, 'bulkApproveWithdrawals'])->name('admin.withdrawals.bulk-approve');
+    Route::post('withdrawals/bulk-reject', [AdminController::class, 'bulkRejectWithdrawals'])->name('admin.withdrawals.bulk-reject');
     Route::post('withdrawals/{withdrawal}/approve', [AdminController::class, 'approveWithdrawal'])->name('admin.withdrawals.approve');
     Route::post('withdrawals/{withdrawal}/reject', [AdminController::class, 'rejectWithdrawal'])->name('admin.withdrawals.reject');
 

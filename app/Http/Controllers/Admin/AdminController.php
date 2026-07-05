@@ -1584,25 +1584,172 @@ class AdminController extends Controller
     public function withdrawals(Request $request)
     {
         $status = $request->input('status', 'pending');
+        $search = $request->input('search');
+        $method = $request->input('method');
+        $dateFrom = $request->input('date_from');
+        $dateTo   = $request->input('date_to');
 
-        $emptyPage = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
+        $query = WithdrawalRequest::with(['driver', 'processor'])
+            ->where('status', $status)
+            ->orderByDesc('id');
+
+        if ($search) {
+            $query->whereHas('driver', fn ($q) => $q->where('name', 'like', "%{$search}%")
+                ->orWhere('phone', 'like', "%{$search}%"));
+        }
+        if ($method) {
+            $query->where('payment_method', $method);
+        }
+        if ($dateFrom) {
+            $query->whereDate('created_at', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $query->whereDate('created_at', '<=', $dateTo);
+        }
+
+        $emptyPage = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 10);
 
         return view('admin.withdrawals', [
-            'withdrawals' => rescue(
-                fn () => WithdrawalRequest::with(['driver', 'processor'])
-                    ->where('status', $status)
-                    ->orderByDesc('id')
-                    ->paginate(10),
-                $emptyPage,
-                false
-            ),
-            'status' => $status,
-            'counts' => [
+            'withdrawals' => rescue(fn () => $query->paginate(10)->withQueryString(), $emptyPage, false),
+            'status'  => $status,
+            'search'  => $search,
+            'method'  => $method,
+            'dateFrom' => $dateFrom,
+            'dateTo'   => $dateTo,
+            'counts'  => [
                 'pending'  => rescue(fn () => WithdrawalRequest::where('status', 'pending')->count(), 0, false),
                 'approved' => rescue(fn () => WithdrawalRequest::where('status', 'approved')->count(), 0, false),
                 'rejected' => rescue(fn () => WithdrawalRequest::where('status', 'rejected')->count(), 0, false),
             ],
         ]);
+    }
+
+    public function exportWithdrawals(Request $request)
+    {
+        $status = $request->input('status', 'pending');
+
+        $query = WithdrawalRequest::with('driver')
+            ->where('status', $status)
+            ->orderByDesc('id');
+
+        if ($s = $request->input('search')) {
+            $query->whereHas('driver', fn ($q) => $q->where('name', 'like', "%{$s}%")->orWhere('phone', 'like', "%{$s}%"));
+        }
+        if ($m = $request->input('method')) {
+            $query->where('payment_method', $m);
+        }
+        if ($df = $request->input('date_from')) {
+            $query->whereDate('created_at', '>=', $df);
+        }
+        if ($dt = $request->input('date_to')) {
+            $query->whereDate('created_at', '<=', $dt);
+        }
+
+        $withdrawals = $query->get();
+
+        $filename = 'withdrawals_' . $status . '_' . now()->format('Ymd_His') . '.csv';
+
+        $headers = [
+            'Content-Type'        => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ];
+
+        $callback = function () use ($withdrawals) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['ID', 'Driver Name', 'Phone', 'Amount (KHR)', 'Amount (USD)', 'Method', 'Bank', 'Account Name', 'Account Number', 'Requested At', 'Status']);
+            foreach ($withdrawals as $w) {
+                fputcsv($out, [
+                    $w->id,
+                    $w->driver->name ?? '',
+                    $w->driver->phone ?? '',
+                    $w->amount_khr,
+                    round($w->amount_khr / 4000, 2),
+                    strtoupper(str_replace('_', ' ', $w->payment_method)),
+                    $w->bank_name ?? '',
+                    $w->account_name ?? '',
+                    $w->account_number ?? '',
+                    $w->created_at->format('Y-m-d H:i:s'),
+                    $w->status,
+                ]);
+            }
+            fclose($out);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    public function bulkApproveWithdrawals(Request $request)
+    {
+        $ids  = $request->input('ids', []);
+        $note = $request->input('admin_note');
+
+        if (empty($ids)) {
+            return redirect()->route('admin.withdrawals')->with('error', 'No withdrawals selected.');
+        }
+
+        $withdrawals = WithdrawalRequest::whereIn('id', $ids)->where('status', 'pending')->get();
+        $count = 0;
+
+        foreach ($withdrawals as $withdrawal) {
+            $withdrawal->update([
+                'status'       => 'approved',
+                'admin_note'   => $note,
+                'processed_at' => now(),
+                'processed_by' => Auth::id(),
+            ]);
+
+            WalletTransaction::where('reference_type', WithdrawalRequest::class)
+                ->where('reference_id', $withdrawal->id)
+                ->where('type', 'withdrawal_hold')
+                ->update(['status' => 'completed']);
+
+            $count++;
+        }
+
+        return redirect()->route('admin.withdrawals', ['status' => 'pending'])
+            ->with('success', "{$count} withdrawal(s) approved successfully.");
+    }
+
+    public function bulkRejectWithdrawals(Request $request)
+    {
+        $ids  = $request->input('ids', []);
+        $note = $request->input('admin_note');
+
+        if (empty($ids)) {
+            return redirect()->route('admin.withdrawals')->with('error', 'No withdrawals selected.');
+        }
+        if (empty($note)) {
+            return redirect()->back()->with('error', 'Rejection reason is required for bulk reject.');
+        }
+
+        $withdrawals = WithdrawalRequest::whereIn('id', $ids)->where('status', 'pending')->get();
+        $count = 0;
+
+        foreach ($withdrawals as $withdrawal) {
+            app(\App\Services\WalletService::class)->credit(
+                $withdrawal->driver,
+                $withdrawal->amount_khr,
+                'withdrawal_rejected',
+                'Withdrawal request rejected — funds returned'
+            );
+
+            WalletTransaction::where('reference_type', WithdrawalRequest::class)
+                ->where('reference_id', $withdrawal->id)
+                ->where('type', 'withdrawal_hold')
+                ->update(['status' => 'cancelled']);
+
+            $withdrawal->update([
+                'status'       => 'rejected',
+                'admin_note'   => $note,
+                'processed_at' => now(),
+                'processed_by' => Auth::id(),
+            ]);
+
+            $count++;
+        }
+
+        return redirect()->route('admin.withdrawals', ['status' => 'pending'])
+            ->with('success', "{$count} withdrawal(s) rejected and funds returned.");
     }
 
     public function approveWithdrawal(Request $request, WithdrawalRequest $withdrawal)
