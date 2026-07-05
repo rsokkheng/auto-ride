@@ -647,9 +647,9 @@ class DeliveryController extends ApiController
 
         $delivery->update(['status' => 'completed']);
 
-        // Create/update transaction record and process payment.
+        // Create/update transaction record and process payment (skip if already paid).
         $transaction = null;
-        if ($delivery->fee > 0) {
+        if ($delivery->fee > 0 && $delivery->payment_status !== 'paid') {
             $transaction = app(PaymentService::class)->processDelivery($delivery->fresh());
         }
 
@@ -694,6 +694,17 @@ class DeliveryController extends ApiController
         $delivery->update(['status' => 'completed', 'completed_at' => now()]);
 
         $fresh = $delivery->fresh()->load('sender', 'driver', 'vehicle');
+
+        // Process payment and credit driver wallet immediately
+        if ($fresh->fee > 0) {
+            try {
+                app(\App\Services\PaymentService::class)->processDelivery($fresh);
+                $fresh->refresh();
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
         $this->firestore->syncDelivery($fresh);
 
         try {
