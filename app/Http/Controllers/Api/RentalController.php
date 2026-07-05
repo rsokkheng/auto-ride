@@ -104,9 +104,6 @@ class RentalController extends ApiController
     /**
      * POST /v1/rentals
      * Book a car rental.
-     * Body: vehicle_type, pickup_location, pickup_lat?, pickup_lng?,
-     *       start_date (YYYY-MM-DD), end_date (YYYY-MM-DD),
-     *       payment_method?, notes?
      */
     public function store(Request $request)
     {
@@ -114,55 +111,56 @@ class RentalController extends ApiController
         if (! $user) return $this->unauthorized();
 
         $hasProduct = $request->filled('marketplace_product_id');
+        $allowed    = ['motorcycle', 'tuk_tuk', 'electric', 'sedan', 'suv', 'van', 'truck'];
 
         $data = $request->validate([
-            'marketplace_product_id' => 'nullable|exists:marketplace_products,id',
-            'vehicle_type'           => $hasProduct ? 'nullable|in:motorcycle,tuk_tuk,electric,sedan,suv,van,truck' : 'required|in:motorcycle,tuk_tuk,electric,sedan,suv,van,truck',
+            'marketplace_product_id' => 'nullable|integer|exists:marketplace_products,id',
+            'vehicle_type'           => ($hasProduct ? 'nullable' : 'required') . '|in:' . implode(',', $allowed),
             'pickup_location'        => 'required|string|max:255',
-            'pickup_lat'             => 'nullable|numeric|between:-90,90',
-            'pickup_lng'             => 'nullable|numeric|between:-180,180',
-            'start_date'             => 'required|date|after_or_equal:today',
-            'end_date'               => 'required|date|after_or_equal:start_date',
+            'pickup_lat'             => 'nullable|numeric',
+            'pickup_lng'             => 'nullable|numeric',
+            'start_date'             => 'required|date_format:Y-m-d',
+            'end_date'               => 'required|date_format:Y-m-d|after_or_equal:start_date',
             'payment_method'         => 'nullable|in:cash,wallet,aba,wing,other_online',
             'notes'                  => 'nullable|string|max:500',
         ]);
 
-        // If booking a marketplace product, derive vehicle_type from its linked vehicle (fallback: 'suv')
-        if ($hasProduct && empty($data['vehicle_type'])) {
-            $product = \App\Models\MarketplaceProduct::with('vehicle')->find($data['marketplace_product_id']);
-            $type = $product?->vehicle?->type;
-            $allowed = ['motorcycle','tuk_tuk','electric','sedan','suv','van','truck'];
-            $data['vehicle_type'] = in_array($type, $allowed) ? $type : 'suv';
+        // Derive vehicle_type from the linked marketplace product's vehicle
+        $vehicleType = $data['vehicle_type'] ?? null;
+        if ($hasProduct && ! $vehicleType) {
+            $product     = \App\Models\MarketplaceProduct::with('vehicle')->find($data['marketplace_product_id']);
+            $rawType     = $product?->vehicle?->type ?? null;
+            $vehicleType = in_array($rawType, $allowed) ? $rawType : 'sedan';
         }
 
         $start     = Carbon::parse($data['start_date']);
         $end       = Carbon::parse($data['end_date']);
         $totalDays = max(1, $start->diffInDays($end) + 1);
-
-        $dailyRateKhr = $this->dailyRate($data['vehicle_type']);
-        $totalKhr     = $dailyRateKhr * $totalDays;
+        $dailyKhr  = $this->dailyRate($vehicleType);
 
         $rental = CarRental::create([
             'user_id'                => $user->id,
             'marketplace_product_id' => $data['marketplace_product_id'] ?? null,
-            'vehicle_type'           => $data['vehicle_type'],
+            'vehicle_type'           => $vehicleType,
             'pickup_location'        => $data['pickup_location'],
             'pickup_lat'             => $data['pickup_lat'] ?? null,
             'pickup_lng'             => $data['pickup_lng'] ?? null,
             'start_date'             => $data['start_date'],
             'end_date'               => $data['end_date'],
             'total_days'             => $totalDays,
-            'daily_rate_khr'         => $dailyRateKhr,
-            'total_amount_khr'       => $totalKhr,
+            'daily_rate_khr'         => $dailyKhr,
+            'total_amount_khr'       => $dailyKhr * $totalDays,
             'payment_method'         => $data['payment_method'] ?? 'cash',
             'notes'                  => $data['notes'] ?? null,
             'status'                 => 'pending',
         ]);
 
+        $rental->load(['user', 'marketplaceProduct.images']);
+
         return $this->success([
+            'message' => 'Rental booked successfully.',
             'rental'  => $this->formatRental($rental),
-            'message' => 'Rental request submitted. We will confirm within 1 hour.',
-        ], 201);
+        ]);
     }
 
     /**
@@ -261,27 +259,35 @@ class RentalController extends ApiController
     /**
      * GET /v1/rentals
      * List the authenticated user's rentals.
+     * Query params: status, per_page (default 15, max 100)
      */
     public function index(Request $request)
     {
         $user = $this->authUser($request);
         if (! $user) return $this->unauthorized();
 
-        $query = CarRental::where('user_id', $user->id)->latest();
+        $perPage = min((int) $request->query('per_page', 15), 100);
+        $status  = $request->query('status');
 
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
+        $query = CarRental::with(['marketplaceProduct.images'])
+            ->where('user_id', $user->id)
+            ->orderByDesc('id');
+
+        if ($status) {
+            $query->where('status', $status);
         }
 
-        $rentals = $query->paginate(15)->through(fn($r) => $this->formatRental($r));
+        $paginator = $query->paginate($perPage);
+        $rentals   = collect($paginator->items())->map(fn($r) => $this->formatRental($r))->values();
 
         return $this->success([
-            'total'      => $rentals->total(),
-            'rentals'    => $rentals->items(),
+            'total'   => $paginator->total(),
+            'rentals' => $rentals,
             'pagination' => [
-                'total'        => $rentals->total(),
-                'current_page' => $rentals->currentPage(),
-                'last_page'    => $rentals->lastPage(),
+                'total'        => $paginator->total(),
+                'per_page'     => $paginator->perPage(),
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
             ],
         ]);
     }
