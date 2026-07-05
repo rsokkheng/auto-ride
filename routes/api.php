@@ -299,6 +299,7 @@ Route::prefix('v1')->group(function () {
     Route::get('rentals/{rental}',              [RentalController::class, 'show']);     // single booking detail (auth)
     Route::post('rentals/{rental}/cancel',      [RentalController::class, 'cancel']);   // cancel booking (auth)
     Route::post('rentals/{rental}/confirm',     [RentalController::class, 'confirm']);  // admin confirm (auth)
+    Route::post('rentals/{rental}/accept',      [RentalController::class, 'confirm']);  // alias for confirm (auth)
     Route::delete('rentals/{rental}',           [RentalController::class, 'destroy']);  // delete booking (auth)
 
     // ── Promo apply (alias to validate — same logic, booking-time friendly) ──
