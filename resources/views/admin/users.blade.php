@@ -34,7 +34,7 @@
                     $dtLabel = ['owner' => 'Own Vehicle', 'rental' => 'Rental', 'employee' => 'Employee'];
                 @endphp
                 <tr>
-                    <td>{{ $user->id }}</td>
+                    <td>{{ ($users->currentPage() - 1) * $users->perPage() + $loop->iteration }}</td>
                     <td>
                         @if($user->avatar)
                             <img src="{{ asset('storage/'.$user->avatar) }}" alt=""

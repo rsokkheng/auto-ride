@@ -58,7 +58,7 @@
             <tbody>
                 @forelse($withdrawals as $w)
                 <tr>
-                    <td class="text-muted small">{{ $w->id }}</td>
+                    <td class="text-muted small">{{ ($withdrawals->currentPage() - 1) * $withdrawals->perPage() + $loop->iteration }}</td>
                     <td>
                         <div class="font-weight-bold">{{ $w->driver->name }}</div>
                         <small class="text-muted">{{ $w->driver->phone }}</small>

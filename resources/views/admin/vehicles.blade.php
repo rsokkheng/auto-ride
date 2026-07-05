@@ -39,7 +39,7 @@
                             </div>
                         @endif
                     </td>
-                    <td>{{ $v->id }}</td>
+                    <td>{{ ($vehicles->currentPage() - 1) * $vehicles->perPage() + $loop->iteration }}</td>
                     <td>{{ $v->driver?->name ?? '—' }}</td>
                     <td><strong>{{ $v->license_plate }}</strong></td>
                     <td>{{ $v->make }} {{ $v->model }}</td>

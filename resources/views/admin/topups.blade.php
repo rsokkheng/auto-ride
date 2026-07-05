@@ -25,7 +25,7 @@
             <tbody>
                 @forelse($pending as $t)
                 <tr>
-                    <td>{{ $t->id }}</td>
+                    <td>{{ ($pending->currentPage() - 1) * $pending->perPage() + $loop->iteration }}</td>
                     <td>
                         <strong>{{ $t->user->name }}</strong><br>
                         <small class="text-muted">{{ $t->user->phone ?? $t->user->email }}</small>
@@ -76,7 +76,7 @@
                 @forelse($history as $t)
                 @php $sc = ['approved'=>'success','rejected'=>'danger']; @endphp
                 <tr>
-                    <td>{{ $t->id }}</td>
+                    <td>{{ ($history->currentPage() - 1) * $history->perPage() + $loop->iteration }}</td>
                     <td>{{ $t->user->name }}</td>
                     <td>{{ number_format($t->amount, 0) }} ៛</td>
                     <td>{{ \App\Models\TopUpRequest::$methodLabels[$t->method] ?? $t->method }}</td>

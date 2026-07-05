@@ -26,7 +26,7 @@
             <tbody>
                 @forelse($incidents as $i)
                 <tr>
-                    <td>{{ $i->id }}</td>
+                    <td>{{ ($incidents->currentPage() - 1) * $incidents->perPage() + $loop->iteration }}</td>
                     <td>{{ $i->user?->name ?? '—' }}</td>
                     <td>
                         @php $tc = ['accident'=>'danger','harassment'=>'warning','theft'=>'dark','other'=>'secondary']; @endphp

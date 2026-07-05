@@ -76,7 +76,7 @@
                     $sc = ['requested'=>'secondary','pending'=>'warning','accepted'=>'info','in_progress'=>'primary','completed'=>'success','cancelled'=>'danger'];
                 @endphp
                 <tr>
-                    <td>{{ $d->id }}</td>
+                    <td>{{ ($deliveries->currentPage() - 1) * $deliveries->perPage() + $loop->iteration }}</td>
                     <td>
                         @if($isMoving)
                             <span class="badge" style="background:#fef3c7;color:#d97706;border:1px solid #fde68a;">

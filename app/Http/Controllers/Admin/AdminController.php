@@ -212,7 +212,7 @@ class AdminController extends Controller
     public function users()
     {
         return view('admin.users', [
-            'users'     => User::with('company')->orderBy('created_at')->paginate(20),
+            'users'     => User::with('company')->orderBy('created_at')->paginate(10),
             'companies' => Company::where('active', true)->orderBy('name')->get(),
         ]);
     }
@@ -320,7 +320,7 @@ class AdminController extends Controller
     public function vehicles()
     {
         return view('admin.vehicles', [
-            'vehicles' => Vehicle::with('driver')->orderBy('created_at')->paginate(20),
+            'vehicles' => Vehicle::with('driver')->orderBy('created_at')->paginate(10),
             'drivers'  => User::where('role', 'driver')->orderBy('name')->get(),
         ]);
     }
@@ -441,7 +441,7 @@ class AdminController extends Controller
     public function rides()
     {
         return view('admin.rides', [
-            'rides'      => Ride::with(['passenger', 'driver'])->orderBy('created_at')->paginate(20),
+            'rides'      => Ride::with(['passenger', 'driver'])->orderBy('created_at')->paginate(10),
             'passengers' => User::where('role', 'passenger')->orderBy('name')->get(),
             'drivers'    => User::where('role', 'driver')->orderBy('name')->get(),
         ]);
@@ -501,7 +501,7 @@ class AdminController extends Controller
         }
 
         return view('admin.deliveries', [
-            'deliveries' => $query->paginate(20)->appends(['type' => $type]),
+            'deliveries' => $query->paginate(10)->appends(['type' => $type]),
             'senders'    => User::where('role', 'passenger')->orderBy('name')->get(),
             'drivers'    => User::where('role', 'driver')->orderBy('name')->get(),
             'activeType' => $type,
@@ -640,7 +640,7 @@ class AdminController extends Controller
     public function marketplace()
     {
         return view('admin.marketplace', [
-            'items'    => MarketplaceProduct::with(['seller', 'images'])->orderByDesc('created_at')->paginate(20),
+            'items'    => MarketplaceProduct::with(['seller', 'images'])->orderByDesc('created_at')->paginate(10),
             'sellers'  => User::orderBy('name')->get(),
             'vehicles' => Vehicle::orderBy('make')->get(),
         ]);
@@ -792,7 +792,7 @@ class AdminController extends Controller
         }
 
         return view('admin.marketplace-orders', [
-            'orders' => $query->paginate(20)->appends($request->query()),
+            'orders' => $query->paginate(10)->appends($request->query()),
         ]);
     }
 
@@ -842,7 +842,7 @@ class AdminController extends Controller
         }
 
         return view('admin.car-rentals', [
-            'rentals' => $query->paginate(20)->appends($request->query()),
+            'rentals' => $query->paginate(10)->appends($request->query()),
         ]);
     }
 
@@ -1042,7 +1042,7 @@ class AdminController extends Controller
     public function surgeZones()
     {
         return view('admin.surge-zones', [
-            'zones' => SurgeZone::orderBy('active')->orderBy('multiplier')->paginate(20),
+            'zones' => SurgeZone::orderBy('active')->orderBy('multiplier')->paginate(10),
         ]);
     }
 
@@ -1117,7 +1117,7 @@ class AdminController extends Controller
     public function chargingStations()
     {
         return view('admin.charging-stations', [
-            'stations' => ChargingStation::orderBy('created_at')->paginate(20),
+            'stations' => ChargingStation::orderBy('created_at')->paginate(10),
         ]);
     }
 
@@ -1168,7 +1168,7 @@ class AdminController extends Controller
     public function support()
     {
         return view('admin.support', [
-            'tickets' => SupportTicket::with('user')->orderBy('created_at')->paginate(20),
+            'tickets' => SupportTicket::with('user')->orderBy('created_at')->paginate(10),
             'users'   => User::orderBy('name')->get(),
             'admins'  => User::where('role', 'admin')->orderBy('name')->get(),
         ]);
@@ -1215,7 +1215,7 @@ class AdminController extends Controller
     public function safety()
     {
         return view('admin.safety', [
-            'incidents' => SafetyIncident::with('user')->orderBy('created_at')->paginate(20),
+            'incidents' => SafetyIncident::with('user')->orderBy('created_at')->paginate(10),
             'users'     => User::orderBy('name')->get(),
         ]);
     }
@@ -1272,7 +1272,7 @@ class AdminController extends Controller
         }
 
         return view('admin.transactions', [
-            'transactions' => $query->paginate(30)->withQueryString(),
+            'transactions' => $query->paginate(10)->withQueryString(),
             'pending_cash' => TransactionRecord::where('status', 'pending')
                 ->where('payment_method', 'cash')->count(),
             'pending_online' => TransactionRecord::where('status', 'pending')
@@ -1333,7 +1333,7 @@ class AdminController extends Controller
     public function companies()
     {
         return view('admin.companies', [
-            'companies' => Company::withCount('drivers')->orderBy('created_at')->paginate(20),
+            'companies' => Company::withCount('drivers')->orderBy('created_at')->paginate(10),
         ]);
     }
 
@@ -1388,7 +1388,7 @@ class AdminController extends Controller
         return view('admin.wallet', [
             'transactions' => WalletTransaction::with('user')
                 ->orderBy('created_at')
-                ->paginate(30),
+                ->paginate(10),
         ]);
     }
 
@@ -1427,7 +1427,7 @@ class AdminController extends Controller
     {
         return view('admin.topups', [
             'pending'  => TopUpRequest::with('user')->where('status', 'pending')->orderBy('created_at')->get(),
-            'history'  => TopUpRequest::with(['user', 'approvedBy'])->whereIn('status', ['approved', 'rejected'])->orderBy('updated_at')->paginate(20),
+            'history'  => TopUpRequest::with(['user', 'approvedBy'])->whereIn('status', ['approved', 'rejected'])->orderBy('updated_at')->paginate(10),
         ]);
     }
 
@@ -1514,7 +1514,7 @@ class AdminController extends Controller
         }
 
         return view('admin.drivers', [
-            'drivers' => $query->paginate(20)->appends(['status' => $status]),
+            'drivers' => $query->paginate(10)->appends(['status' => $status]),
             'status' => $status,
             'counts' => [
                 'pending'  => User::where('role','driver')->where('approval_status','pending')->count(),
@@ -1591,7 +1591,7 @@ class AdminController extends Controller
                 fn () => WithdrawalRequest::with(['driver', 'processor'])
                     ->where('status', $status)
                     ->orderByDesc('id')
-                    ->paginate(20),
+                    ->paginate(10),
                 $emptyPage,
                 false
             ),
@@ -1658,7 +1658,7 @@ class AdminController extends Controller
 
         return view('admin.banners', [
             'banners' => rescue(
-                fn () => Banner::orderBy('sort_order')->orderByDesc('created_at')->paginate(20),
+                fn () => Banner::orderBy('sort_order')->orderByDesc('created_at')->paginate(10),
                 $emptyPage,
                 false
             ),
@@ -1726,7 +1726,7 @@ class AdminController extends Controller
     {
         $emptyPage = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
         return view('admin.airport-zones', [
-            'zones' => rescue(fn () => AirportZone::orderBy('sort_order')->orderBy('name')->paginate(20), $emptyPage, false),
+            'zones' => rescue(fn () => AirportZone::orderBy('sort_order')->orderBy('name')->paginate(10), $emptyPage, false),
         ]);
     }
 
@@ -1779,7 +1779,7 @@ class AdminController extends Controller
             'accounts' => rescue(fn () => BusinessAccount::with('owner:id,name,email')
                 ->withCount('members')
                 ->orderByDesc('created_at')
-                ->paginate(20), $emptyPage, false),
+                ->paginate(10), $emptyPage, false),
         ]);
     }
 
@@ -1812,7 +1812,7 @@ class AdminController extends Controller
     {
         $emptyPage = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
 
-        $plans = rescue(fn () => SubscriptionPlan::orderBy('sort_order')->paginate(20), $emptyPage, false);
+        $plans = rescue(fn () => SubscriptionPlan::orderBy('sort_order')->paginate(10), $emptyPage, false);
 
         $stats = [
             'total_active'      => rescue(fn () => UserSubscription::where('status', 'active')->count(), 0, false),
@@ -1912,7 +1912,7 @@ class AdminController extends Controller
             fn () => UserSubscription::with('user:id,name,email,phone')
                 ->where('subscription_plan_id', $plan->id)
                 ->orderByDesc('created_at')
-                ->paginate(30),
+                ->paginate(10),
             new \Illuminate\Pagination\LengthAwarePaginator([], 0, 30),
             false
         );

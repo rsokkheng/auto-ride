@@ -111,7 +111,7 @@
                             <input type="checkbox" class="tx-checkbox" name="ids[]" value="{{ $tx->id }}">
                         @endif
                     </td>
-                    <td>{{ $tx->id }}</td>
+                    <td>{{ ($transactions->currentPage() - 1) * $transactions->perPage() + $loop->iteration }}</td>
                     <td>
                         <span class="badge badge-light">
                             {{ \App\Models\TransactionRecord::$typeLabels[$tx->type] ?? $tx->type }}

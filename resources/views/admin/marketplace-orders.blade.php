@@ -89,7 +89,7 @@
         <table class="table table-hover text-nowrap mb-0">
             <thead class="thead-light">
                 <tr>
-                    <th>#ID</th>
+                    <th>No.</th>
                     <th>Product</th>
                     <th>Type</th>
                     <th>Buyer</th>
@@ -107,7 +107,7 @@
             <tbody>
             @forelse($orders as $order)
                 <tr>
-                    <td class="align-middle font-weight-bold">#{{ $order->id }}</td>
+                    <td class="align-middle font-weight-bold">{{ ($orders->currentPage() - 1) * $orders->perPage() + $loop->iteration }}</td>
 
                     <td class="align-middle" style="max-width:180px;white-space:normal;">
                         @if($order->product)

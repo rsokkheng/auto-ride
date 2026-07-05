@@ -29,7 +29,7 @@
             <tbody>
                 @forelse($items as $item)
                 <tr>
-                    <td>{{ $item->id }}</td>
+                    <td>{{ ($items->currentPage() - 1) * $items->perPage() + $loop->iteration }}</td>
                     <td>
                         @if($item->images->count())
                             @php $allUrls = $item->images->map(fn($i) => $i->full_url)->values()->toJson(); @endphp

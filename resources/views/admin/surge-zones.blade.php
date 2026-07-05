@@ -30,7 +30,7 @@
             <tbody>
                 @forelse($zones as $z)
                 <tr>
-                    <td>{{ $z->id }}</td>
+                    <td>{{ ($zones->currentPage() - 1) * $zones->perPage() + $loop->iteration }}</td>
                     <td>
                         <div class="font-weight-bold">{{ $z->name }}</div>
                         @if($z->description)

@@ -28,7 +28,7 @@
             <tbody>
                 @forelse($rides as $r)
                 <tr>
-                    <td>{{ $r->id }}</td>
+                    <td>{{ ($rides->currentPage() - 1) * $rides->perPage() + $loop->iteration }}</td>
                     <td>{{ $r->passenger?->name ?? '—' }}</td>
                     <td>{{ $r->driver?->name ?? 'Unassigned' }}</td>
                     <td>{{ \Illuminate\Support\Str::limit($r->pickup_address, 22) }}</td>

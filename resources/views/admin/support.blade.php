@@ -27,7 +27,7 @@
             <tbody>
                 @forelse($tickets as $t)
                 <tr>
-                    <td>{{ $t->id }}</td>
+                    <td>{{ ($tickets->currentPage() - 1) * $tickets->perPage() + $loop->iteration }}</td>
                     <td>{{ \Illuminate\Support\Str::limit($t->subject, 30) }}</td>
                     <td>{{ $t->user?->name ?? '—' }}</td>
                     <td>

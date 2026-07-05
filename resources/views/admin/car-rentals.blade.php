@@ -94,7 +94,7 @@
         <table class="table table-hover text-nowrap mb-0">
             <thead class="thead-light">
                 <tr>
-                    <th>#ID</th>
+                    <th>No.</th>
                     <th>Customer</th>
                     <th>Product</th>
                     <th>Vehicle</th>
@@ -119,7 +119,7 @@
                     $totalUsd = $dailyUsd * $rental->total_days;
                 @endphp
                 <tr>
-                    <td class="align-middle font-weight-bold">#{{ $rental->id }}</td>
+                    <td class="align-middle font-weight-bold">{{ ($rentals->currentPage() - 1) * $rentals->perPage() + $loop->iteration }}</td>
 
                     <td class="align-middle" style="max-width:140px;white-space:normal;">
                         @if($rental->user)

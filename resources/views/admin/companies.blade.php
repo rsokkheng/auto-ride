@@ -29,7 +29,7 @@
             <tbody>
                 @forelse($companies as $c)
                 <tr>
-                    <td>{{ $c->id }}</td>
+                    <td>{{ ($companies->currentPage() - 1) * $companies->perPage() + $loop->iteration }}</td>
                     <td><strong>{{ $c->name }}</strong><br><small class="text-muted">{{ $c->address ?? '' }}</small></td>
                     <td>{{ $c->phone ?? '—' }}</td>
                     <td>{{ $c->email ?? '—' }}</td>

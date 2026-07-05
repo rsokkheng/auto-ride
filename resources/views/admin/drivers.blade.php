@@ -51,7 +51,7 @@
                 <tbody>
                     @forelse($drivers as $driver)
                     <tr>
-                        <td>{{ $driver->id }}</td>
+                        <td>{{ ($drivers->currentPage() - 1) * $drivers->perPage() + $loop->iteration }}</td>
                         <td>
                             <div class="d-flex align-items-center">
                                 @if($driver->avatar)
