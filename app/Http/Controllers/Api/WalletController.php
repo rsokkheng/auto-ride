@@ -161,27 +161,72 @@ class WalletController extends ApiController
 
     /**
      * POST /v1/wallet/withdraw
-     * Body: amount (KHR), note?
+     * Accepts same body as /v1/driver/withdraw — creates a WithdrawalRequest
+     * so it appears in the admin approval queue.
+     *
+     * Body: amount_khr (or amount), payment_method?, account_number?,
+     *       account_name?, bank_name?, note?
      */
     public function requestWithdrawal(Request $request)
     {
         $user = $this->authUser($request);
         if (! $user) return $this->unauthorized();
 
+        // Accept both `amount_khr` (driver endpoint) and `amount` (wallet endpoint)
+        $amountKhr = (int) ($request->input('amount_khr') ?? $request->input('amount') ?? 0);
+
         $data = $request->validate([
-            'amount' => 'required|integer|min:1000',
-            'note'   => 'nullable|string|max:255',
+            'amount_khr'     => 'nullable|integer|min:50000',
+            'amount'         => 'nullable|integer|min:50000',
+            'payment_method' => 'nullable|in:bank_transfer,aba,wing,acleda',
+            'account_number' => 'nullable|string|max:100',
+            'account_name'   => 'nullable|string|max:100',
+            'bank_name'      => 'nullable|string|max:100',
+            'note'           => 'nullable|string|max:255',
         ]);
 
-        if ($user->wallet_balance < $data['amount']) {
-            return response()->json(['message' => 'Insufficient wallet balance'], 422);
+        if ($amountKhr < 50000) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Minimum withdrawal is 50,000 ៛.',
+            ], 422);
         }
 
-        $tx = $this->wallet->requestWithdrawal($user, $data['amount'], $data['note'] ?? '');
+        if ($user->wallet_balance < $amountKhr) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Insufficient wallet balance. Available: ' . number_format($user->wallet_balance) . ' ៛.',
+            ], 422);
+        }
+
+        $hasPending = \App\Models\WithdrawalRequest::where('driver_id', $user->id)
+            ->where('status', 'pending')
+            ->exists();
+
+        if ($hasPending) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You already have a pending withdrawal request.',
+            ], 422);
+        }
+
+        // Hold the amount — deducted from wallet, returned if admin rejects
+        $this->wallet->debit($user, $amountKhr, 'withdrawal_hold', 'Withdrawal request hold');
+
+        $withdrawal = \App\Models\WithdrawalRequest::create([
+            'driver_id'      => $user->id,
+            'amount_khr'     => $amountKhr,
+            'status'         => 'pending',
+            'payment_method' => $data['payment_method'] ?? 'bank_transfer',
+            'account_number' => $data['account_number'] ?? null,
+            'account_name'   => $data['account_name'] ?? null,
+            'bank_name'      => $data['bank_name'] ?? null,
+        ]);
 
         return $this->success([
-            'transaction'   => $tx,
-            'balance'       => $user->fresh()->wallet_balance,
+            'withdrawal'     => $withdrawal,
+            'wallet_balance' => $user->fresh()->wallet_balance,
+            'message'        => number_format($amountKhr) . ' ៛ held. Your withdrawal request has been submitted for admin approval.',
         ]);
     }
 }
