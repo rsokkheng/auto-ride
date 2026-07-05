@@ -263,7 +263,7 @@ class SubscriptionController extends ApiController
         $transactions = SubscriptionTransaction::with('plan:id,name,slug,badge_color,icon')
             ->where('user_id', $user->id)
             ->orderByDesc('created_at')
-            ->paginate(20);
+            ->paginate(10);
 
         return response()->json(['data' => $transactions]);
     }

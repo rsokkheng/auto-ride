@@ -77,7 +77,7 @@ class WithdrawalController extends ApiController
 
         $withdrawals = WithdrawalRequest::where('driver_id', $user->id)
             ->orderByDesc('created_at')
-            ->paginate(20);
+            ->paginate(10);
 
         return $this->success([
             'withdrawals'    => $withdrawals,

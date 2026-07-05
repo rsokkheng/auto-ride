@@ -10,7 +10,7 @@ class VehicleController extends ApiController
     public function index(Request $request)
     {
         return $this->success([
-            'vehicles' => Vehicle::with('driver')->paginate(20),
+            'vehicles' => Vehicle::with('driver')->paginate(10),
         ]);
     }
 

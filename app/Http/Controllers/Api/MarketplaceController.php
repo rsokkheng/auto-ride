@@ -64,7 +64,7 @@ class MarketplaceController extends ApiController
                 });
             }
 
-            $products = $query->latest()->paginate(20);
+            $products = $query->latest()->paginate(10);
 
             return $this->success([
                 'total'    => $products->total(),
@@ -98,7 +98,7 @@ class MarketplaceController extends ApiController
         $products = MarketplaceProduct::with(['category', 'images'])
             ->where('seller_id', $user->id)
             ->latest()
-            ->paginate(20);
+            ->paginate(10);
 
         return $this->success(['products' => $products]);
     }
@@ -395,7 +395,7 @@ class MarketplaceController extends ApiController
                   ->where('order_type', 'purchase');
         }
 
-        $orders = $query->latest()->paginate(20);
+        $orders = $query->latest()->paginate(10);
 
         return $this->success([
             'total'  => $orders->total(),

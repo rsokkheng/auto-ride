@@ -51,9 +51,33 @@ class WalletController extends ApiController
         $user = $this->authUser($request);
         if (! $user) return $this->unauthorized();
 
-        $transactions = $user->walletTransactions()->paginate(30);
+        $perPage = min((int) $request->query('per_page', 10), 100);
+        $date    = $request->query('date');   // YYYY-MM-DD  or  "today"
+        $type    = $request->query('type');
 
-        return $this->success(['transactions' => $transactions]);
+        $query = $user->walletTransactions();
+
+        if ($date) {
+            $day = $date === 'today' ? now()->toDateString() : $date;
+            $query->whereDate('created_at', $day);
+        }
+
+        if ($type) {
+            $query->where('type', $type);
+        }
+
+        $paginator = $query->paginate($perPage);
+
+        return $this->success([
+            'wallet_balance' => $user->wallet_balance,
+            'transactions'   => $paginator->items(),
+            'pagination'     => [
+                'total'        => $paginator->total(),
+                'per_page'     => $paginator->perPage(),
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+            ],
+        ]);
     }
 
     // ── Request top-up ───────────────────────────────────────────────────────

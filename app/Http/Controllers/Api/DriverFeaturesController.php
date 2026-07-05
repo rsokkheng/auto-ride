@@ -254,7 +254,7 @@ class DriverFeaturesController extends ApiController
 
         $drivers = User::where('role', 'driver')
             ->where('approval_status', 'pending')
-            ->paginate(20);
+            ->paginate(10);
 
         return $this->success(['drivers' => $drivers]);
     }
@@ -419,24 +419,24 @@ class DriverFeaturesController extends ApiController
 
         switch ($filter) {
             case 'rides':
-                $rides      = $ridesQ->latest('created_at')->paginate(20);
+                $rides      = $ridesQ->latest('created_at')->paginate(10);
                 $deliveries = collect();
                 break;
             case 'deliveries':
                 $rides      = collect();
-                $deliveries = $delivQ->latest('created_at')->paginate(20);
+                $deliveries = $delivQ->latest('created_at')->paginate(10);
                 break;
             case 'completed':
-                $rides      = $ridesQ->where('status', 'completed')->latest('completed_at')->paginate(20);
-                $deliveries = $delivQ->where('status', 'completed')->latest('updated_at')->paginate(20);
+                $rides      = $ridesQ->where('status', 'completed')->latest('completed_at')->paginate(10);
+                $deliveries = $delivQ->where('status', 'completed')->latest('updated_at')->paginate(10);
                 break;
             case 'cancelled':
-                $rides      = $ridesQ->where('status', 'cancelled')->latest('cancelled_at')->paginate(20);
-                $deliveries = $delivQ->where('status', 'cancelled')->latest('updated_at')->paginate(20);
+                $rides      = $ridesQ->where('status', 'cancelled')->latest('cancelled_at')->paginate(10);
+                $deliveries = $delivQ->where('status', 'cancelled')->latest('updated_at')->paginate(10);
                 break;
             default: // all
-                $rides      = $ridesQ->latest('created_at')->paginate(20);
-                $deliveries = $delivQ->latest('created_at')->paginate(20);
+                $rides      = $ridesQ->latest('created_at')->paginate(10);
+                $deliveries = $delivQ->latest('created_at')->paginate(10);
         }
 
         $rideItems = ($rides instanceof \Illuminate\Pagination\LengthAwarePaginator ? $rides->items() : $rides)

@@ -33,7 +33,7 @@ class DeliveryController extends ApiController
         $user = $this->authUser($request);
         if (! $user) return $this->unauthorized();
 
-        $perPage = min((int) ($request->query('per_page', 20)), 100);
+        $perPage = min((int) ($request->query('per_page', 10)), 100);
         $status  = $request->query('status');
 
         if ($user->role === 'driver') {
@@ -80,7 +80,7 @@ class DeliveryController extends ApiController
             ->whereIn('status', ['requested', 'pending'])
             ->whereNull('driver_id')
             ->orderBy('created_at')
-            ->paginate(20);
+            ->paginate(10);
 
         return $this->success(['deliveries' => $deliveries]);
     }
@@ -162,7 +162,7 @@ class DeliveryController extends ApiController
         $user = $this->authUser($request);
         if (! $user) return $this->unauthorized();
 
-        $perPage = min((int) ($request->query('per_page', 20)), 100);
+        $perPage = min((int) ($request->query('per_page', 10)), 100);
         $status  = $request->query('status');
 
         if ($user->role === 'driver') {

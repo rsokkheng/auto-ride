@@ -14,7 +14,7 @@ class NotificationController extends ApiController
 
         $notifications = PushNotification::where('user_id', $user->id)
             ->orderByDesc('created_at')
-            ->paginate(30);
+            ->paginate(10);
 
         return $this->success([
             'notifications' => $notifications->items(),

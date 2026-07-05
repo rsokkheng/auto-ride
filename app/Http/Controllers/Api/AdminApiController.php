@@ -194,7 +194,7 @@ class AdminApiController extends ApiController
                 ->orWhere('phone', 'like', $s));
         }
 
-        $users = $query->paginate((int) $request->input('per_page', 20));
+        $users = $query->paginate((int) $request->input('per_page', 10));
 
         return $this->ok($users);
     }
@@ -293,7 +293,7 @@ class AdminApiController extends ApiController
             $query->where(fn ($q) => $q->where('name', 'like', $s)->orWhere('phone', 'like', $s));
         }
 
-        return $this->ok($query->paginate((int) $request->input('per_page', 20)));
+        return $this->ok($query->paginate((int) $request->input('per_page', 10)));
     }
 
     /** GET /api/v1/admin/drivers/{driver} */
@@ -373,7 +373,7 @@ class AdminApiController extends ApiController
         if ($request->filled('passenger_id')) $query->where('passenger_id', $request->passenger_id);
         if ($request->filled('date'))         $query->whereDate('created_at', $request->date);
 
-        return $this->ok($query->paginate((int) $request->input('per_page', 20)));
+        return $this->ok($query->paginate((int) $request->input('per_page', 10)));
     }
 
     /** GET /api/v1/admin/rides/{ride} */
@@ -425,7 +425,7 @@ class AdminApiController extends ApiController
         if ($request->filled('service_type')) $query->where('service_type', $request->service_type);
         if ($request->filled('date'))         $query->whereDate('created_at', $request->date);
 
-        return $this->ok($query->paginate((int) $request->input('per_page', 20)));
+        return $this->ok($query->paginate((int) $request->input('per_page', 10)));
     }
 
     /** GET /api/v1/admin/deliveries/{delivery} */
@@ -455,7 +455,7 @@ class AdminApiController extends ApiController
             $query->where('status', $request->status);
         }
 
-        return $this->ok($query->paginate((int) $request->input('per_page', 20)));
+        return $this->ok($query->paginate((int) $request->input('per_page', 10)));
     }
 
     /**
@@ -532,7 +532,7 @@ class AdminApiController extends ApiController
 
         if ($request->filled('status')) $query->where('status', $request->status);
 
-        return $this->ok($query->paginate((int) $request->input('per_page', 20)));
+        return $this->ok($query->paginate((int) $request->input('per_page', 10)));
     }
 
     /**
@@ -593,7 +593,7 @@ class AdminApiController extends ApiController
         if ($request->filled('status'))   $query->where('status', $request->status);
         if ($request->filled('priority')) $query->where('priority', $request->priority);
 
-        return $this->ok($query->paginate((int) $request->input('per_page', 20)));
+        return $this->ok($query->paginate((int) $request->input('per_page', 10)));
     }
 
     /** GET /api/v1/admin/support/{ticket} */
@@ -664,7 +664,7 @@ class AdminApiController extends ApiController
         if ($request->filled('user_id')) $query->where('user_id', $request->user_id);
         if ($request->filled('date'))    $query->whereDate('created_at', $request->date);
 
-        return $this->ok($query->paginate((int) $request->input('per_page', 30)));
+        return $this->ok($query->paginate((int) $request->input('per_page', 10)));
     }
 
     // ─── Banners ─────────────────────────────────────────────────────────────
@@ -881,6 +881,6 @@ class AdminApiController extends ApiController
 
         if ($request->filled('type')) $query->where('type', $request->type);
 
-        return $this->ok($query->paginate((int) $request->input('per_page', 20)));
+        return $this->ok($query->paginate((int) $request->input('per_page', 10)));
     }
 }

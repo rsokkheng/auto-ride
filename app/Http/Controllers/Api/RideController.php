@@ -33,7 +33,7 @@ class RideController extends ApiController
         if (! $user) return $this->unauthorized();
 
         $status  = $request->query('status');
-        $perPage = (int) ($request->query('per_page', 20));
+        $perPage = (int) ($request->query('per_page', 10));
         $perPage = min(max($perPage, 1), 100);
 
         $query = $user->role === 'driver'
@@ -125,7 +125,7 @@ class RideController extends ApiController
             ->where('status', Ride::STATUS_REQUESTED)
             ->whereNull('driver_id')
             ->orderBy('created_at')
-            ->paginate(20);
+            ->paginate(10);
 
         return $this->success(['rides' => $rides]);
     }

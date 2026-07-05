@@ -215,7 +215,7 @@ class BusinessController extends ApiController
             $query->where('completed_at', '<=', $request->input('to'));
         }
 
-        $rides    = $query->orderByDesc('completed_at')->paginate(20);
+        $rides    = $query->orderByDesc('completed_at')->paginate(10);
         $totalKhr = (clone $query)->sum('fare');
 
         return response()->json([

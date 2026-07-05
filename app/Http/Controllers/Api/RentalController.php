@@ -266,7 +266,7 @@ class RentalController extends ApiController
         $user = $this->authUser($request);
         if (! $user) return $this->unauthorized();
 
-        $perPage = min((int) $request->query('per_page', 15), 100);
+        $perPage = min((int) $request->query('per_page', 10), 100);
         $status  = $request->query('status');
 
         $query = CarRental::with(['marketplaceProduct.images'])

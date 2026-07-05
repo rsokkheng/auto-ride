@@ -125,7 +125,7 @@ class QrPaymentController extends ApiController
 
         $payments = QrPayment::where('user_id', $user->id)
             ->orderByDesc('id')
-            ->paginate(20);
+            ->paginate(10);
 
         return $this->success($payments);
     }
