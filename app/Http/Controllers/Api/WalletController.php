@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\PricingSetting;
 use App\Models\TopUpRequest;
 use App\Models\User;
 use App\Services\WalletService;
@@ -21,10 +22,27 @@ class WalletController extends ApiController
 
         $transactions = $user->walletTransactions()->limit(20)->get();
 
+        $pendingWithdrawal = \App\Models\WithdrawalRequest::where('driver_id', $user->id)
+            ->where('status', 'pending')
+            ->latest()
+            ->first();
+
+        $balance    = (int) $user->wallet_balance;
+        $minBalance = (int) PricingSetting::get('driver_min_balance_khr', 50000);
+
         return $this->success([
-            'balance'      => $user->wallet_balance,
-            'currency'     => 'KHR',
-            'transactions' => $transactions,
+            'balance'             => $balance,
+            'balance_khr'         => $balance,
+            'balance_usd'         => round($balance / 4000, 2),
+            'currency'            => 'KHR',
+            'can_withdraw'        => $balance >= $minBalance && ! $pendingWithdrawal,
+            'min_withdrawal_khr'  => $minBalance,
+            'pending_withdrawal'  => $pendingWithdrawal ? [
+                'id'         => $pendingWithdrawal->id,
+                'amount_khr' => $pendingWithdrawal->amount_khr,
+                'status'     => $pendingWithdrawal->status,
+            ] : null,
+            'transactions'        => $transactions,
         ]);
     }
 
@@ -38,10 +56,18 @@ class WalletController extends ApiController
         $khr = (int) $user->wallet_balance;
         $usd = round($khr / 4000, 2);
 
+        $hasPending = \App\Models\WithdrawalRequest::where('driver_id', $user->id)
+            ->where('status', 'pending')
+            ->exists();
+
+        $minBalance = (int) PricingSetting::get('driver_min_balance_khr', 50000);
+
         return $this->success([
-            'balance_khr' => $khr,
-            'balance_usd' => $usd,
-            'currency'    => 'KHR',
+            'balance_khr'        => $khr,
+            'balance_usd'        => $usd,
+            'currency'           => 'KHR',
+            'can_withdraw'       => $khr >= $minBalance && ! $hasPending,
+            'min_withdrawal_khr' => $minBalance,
         ]);
     }
 
@@ -174,11 +200,12 @@ class WalletController extends ApiController
         if (! $user) return $this->unauthorized();
 
         // Accept both `amount_khr` (driver endpoint) and `amount` (wallet endpoint)
-        $amountKhr = (int) ($request->input('amount_khr') ?? $request->input('amount') ?? 0);
+        $amountKhr  = (int) ($request->input('amount_khr') ?? $request->input('amount') ?? 0);
+        $minBalance = (int) PricingSetting::get('driver_min_balance_khr', 50000);
 
         $data = $request->validate([
-            'amount_khr'     => 'nullable|integer|min:50000',
-            'amount'         => 'nullable|integer|min:50000',
+            'amount_khr'     => "nullable|integer|min:{$minBalance}",
+            'amount'         => "nullable|integer|min:{$minBalance}",
             'payment_method' => 'nullable|in:bank_transfer,aba,wing,acleda',
             'account_number' => 'nullable|string|max:100',
             'account_name'   => 'nullable|string|max:100',
@@ -186,10 +213,10 @@ class WalletController extends ApiController
             'note'           => 'nullable|string|max:255',
         ]);
 
-        if ($amountKhr < 50000) {
+        if ($amountKhr < $minBalance) {
             return response()->json([
                 'success' => false,
-                'message' => 'Minimum withdrawal is 50,000 ៛.',
+                'message' => 'Minimum withdrawal is ' . number_format($minBalance) . ' ៛.',
             ], 422);
         }
 

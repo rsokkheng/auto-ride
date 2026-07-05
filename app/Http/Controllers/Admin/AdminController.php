@@ -911,6 +911,7 @@ class AdminController extends Controller
             'delivery_express_multiplier'    => 'required|numeric|min:1|max:10',
             'avg_city_speed_kmh'             => 'required|integer|min:5|max:120',
             'traffic_speed_threshold_kmh'    => 'required|integer|min:5|max:60',
+            'driver_min_balance_khr'         => 'required|integer|min:0',
         ]);
 
         foreach ($data as $key => $value) {

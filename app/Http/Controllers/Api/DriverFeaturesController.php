@@ -6,6 +6,7 @@ use App\Models\Ride;
 use App\Models\Delivery;
 use App\Models\DriverIncentive;
 use App\Models\DriverSession;
+use App\Models\PricingSetting;
 use App\Models\RideDecline;
 use App\Models\User;
 use App\Models\WithdrawalRequest;
@@ -340,8 +341,8 @@ class DriverFeaturesController extends ApiController
             'currency'               => 'KHR',
             'wallet_balance'         => $user->wallet_balance,
             'wallet_balance_usd'     => round($user->wallet_balance / 4000, 2),
-            'can_withdraw'           => $user->wallet_balance >= 50000 && ! $pendingWithdrawal,
-            'min_withdrawal_khr'     => 50000,
+            'can_withdraw'           => $user->wallet_balance >= (int) PricingSetting::get('driver_min_balance_khr', 50000) && ! $pendingWithdrawal,
+            'min_withdrawal_khr'     => (int) PricingSetting::get('driver_min_balance_khr', 50000),
             'pending_withdrawal'     => $pendingWithdrawal ? [
                 'id'             => $pendingWithdrawal->id,
                 'amount_khr'     => $pendingWithdrawal->amount_khr,

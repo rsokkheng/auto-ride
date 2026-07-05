@@ -215,6 +215,19 @@ $colors = [
                     </div>
                     <small class="text-muted">Per-min rate activates below this speed</small>
                 </div>
+                <div class="col-md-3 mb-3">
+                    <label class="field-label">
+                        <i class="fas fa-wallet text-warning mr-1"></i>
+                        Driver Min. Wallet Balance
+                    </label>
+                    <div class="input-group">
+                        <input type="number" name="driver_min_balance_khr" class="form-control"
+                               value="{{ $settings['driver_min_balance_khr']->value ?? 50000 }}"
+                               min="0" step="1000" required>
+                        <div class="input-group-append"><span class="input-group-text">៛</span></div>
+                    </div>
+                    <small class="text-muted">Required to go online &amp; withdraw</small>
+                </div>
             </div>
             <button type="submit" class="btn btn-primary">
                 <i class="fas fa-save mr-1"></i> Save Global Settings

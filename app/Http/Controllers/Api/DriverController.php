@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Delivery;
 use App\Models\DriverSession;
+use App\Models\PricingSetting;
 use App\Models\Ride;
 use App\Models\RideDecline;
 use App\Models\RideLocation;
@@ -100,6 +101,9 @@ class DriverController extends ApiController
 
         return $this->success([
             'driver'            => $user,
+            'can_go_online'     => $user->wallet_balance >= (int) PricingSetting::get('driver_min_balance_khr', 50000),
+            'min_balance_khr'   => (int) PricingSetting::get('driver_min_balance_khr', 50000),
+            'wallet_balance'    => (int) $user->wallet_balance,
             'active_rides'      => Ride::where('driver_id', $user->id)->whereIn('status', ['accepted', 'on_route', 'in_progress'])->get(),
             'active_deliveries' => Delivery::where('driver_id', $user->id)->whereIn('status', ['accepted', 'in_transit'])->get(),
         ]);
@@ -115,6 +119,19 @@ class DriverController extends ApiController
             'status_note' => 'nullable|string|max:255',
         ]);
 
+        // Block going online when wallet balance is below minimum
+        $minBalance = (int) PricingSetting::get('driver_min_balance_khr', 50000);
+        if ($data['available'] && $user->wallet_balance < $minBalance) {
+            return response()->json([
+                'success'         => false,
+                'message'         => 'Your wallet balance is too low to go online. Please top up at least ' . number_format($minBalance) . ' ៛ to continue.',
+                'can_go_online'   => false,
+                'wallet_balance'  => (int) $user->wallet_balance,
+                'min_balance_khr' => $minBalance,
+                'short_by_khr'    => $minBalance - (int) $user->wallet_balance,
+            ], 403);
+        }
+
         $user->update([
             'available'   => $data['available'],
             'status_note' => $data['status_note'] ?? null,
@@ -128,12 +145,25 @@ class DriverController extends ApiController
     public function goOnline(Request $request)
     {
         $user = $this->authUser($request);
-        if ($user) {
-            // Close any open session first (safety), then open new one
-            DriverSession::where('driver_id', $user->id)->whereNull('ended_at')
-                ->update(['ended_at' => now()]);
-            DriverSession::create(['driver_id' => $user->id, 'started_at' => now()]);
+        if (! $user || $user->role !== 'driver') return $this->unauthorized();
+
+        $minBalance = (int) PricingSetting::get('driver_min_balance_khr', 50000);
+        if ($user->wallet_balance < $minBalance) {
+            return response()->json([
+                'success'         => false,
+                'message'         => 'Your wallet balance is too low to go online. Please top up at least ' . number_format($minBalance) . ' ៛ to continue.',
+                'can_go_online'   => false,
+                'wallet_balance'  => (int) $user->wallet_balance,
+                'min_balance_khr' => $minBalance,
+                'short_by_khr'    => $minBalance - (int) $user->wallet_balance,
+            ], 403);
         }
+
+        // Close any open session first (safety), then open new one
+        DriverSession::where('driver_id', $user->id)->whereNull('ended_at')
+            ->update(['ended_at' => now()]);
+        DriverSession::create(['driver_id' => $user->id, 'started_at' => now()]);
+
         return $this->setAvailability($request->merge(['available' => true]));
     }
 

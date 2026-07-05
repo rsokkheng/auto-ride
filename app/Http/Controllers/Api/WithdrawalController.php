@@ -2,14 +2,13 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\PricingSetting;
 use App\Models\WithdrawalRequest;
 use App\Services\WalletService;
 use Illuminate\Http\Request;
 
 class WithdrawalController extends ApiController
 {
-    private const MIN_WITHDRAWAL = 50000;  // 50,000 KHR minimum
-
     public function __construct(private WalletService $wallet) {}
 
     /**
@@ -21,8 +20,10 @@ class WithdrawalController extends ApiController
         $user = $this->authUser($request);
         if (! $user || $user->role !== 'driver') return $this->unauthorized();
 
+        $minBalance = (int) PricingSetting::get('driver_min_balance_khr', 50000);
+
         $data = $request->validate([
-            'amount_khr'     => 'required|integer|min:' . self::MIN_WITHDRAWAL,
+            'amount_khr'     => "required|integer|min:{$minBalance}",
             'payment_method' => 'required|in:bank_transfer,aba,wing,acleda',
             'account_number' => 'required|string|max:100',
             'account_name'   => 'required|string|max:100',
