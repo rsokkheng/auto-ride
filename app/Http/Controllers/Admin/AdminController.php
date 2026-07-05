@@ -1619,6 +1619,12 @@ class AdminController extends Controller
             'processed_by' => Auth::id(),
         ]);
 
+        // Mark the hold transaction as completed so driver sees it as approved
+        WalletTransaction::where('reference_type', WithdrawalRequest::class)
+            ->where('reference_id', $withdrawal->id)
+            ->where('type', 'withdrawal_hold')
+            ->update(['status' => 'completed']);
+
         return redirect()->route('admin.withdrawals')
             ->with('success', number_format($withdrawal->amount_khr) . ' ៛ withdrawal approved for ' . $withdrawal->driver->name . '.');
     }
@@ -1631,13 +1637,18 @@ class AdminController extends Controller
 
         $data = $request->validate(['admin_note' => 'nullable|string|max:500']);
 
-        // Return funds to driver wallet
+        // Return funds to driver wallet and mark hold as cancelled
         app(\App\Services\WalletService::class)->credit(
             $withdrawal->driver,
             $withdrawal->amount_khr,
             'withdrawal_rejected',
             'Withdrawal request rejected — funds returned'
         );
+
+        WalletTransaction::where('reference_type', WithdrawalRequest::class)
+            ->where('reference_id', $withdrawal->id)
+            ->where('type', 'withdrawal_hold')
+            ->update(['status' => 'cancelled']);
 
         $withdrawal->update([
             'status'       => 'rejected',

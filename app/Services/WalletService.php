@@ -35,12 +35,13 @@ class WalletService
         string $note = '',
         ?Model $reference = null,
         ?int   $actorId = null,
+        string $status = 'completed',
     ): WalletTransaction {
         if ($user->wallet_balance < $amount) {
             throw new \RuntimeException("Insufficient wallet balance.");
         }
 
-        return $this->record($user, 'debit', $amount, $type, $note, $reference, $actorId);
+        return $this->record($user, 'debit', $amount, $type, $note, $reference, $actorId, $status);
     }
 
     /**

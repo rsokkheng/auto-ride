@@ -46,18 +46,22 @@ class WithdrawalController extends ApiController
             ], 422);
         }
 
-        // Hold the amount (deduct from wallet immediately, return if rejected)
-        $this->wallet->debit($user, $data['amount_khr'], 'withdrawal_hold', 'Withdrawal request hold');
+        $withdrawal = \Illuminate\Support\Facades\DB::transaction(function () use ($user, $data) {
+            $withdrawal = WithdrawalRequest::create([
+                'driver_id'      => $user->id,
+                'amount_khr'     => $data['amount_khr'],
+                'status'         => 'pending',
+                'payment_method' => $data['payment_method'],
+                'account_number' => $data['account_number'],
+                'account_name'   => $data['account_name'],
+                'bank_name'      => $data['bank_name'] ?? null,
+            ]);
 
-        $withdrawal = WithdrawalRequest::create([
-            'driver_id'      => $user->id,
-            'amount_khr'     => $data['amount_khr'],
-            'status'         => 'pending',
-            'payment_method' => $data['payment_method'],
-            'account_number' => $data['account_number'],
-            'account_name'   => $data['account_name'],
-            'bank_name'      => $data['bank_name'] ?? null,
-        ]);
+            // Hold the amount — status 'pending' so driver sees it as pending until admin approves
+            $this->wallet->debit($user, $data['amount_khr'], 'withdrawal_hold', 'Withdrawal request hold', $withdrawal, null, 'pending');
+
+            return $withdrawal;
+        });
 
         return $this->success([
             'withdrawal'     => $withdrawal,

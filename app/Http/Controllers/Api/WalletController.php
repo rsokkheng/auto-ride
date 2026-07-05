@@ -6,6 +6,7 @@ use App\Models\TopUpRequest;
 use App\Models\User;
 use App\Services\WalletService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class WalletController extends ApiController
 {
@@ -210,18 +211,22 @@ class WalletController extends ApiController
             ], 422);
         }
 
-        // Hold the amount — deducted from wallet, returned if admin rejects
-        $this->wallet->debit($user, $amountKhr, 'withdrawal_hold', 'Withdrawal request hold');
+        $withdrawal = DB::transaction(function () use ($user, $amountKhr, $data) {
+            $withdrawal = \App\Models\WithdrawalRequest::create([
+                'driver_id'      => $user->id,
+                'amount_khr'     => $amountKhr,
+                'status'         => 'pending',
+                'payment_method' => $data['payment_method'] ?? 'bank_transfer',
+                'account_number' => $data['account_number'] ?? null,
+                'account_name'   => $data['account_name'] ?? null,
+                'bank_name'      => $data['bank_name'] ?? null,
+            ]);
 
-        $withdrawal = \App\Models\WithdrawalRequest::create([
-            'driver_id'      => $user->id,
-            'amount_khr'     => $amountKhr,
-            'status'         => 'pending',
-            'payment_method' => $data['payment_method'] ?? 'bank_transfer',
-            'account_number' => $data['account_number'] ?? null,
-            'account_name'   => $data['account_name'] ?? null,
-            'bank_name'      => $data['bank_name'] ?? null,
-        ]);
+            // Hold the amount — status 'pending' so driver sees it as pending until admin approves
+            $this->wallet->debit($user, $amountKhr, 'withdrawal_hold', 'Withdrawal request hold', $withdrawal, null, 'pending');
+
+            return $withdrawal;
+        });
 
         return $this->success([
             'withdrawal'     => $withdrawal,
