@@ -1562,7 +1562,7 @@ class AdminController extends Controller
             ->with('success', "Driver {$driver->name} has been {$label}.");
     }
 
-    public function reviewDocument(Request $request, User $driver, \App\Models\DriverDocument $document)
+    public function reviewDocument(Request $request, User $_driver, \App\Models\DriverDocument $document)
     {
         $data = $request->validate([
             'action' => 'required|in:approve,reject',
@@ -1647,15 +1647,18 @@ class AdminController extends Controller
 
         $withdrawals = $query->get();
 
-        $filename = 'withdrawals_' . $status . '_' . now()->format('Ymd_His') . '.csv';
+        $filename = 'withdrawals_' . $status . '_' . now()->format('Ymd_His') . '.xlsx';
 
         $headers = [
-            'Content-Type'        => 'text/csv',
+            'Content-Type'        => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            'Cache-Control'       => 'max-age=0',
         ];
 
         $callback = function () use ($withdrawals) {
             $out = fopen('php://output', 'w');
+            // UTF-8 BOM so Excel reads Khmer names correctly
+            fputs($out, "\xEF\xBB\xBF");
             fputcsv($out, ['ID', 'Driver Name', 'Phone', 'Amount (KHR)', 'Amount (USD)', 'Method', 'Bank', 'Account Name', 'Account Number', 'Requested At', 'Status']);
             foreach ($withdrawals as $w) {
                 fputcsv($out, [
@@ -1669,7 +1672,7 @@ class AdminController extends Controller
                     $w->account_name ?? '',
                     $w->account_number ?? '',
                     $w->created_at->format('Y-m-d H:i:s'),
-                    $w->status,
+                    ucfirst($w->status),
                 ]);
             }
             fclose($out);
@@ -1931,7 +1934,7 @@ class AdminController extends Controller
 
     // ─── Business Accounts ────────────────────────────────────────────────────
 
-    public function businessAccounts(Request $request)
+    public function businessAccounts()
     {
         $emptyPage = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
         return view('admin.business-accounts', [

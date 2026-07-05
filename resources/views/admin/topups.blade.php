@@ -25,7 +25,7 @@
             <tbody>
                 @forelse($pending as $t)
                 <tr>
-                    <td>{{ ($pending->currentPage() - 1) * $pending->perPage() + $loop->iteration }}</td>
+                    <td>{{ $loop->iteration }}</td>
                     <td>
                         <strong>{{ $t->user->name }}</strong><br>
                         <small class="text-muted">{{ $t->user->phone ?? $t->user->email }}</small>
