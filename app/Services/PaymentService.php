@@ -12,13 +12,11 @@ use Illuminate\Support\Facades\DB;
 /**
  * Unified payment processor for deliveries and rides.
  *
- * Payment method behaviour:
- *  cash        – creates a PENDING transaction; wallet credit happens when
- *                admin/driver confirms receipt (confirmCash).
- *  wallet      – deducts sender/passenger wallet immediately; driver wallet
- *                credited on completion.
- *  aba / wing / other_online – creates a PENDING transaction (waiting for
- *                gateway callback); admin confirms via confirmOnline.
+ * Driver earnings are credited to the driver wallet immediately on trip
+ * completion, regardless of payment method. The TransactionRecord is an
+ * audit log only — no admin confirmation is needed for trip earnings.
+ *
+ * Admin confirmation is required only for driver withdrawal requests.
  */
 class PaymentService
 {
@@ -38,11 +36,20 @@ class PaymentService
             : ['gross_amount' => $fare, 'platform_fee' => 0, 'company_share' => 0, 'driver_earning' => $fare, 'platform_rate' => 0, 'driver_type' => 'owner'];
 
         $method = $delivery->payment_method ?? 'cash';
-        $isCash = $method === 'cash';
-        $isOnline = in_array($method, ['aba', 'wing', 'other_online']);
 
-        return DB::transaction(function () use ($delivery, $driver, $split, $method, $isCash, $isOnline, $fare) {
-            $status = ($isCash || $isOnline) ? 'pending' : 'completed';
+        return DB::transaction(function () use ($delivery, $driver, $split, $method, $fare) {
+            // Deduct from passenger wallet if paying by wallet
+            if ($method === 'wallet') {
+                $sender = $delivery->sender;
+                if ($sender && $sender->wallet_balance >= $fare) {
+                    $this->wallet->debit($sender, $fare, 'delivery_payment', "Delivery #{$delivery->id} fee", $delivery);
+                }
+            }
+
+            // Always credit driver earning immediately — no admin confirmation needed
+            if ($driver && $split['driver_earning'] > 0) {
+                $this->wallet->processTripPayment($driver, $split, $delivery);
+            }
 
             $record = TransactionRecord::create([
                 'reference_type' => Delivery::class,
@@ -56,23 +63,11 @@ class PaymentService
                 'platform_fee'   => $split['platform_fee'],
                 'company_share'  => $split['company_share'],
                 'driver_earning' => $split['driver_earning'],
-                'status'         => $status,
+                'status'         => 'completed',
                 'note'           => "Delivery #{$delivery->id}",
             ]);
 
-            // Wallet payment: deduct from sender & update delivery immediately.
-            if ($method === 'wallet') {
-                $sender = $delivery->sender;
-                if ($sender && $sender->wallet_balance >= $fare) {
-                    $this->wallet->debit($sender, $fare, 'delivery_payment', "Delivery #{$delivery->id} fee", $delivery);
-                }
-                if ($driver && $split['driver_earning'] > 0) {
-                    $this->wallet->processTripPayment($driver, $split, $delivery);
-                }
-                $delivery->update(['payment_status' => 'paid']);
-            } else {
-                $delivery->update(['payment_status' => 'pending']);
-            }
+            $delivery->update(['payment_status' => 'paid']);
 
             return $record;
         });
@@ -88,12 +83,21 @@ class PaymentService
             ? $this->commission->split($fare, $driver)
             : ['gross_amount' => $fare, 'platform_fee' => 0, 'company_share' => 0, 'driver_earning' => $fare, 'platform_rate' => 0, 'driver_type' => 'owner'];
 
-        $method   = $ride->payment_method ?? 'cash';
-        $isCash   = $method === 'cash';
-        $isOnline = in_array($method, ['aba', 'wing', 'other_online']);
+        $method = $ride->payment_method ?? 'cash';
 
-        return DB::transaction(function () use ($ride, $driver, $split, $method, $isCash, $isOnline, $fare) {
-            $status = ($isCash || $isOnline) ? 'pending' : 'completed';
+        return DB::transaction(function () use ($ride, $driver, $split, $method, $fare) {
+            // Deduct from passenger wallet if paying by wallet
+            if ($method === 'wallet') {
+                $passenger = $ride->passenger;
+                if ($passenger && $passenger->wallet_balance >= $fare) {
+                    $this->wallet->debit($passenger, $fare, 'ride_payment', "Ride #{$ride->id} fare", $ride);
+                }
+            }
+
+            // Always credit driver earning immediately — no admin confirmation needed
+            if ($driver && $split['driver_earning'] > 0) {
+                $this->wallet->processTripPayment($driver, $split, $ride);
+            }
 
             $record = TransactionRecord::create([
                 'reference_type' => Ride::class,
@@ -107,22 +111,11 @@ class PaymentService
                 'platform_fee'   => $split['platform_fee'],
                 'company_share'  => $split['company_share'],
                 'driver_earning' => $split['driver_earning'],
-                'status'         => $status,
+                'status'         => 'completed',
                 'note'           => "Ride #{$ride->id}",
             ]);
 
-            if ($method === 'wallet') {
-                $passenger = $ride->passenger;
-                if ($passenger && $passenger->wallet_balance >= $fare) {
-                    $this->wallet->debit($passenger, $fare, 'ride_payment', "Ride #{$ride->id} fare", $ride);
-                }
-                if ($driver && $split['driver_earning'] > 0) {
-                    $this->wallet->processTripPayment($driver, $split, $ride);
-                }
-                $ride->update(['payment_status' => 'paid']);
-            } else {
-                $ride->update(['payment_status' => 'pending']);
-            }
+            $ride->update(['payment_status' => 'paid']);
 
             return $record;
         });
