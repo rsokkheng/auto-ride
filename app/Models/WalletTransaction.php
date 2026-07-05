@@ -37,6 +37,8 @@ class WalletTransaction extends Model
         'company_commission'  => 'Company Fee',
         'rental_fee'          => 'Rental Fee',
         'withdrawal'          => 'Withdrawal',
+        'withdrawal_hold'     => 'Withdrawal (Hold)',
+        'withdrawal_rejected' => 'Withdrawal Refund',
         'bonus'               => 'Bonus',
         'adjustment'          => 'Adjustment',
     ];

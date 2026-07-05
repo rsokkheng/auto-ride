@@ -1588,9 +1588,9 @@ class AdminController extends Controller
 
         return view('admin.withdrawals', [
             'withdrawals' => rescue(
-                fn () => WithdrawalRequest::with('driver')
+                fn () => WithdrawalRequest::with(['driver', 'processor'])
                     ->where('status', $status)
-                    ->orderBy('created_at')
+                    ->orderByDesc('id')
                     ->paginate(20),
                 $emptyPage,
                 false

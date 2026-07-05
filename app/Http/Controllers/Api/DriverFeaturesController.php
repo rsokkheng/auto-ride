@@ -8,6 +8,7 @@ use App\Models\DriverIncentive;
 use App\Models\DriverSession;
 use App\Models\RideDecline;
 use App\Models\User;
+use App\Models\WithdrawalRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -152,6 +153,7 @@ class DriverFeaturesController extends ApiController
             'delivery_count'   => $deliveryCount,
             'breakdown'        => $breakdown,
             'currency'         => 'KHR',
+            'wallet_balance'   => $user->wallet_balance,
         ]);
     }
 
@@ -325,11 +327,29 @@ class DriverFeaturesController extends ApiController
         $totalTrips = Ride::where('driver_id', $user->id)->where('status', 'completed')->count()
             + Delivery::where('driver_id', $user->id)->where('status', 'completed')->count();
 
+        $user->refresh();
+        $pendingWithdrawal = WithdrawalRequest::where('driver_id', $user->id)
+            ->where('status', 'pending')
+            ->orderByDesc('id')
+            ->first();
+
         return $this->success([
-            'today_khr'   => $todayKhr,
-            'week_khr'    => $weekKhr,
-            'total_trips' => $totalTrips,
-            'currency'    => 'KHR',
+            'today_khr'              => $todayKhr,
+            'week_khr'               => $weekKhr,
+            'total_trips'            => $totalTrips,
+            'currency'               => 'KHR',
+            'wallet_balance'         => $user->wallet_balance,
+            'wallet_balance_usd'     => round($user->wallet_balance / 4000, 2),
+            'can_withdraw'           => $user->wallet_balance >= 50000 && ! $pendingWithdrawal,
+            'min_withdrawal_khr'     => 50000,
+            'pending_withdrawal'     => $pendingWithdrawal ? [
+                'id'             => $pendingWithdrawal->id,
+                'amount_khr'     => $pendingWithdrawal->amount_khr,
+                'payment_method' => $pendingWithdrawal->payment_method,
+                'account_name'   => $pendingWithdrawal->account_name,
+                'account_number' => $pendingWithdrawal->account_number,
+                'created_at'     => $pendingWithdrawal->created_at->toDateTimeString(),
+            ] : null,
         ]);
     }
 
