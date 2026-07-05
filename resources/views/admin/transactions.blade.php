@@ -77,16 +77,36 @@
                     $icon  = \App\Models\TransactionRecord::$methodIcons[$tx->payment_method]  ?? 'fa-question';
                     $color = \App\Models\TransactionRecord::$methodColors[$tx->payment_method] ?? 'secondary';
                     $sColor = \App\Models\TransactionRecord::$statusColors[$tx->status] ?? 'secondary';
+
+                    if ($tx->type === 'ride_payment') {
+                        $srcLabel = 'Ride';
+                        $srcColor = 'primary';
+                        $srcIcon  = 'fa-car';
+                    } elseif ($tx->type === 'delivery_payment' && optional($tx->reference)->service_type === 'moving') {
+                        $srcLabel = 'Moving';
+                        $srcColor = 'warning';
+                        $srcIcon  = 'fa-truck';
+                    } elseif ($tx->type === 'delivery_payment') {
+                        $srcLabel = 'Delivery';
+                        $srcColor = 'info';
+                        $srcIcon  = 'fa-box';
+                    } else {
+                        $srcLabel = null;
+                    }
                 @endphp
                 <tr id="row-{{ $tx->id }}">
                     <td>{{ ($transactions->currentPage() - 1) * $transactions->perPage() + $loop->iteration }}</td>
                     <td>
-                        <span class="badge badge-light">
-                            {{ \App\Models\TransactionRecord::$typeLabels[$tx->type] ?? $tx->type }}
-                        </span>
-                        <small class="text-muted d-block">
-                            {{ class_basename($tx->reference_type ?? '') }} #{{ $tx->reference_id }}
-                        </small>
+                        @if($srcLabel)
+                            <span class="badge badge-{{ $srcColor }}">
+                                <i class="fas {{ $srcIcon }} mr-1"></i>{{ $srcLabel }}
+                            </span>
+                        @else
+                            <span class="badge badge-light">
+                                {{ \App\Models\TransactionRecord::$typeLabels[$tx->type] ?? $tx->type }}
+                            </span>
+                        @endif
+                        <small class="text-muted d-block">#{{ $tx->reference_id }}</small>
                     </td>
                     <td>{{ $tx->payer?->name ?? '—' }}</td>
                     <td>{{ $tx->payee?->name ?? '—' }}</td>

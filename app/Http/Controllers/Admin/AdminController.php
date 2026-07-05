@@ -1258,7 +1258,7 @@ class AdminController extends Controller
 
     public function transactions(Request $request)
     {
-        $query = TransactionRecord::with(['payer', 'payee', 'processedBy'])
+        $query = TransactionRecord::with(['payer', 'payee', 'processedBy', 'reference'])
             ->orderByDesc('id');
 
         if ($request->filled('method')) {
