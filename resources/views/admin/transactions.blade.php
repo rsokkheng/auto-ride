@@ -4,6 +4,20 @@
 
 @section('content')
 
+{{-- Flash messages --}}
+@if(session('success'))
+<div class="alert alert-success alert-dismissible fade show">
+    <i class="fas fa-check-circle mr-2"></i>{{ session('success') }}
+    <button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>
+</div>
+@endif
+@if(session('error'))
+<div class="alert alert-danger alert-dismissible fade show">
+    <i class="fas fa-exclamation-circle mr-2"></i>{{ session('error') }}
+    <button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>
+</div>
+@endif
+
 {{-- Summary alerts --}}
 @if($pending_cash > 0)
 <div class="alert alert-warning alert-dismissible fade show">
@@ -49,15 +63,27 @@
 </div>
 
 {{-- Transaction table --}}
+<form id="bulkForm" method="POST" action="{{ route('admin.transactions.confirm-bulk') }}">
+@csrf
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h3 class="card-title mb-0"><i class="fas fa-receipt mr-1"></i> All Transactions</h3>
-        <span class="badge badge-secondary">{{ $transactions->total() }} records</span>
+        <div class="d-flex align-items-center">
+            <span class="badge badge-secondary mr-3">{{ $transactions->total() }} records</span>
+            <button type="button" id="confirmSelectedBtn" class="btn btn-sm btn-success d-none"
+                onclick="openBulkConfirm()">
+                <i class="fas fa-check-double mr-1"></i>
+                Confirm Selected (<span id="selectedCount">0</span>)
+            </button>
+        </div>
     </div>
     <div class="card-body table-responsive p-0">
         <table class="table table-hover text-nowrap mb-0">
             <thead>
                 <tr>
+                    <th style="width:40px">
+                        <input type="checkbox" id="selectAll" title="Select all pending">
+                    </th>
                     <th>#</th>
                     <th>Reference</th>
                     <th>Payer</th>
@@ -79,7 +105,12 @@
                     $color = \App\Models\TransactionRecord::$methodColors[$tx->payment_method] ?? 'secondary';
                     $sColor = \App\Models\TransactionRecord::$statusColors[$tx->status] ?? 'secondary';
                 @endphp
-                <tr>
+                <tr id="row-{{ $tx->id }}" class="{{ $tx->isPending() ? 'pending-row' : '' }}">
+                    <td>
+                        @if($tx->isPending())
+                            <input type="checkbox" class="tx-checkbox" name="ids[]" value="{{ $tx->id }}">
+                        @endif
+                    </td>
                     <td>{{ $tx->id }}</td>
                     <td>
                         <span class="badge badge-light">
@@ -118,12 +149,12 @@
                         @if($tx->isPending())
                             <form method="POST" action="{{ route('admin.transactions.confirm', $tx) }}" class="d-inline">
                                 @csrf
-                                <button class="btn btn-xs btn-success"
+                                <button type="submit" class="btn btn-xs btn-success"
                                     onclick="return confirm('Confirm payment of {{ number_format($tx->gross_amount, 0) }} ៛?')">
-                                    <i class="fas fa-check"></i> Confirm
+                                    <i class="fas fa-check"></i>
                                 </button>
                             </form>
-                            <button class="btn btn-xs btn-danger ml-1"
+                            <button type="button" class="btn btn-xs btn-danger ml-1"
                                 onclick="openCancel({{ $tx->id }})">
                                 <i class="fas fa-times"></i>
                             </button>
@@ -133,12 +164,35 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="12" class="text-center text-muted py-4">No transactions found.</td></tr>
+                <tr><td colspan="13" class="text-center text-muted py-4">No transactions found.</td></tr>
                 @endforelse
             </tbody>
         </table>
     </div>
     <div class="card-footer clearfix">{{ $transactions->links() }}</div>
+</div>
+</form>
+
+{{-- Bulk confirm modal --}}
+<div class="modal fade" id="bulkConfirmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-check-double mr-2"></i>Confirm All Selected</h5>
+                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-1">You are about to confirm <strong id="bulkCount">0</strong> pending transaction(s).</p>
+                <p class="text-muted small mb-0">This will credit the driver earning to each driver's wallet.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" onclick="submitBulk()">
+                    <i class="fas fa-check-double mr-1"></i>Yes, Confirm All
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 {{-- Cancel modal --}}
@@ -169,6 +223,51 @@
 
 @push('scripts')
 <script>
+// Select All checkbox
+document.getElementById('selectAll').addEventListener('change', function () {
+    document.querySelectorAll('.tx-checkbox').forEach(cb => cb.checked = this.checked);
+    updateBulkBtn();
+});
+
+// Individual checkbox change
+document.addEventListener('change', function (e) {
+    if (e.target.classList.contains('tx-checkbox')) {
+        updateSelectAll();
+        updateBulkBtn();
+    }
+});
+
+function updateSelectAll() {
+    var all  = document.querySelectorAll('.tx-checkbox');
+    var checked = document.querySelectorAll('.tx-checkbox:checked');
+    var sa = document.getElementById('selectAll');
+    sa.checked = all.length > 0 && checked.length === all.length;
+    sa.indeterminate = checked.length > 0 && checked.length < all.length;
+}
+
+function updateBulkBtn() {
+    var count = document.querySelectorAll('.tx-checkbox:checked').length;
+    var btn = document.getElementById('confirmSelectedBtn');
+    document.getElementById('selectedCount').textContent = count;
+    if (count > 0) {
+        btn.classList.remove('d-none');
+    } else {
+        btn.classList.add('d-none');
+    }
+}
+
+function openBulkConfirm() {
+    var count = document.querySelectorAll('.tx-checkbox:checked').length;
+    if (count === 0) return;
+    document.getElementById('bulkCount').textContent = count;
+    $('#bulkConfirmModal').modal('show');
+}
+
+function submitBulk() {
+    $('#bulkConfirmModal').modal('hide');
+    document.getElementById('bulkForm').submit();
+}
+
 function openCancel(id) {
     document.getElementById('cancelForm').action = '/admin/transactions/' + id + '/cancel';
     $('#cancelModal').modal('show');

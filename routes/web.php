@@ -113,6 +113,7 @@ Route::prefix('admin')->group(function () {
 
     // Transactions
     Route::get('transactions', [AdminController::class, 'transactions'])->name('admin.transactions');
+    Route::post('transactions/confirm-bulk', [AdminController::class, 'confirmTransactionBulk'])->name('admin.transactions.confirm-bulk');
     Route::post('transactions/{transaction}/confirm', [AdminController::class, 'confirmTransaction'])->name('admin.transactions.confirm');
     Route::post('transactions/{transaction}/cancel', [AdminController::class, 'cancelTransaction'])->name('admin.transactions.cancel');
 

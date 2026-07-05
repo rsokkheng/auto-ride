@@ -1259,7 +1259,7 @@ class AdminController extends Controller
     public function transactions(Request $request)
     {
         $query = TransactionRecord::with(['payer', 'payee', 'processedBy'])
-            ->orderBy('created_at');
+            ->orderByDesc('id');
 
         if ($request->filled('method')) {
             $query->where('payment_method', $request->method);
@@ -1290,6 +1290,30 @@ class AdminController extends Controller
 
         return redirect()->route('admin.transactions')
             ->with('success', "Transaction #{$transaction->id} confirmed — " . number_format($transaction->gross_amount, 0) . " ៛ credited to driver.");
+    }
+
+    public function confirmTransactionBulk(Request $request)
+    {
+        $ids = array_filter(array_map('intval', (array) $request->input('ids', [])));
+
+        if (empty($ids)) {
+            return redirect()->route('admin.transactions')->with('error', 'No transactions selected.');
+        }
+
+        $transactions = TransactionRecord::whereIn('id', $ids)->where('status', 'pending')->get();
+
+        if ($transactions->isEmpty()) {
+            return redirect()->route('admin.transactions')->with('error', 'No pending transactions found for selected IDs.');
+        }
+
+        $count = 0;
+        foreach ($transactions as $transaction) {
+            app(PaymentService::class)->confirm($transaction, Auth::user());
+            $count++;
+        }
+
+        return redirect()->route('admin.transactions')
+            ->with('success', "{$count} transaction(s) confirmed successfully.");
     }
 
     public function cancelTransaction(Request $request, TransactionRecord $transaction)
