@@ -292,6 +292,7 @@ Route::prefix('v1')->group(function () {
 
     // ── Car rentals ───────────────────────────────────────────────────────────
     Route::get('rentals/catalog',               [RentalController::class, 'catalog']);   // browse available cars (no auth)
+    Route::get('rentals/available',             [RentalController::class, 'catalog']);   // alias for catalog (no auth)
     Route::get('rentals/my-rentals',            [RentalController::class, 'myRentals']); // all my rentals combined (auth)
     Route::get('rentals',                       [RentalController::class, 'index']);    // car rental bookings (auth)
     Route::post('rentals',                      [RentalController::class, 'store']);    // book a car (auth)
