@@ -5,11 +5,11 @@ namespace App\Http\Controllers\Partner;
 use App\Http\Controllers\Controller;
 use App\Models\Delivery;
 use App\Models\PartnerContract;
+use App\Models\PricingSetting;
 use App\Models\TopUpRequest;
 use App\Models\User;
 use App\Models\WithdrawalRequest;
 use App\Services\DriverMatchingService;
-use App\Services\FareService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -156,25 +156,27 @@ class PartnerController extends Controller
             'partner_reference' => 'nullable|string|max:100',
         ]);
 
-        // Auto-calculate fee: use partner contract if active, else system default pricing
-        $fare    = app(FareService::class);
-        $route   = $fare->getRoute(
-            (float) ($data['pickup_lat']  ?? 11.5564),
-            (float) ($data['pickup_lng']  ?? 104.9282),
-            (float) ($data['dropoff_lat'] ?? 11.5564),
-            (float) ($data['dropoff_lng'] ?? 104.9282),
-        );
+        $serviceOption = $data['service_option'] ?? 'normal';
+        $packageSize   = $data['package_size']   ?? 'small';
 
+        // Use partner contract (flat rate); fall back to system default partner rates
         $contract = PartnerContract::where('partner_id', $partner->id)
             ->where('is_active', true)
             ->latest()
             ->first();
 
         if ($contract) {
-            $fee = $contract->calculateFee((float) $route['distance_km'], $data['package_size'] ?? 'small');
+            $fee = $contract->calculateFee($serviceOption, $packageSize);
         } else {
-            $result = $fare->calculateDeliveryFare($data['package_size'] ?? 'small', $route);
-            $fee    = (int) $result['total'];
+            $normalFee  = (int) PricingSetting::get('partner_normal_fee', 5000);
+            $expressFee = (int) PricingSetting::get('partner_express_fee', 10000);
+            $base       = $serviceOption === 'express' ? $expressFee : $normalFee;
+            $surcharge  = match ($packageSize) {
+                'large'       => (int) PricingSetting::get('partner_surcharge_large', 5000),
+                'extra_large' => (int) PricingSetting::get('partner_surcharge_extra_large', 5000),
+                default       => 0,
+            };
+            $fee = $base + $surcharge;
         }
 
         $delivery = Delivery::create([
@@ -190,7 +192,7 @@ class PartnerController extends Controller
             'pickup_lng'        => $data['pickup_lng'] ?? 0,
             'dropoff_lat'       => $data['dropoff_lat'] ?? 0,
             'dropoff_lng'       => $data['dropoff_lng'] ?? 0,
-            'package_size'      => $data['package_size'] ?? 'small',
+            'package_size'      => $packageSize,
             'fee'               => $fee,
             'package_amount'    => $data['package_amount'] ?? 0,
             'payment_method'    => 'cash',
@@ -199,6 +201,7 @@ class PartnerController extends Controller
             'notes'             => $data['notes'] ?? null,
             'partner_reference' => $data['partner_reference'] ?? null,
             'service_type'      => 'delivery',
+            'service_option'    => $serviceOption,
             'status'            => 'created',
             'qr_token'          => Str::random(32),
         ]);

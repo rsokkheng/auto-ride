@@ -154,6 +154,101 @@ $colors = [
 @endforeach
 </div>
 
+{{-- ── Partner Delivery Pricing ─────────────────────────────────────────── --}}
+<div class="card mt-2" style="border-left:4px solid #8b5cf6">
+    <div class="card-header">
+        <h3 class="card-title mb-0">
+            <i class="fas fa-handshake mr-2" style="color:#8b5cf6"></i> Partner Delivery Default Pricing
+        </h3>
+        <div class="card-tools">
+            <small class="text-muted">Applied to partners without a custom contract</small>
+        </div>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ route('admin.ride-pricing.settings') }}">
+            @csrf
+            <input type="hidden" name="_section" value="partner">
+            <div class="row">
+                <div class="col-md-3 mb-3">
+                    <label class="field-label"><i class="fas fa-box mr-1 text-primary"></i>Normal Delivery Fee</label>
+                    <div class="input-group">
+                        <input type="number" name="partner_normal_fee" class="form-control"
+                               value="{{ $settings['partner_normal_fee']->value ?? 5000 }}"
+                               min="0" step="500" required>
+                        <div class="input-group-append"><span class="input-group-text">៛</span></div>
+                    </div>
+                    <small class="text-muted">Flat fee, small/medium package</small>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="field-label"><i class="fas fa-bolt mr-1 text-danger"></i>Express Delivery Fee</label>
+                    <div class="input-group">
+                        <input type="number" name="partner_express_fee" class="form-control"
+                               value="{{ $settings['partner_express_fee']->value ?? 10000 }}"
+                               min="0" step="500" required>
+                        <div class="input-group-append"><span class="input-group-text">៛</span></div>
+                    </div>
+                    <small class="text-muted">Flat fee, small/medium package</small>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="field-label"><i class="fas fa-weight-hanging mr-1 text-warning"></i>Large Surcharge</label>
+                    <div class="input-group">
+                        <div class="input-group-prepend"><span class="input-group-text">+</span></div>
+                        <input type="number" name="partner_surcharge_large" class="form-control"
+                               value="{{ $settings['partner_surcharge_large']->value ?? 5000 }}"
+                               min="0" step="500" required>
+                        <div class="input-group-append"><span class="input-group-text">៛</span></div>
+                    </div>
+                    <small class="text-muted">Added on top for large packages</small>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="field-label"><i class="fas fa-weight-hanging mr-1 text-danger"></i>Extra Large Surcharge</label>
+                    <div class="input-group">
+                        <div class="input-group-prepend"><span class="input-group-text">+</span></div>
+                        <input type="number" name="partner_surcharge_extra_large" class="form-control"
+                               value="{{ $settings['partner_surcharge_extra_large']->value ?? 5000 }}"
+                               min="0" step="500" required>
+                        <div class="input-group-append"><span class="input-group-text">៛</span></div>
+                    </div>
+                    <small class="text-muted">Added on top for extra large packages</small>
+                </div>
+            </div>
+
+            {{-- Live preview table --}}
+            <div class="table-responsive mb-3">
+                <table class="table table-sm table-bordered text-center mb-0" style="max-width:420px">
+                    <thead class="thead-light">
+                        <tr><th>Package</th><th class="text-primary">Normal</th><th class="text-danger">Express</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="text-left text-muted">Small / Medium</td>
+                            <td class="font-weight-bold text-primary" id="pp-normal-sm">{{ number_format($settings['partner_normal_fee']->value ?? 5000) }} ៛</td>
+                            <td class="font-weight-bold text-danger" id="pp-express-sm">{{ number_format($settings['partner_express_fee']->value ?? 10000) }} ៛</td>
+                        </tr>
+                        <tr>
+                            <td class="text-left text-muted">Large</td>
+                            <td class="font-weight-bold text-primary" id="pp-normal-lg">{{ number_format(($settings['partner_normal_fee']->value ?? 5000) + ($settings['partner_surcharge_large']->value ?? 5000)) }} ៛</td>
+                            <td class="font-weight-bold text-danger" id="pp-express-lg">{{ number_format(($settings['partner_express_fee']->value ?? 10000) + ($settings['partner_surcharge_large']->value ?? 5000)) }} ៛</td>
+                        </tr>
+                        <tr>
+                            <td class="text-left text-muted">Extra Large</td>
+                            <td class="font-weight-bold text-primary" id="pp-normal-xl">{{ number_format(($settings['partner_normal_fee']->value ?? 5000) + ($settings['partner_surcharge_extra_large']->value ?? 5000)) }} ៛</td>
+                            <td class="font-weight-bold text-danger" id="pp-express-xl">{{ number_format(($settings['partner_express_fee']->value ?? 10000) + ($settings['partner_surcharge_extra_large']->value ?? 5000)) }} ៛</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="background:#8b5cf6;border-color:#8b5cf6">
+                <i class="fas fa-save mr-1"></i> Save Partner Pricing
+            </button>
+            <a href="{{ route('admin.partner-contracts') }}" class="btn btn-outline-secondary ml-2">
+                <i class="fas fa-file-contract mr-1"></i> Manage Per-Partner Contracts
+            </a>
+        </form>
+    </div>
+</div>
+
 {{-- ── Global Settings ─────────────────────────────────────────────────── --}}
 <div class="card mt-2">
     <div class="card-header">
@@ -298,5 +393,32 @@ function updatePreview(type) {
     var el = document.getElementById('preview_val_' + type);
     if (el) el.textContent = est5km.toLocaleString() + ' ៛';
 }
+
+// Partner delivery pricing live preview
+function updatePartnerPreview() {
+    function v(name) {
+        var el = document.querySelector('[name=' + name + ']');
+        return el ? (parseInt(el.value) || 0) : 0;
+    }
+    function fmt(n) { return n.toLocaleString() + ' ៛'; }
+    var n  = v('partner_normal_fee'),  e  = v('partner_express_fee');
+    var sl = v('partner_surcharge_large'), sx = v('partner_surcharge_extra_large');
+
+    var ids = {
+        'pp-normal-sm':  n,      'pp-express-sm': e,
+        'pp-normal-lg':  n + sl, 'pp-express-lg': e + sl,
+        'pp-normal-xl':  n + sx, 'pp-express-xl': e + sx,
+    };
+    Object.keys(ids).forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = fmt(ids[id]);
+    });
+}
+
+document.addEventListener('input', function(e) {
+    if (['partner_normal_fee','partner_express_fee','partner_surcharge_large','partner_surcharge_extra_large'].includes(e.target.name)) {
+        updatePartnerPreview();
+    }
+});
 </script>
 @endpush

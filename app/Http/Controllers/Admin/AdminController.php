@@ -907,12 +907,16 @@ class AdminController extends Controller
     public function updatePricingSettings(Request $request)
     {
         $data = $request->validate([
-            'night_surcharge_rate'           => 'required|numeric|min:0|max:1',
-            'delivery_night_surcharge_rate'  => 'required|numeric|min:0|max:1',
-            'delivery_express_multiplier'    => 'required|numeric|min:1|max:10',
-            'avg_city_speed_kmh'             => 'required|integer|min:5|max:120',
-            'traffic_speed_threshold_kmh'    => 'required|integer|min:5|max:60',
-            'driver_min_balance_khr'         => 'required|integer|min:0',
+            'night_surcharge_rate'              => 'sometimes|numeric|min:0|max:1',
+            'delivery_night_surcharge_rate'     => 'sometimes|numeric|min:0|max:1',
+            'delivery_express_multiplier'       => 'sometimes|numeric|min:1|max:10',
+            'avg_city_speed_kmh'                => 'sometimes|integer|min:5|max:120',
+            'traffic_speed_threshold_kmh'       => 'sometimes|integer|min:5|max:60',
+            'driver_min_balance_khr'            => 'sometimes|integer|min:0',
+            'partner_normal_fee'                => 'sometimes|integer|min:0',
+            'partner_express_fee'               => 'sometimes|integer|min:0',
+            'partner_surcharge_large'           => 'sometimes|integer|min:0',
+            'partner_surcharge_extra_large'     => 'sometimes|integer|min:0',
         ]);
 
         foreach ($data as $key => $value) {
@@ -2094,12 +2098,10 @@ class AdminController extends Controller
         $partners = User::where('role', 'partner')->orderBy('name')->get(['id', 'name', 'phone', 'email']);
 
         $defaults = [
-            'base_fee'        => (int) config('delivery.fee_base', 3000),
-            'per_km_rate'     => (int) config('delivery.fee_per_km', 1200),
-            'surcharge_small' => (int) config('delivery.fee_surcharge_small', 0),
-            'surcharge_medium'=> (int) config('delivery.fee_surcharge_medium', 2000),
-            'surcharge_large' => (int) config('delivery.fee_surcharge_large', 5000),
-            'min_fee'         => 3000,
+            'normal_fee'            => (int) PricingSetting::get('partner_normal_fee', 5000),
+            'express_fee'           => (int) PricingSetting::get('partner_express_fee', 10000),
+            'surcharge_large'       => (int) PricingSetting::get('partner_surcharge_large', 5000),
+            'surcharge_extra_large' => (int) PricingSetting::get('partner_surcharge_extra_large', 5000),
         ];
 
         return view('admin.partner-contracts', compact('contracts', 'partners', 'defaults'));
