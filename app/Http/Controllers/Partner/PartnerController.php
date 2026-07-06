@@ -125,7 +125,7 @@ class PartnerController extends Controller
             });
         }
 
-        $orders = $query->paginate(15)->withQueryString();
+        $orders = $query->paginate(10)->withQueryString();
 
         return view('partner.orders', compact('partner', 'orders', 'status', 'search', 'from', 'to'));
     }
@@ -149,7 +149,8 @@ class PartnerController extends Controller
             'pickup_lng'        => 'nullable|numeric',
             'dropoff_lat'       => 'nullable|numeric',
             'dropoff_lng'       => 'nullable|numeric',
-            'package_size'      => 'nullable|in:small,medium,large',
+            'package_size'      => 'nullable|in:small,medium,large,extra_large',
+            'service_option'    => 'nullable|in:normal,express',
             'package_amount'    => 'nullable|integer|min:0',
             'payment_by'        => 'nullable|in:sender,recipient',
             'notes'             => 'nullable|string|max:500',

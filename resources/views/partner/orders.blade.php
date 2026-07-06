@@ -125,11 +125,15 @@
             </tbody>
         </table>
     </div>
-    @if($orders->hasPages())
-    <div class="px-5 py-3 border-t border-slate-100">
-        {{ $orders->links() }}
+    <div class="px-5 py-3 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2">
+        <p class="text-sm text-slate-500 mb-0">
+            Showing {{ $orders->firstItem() ?? 0 }}–{{ $orders->lastItem() ?? 0 }}
+            of {{ $orders->total() }} orders
+        </p>
+        @if($orders->hasPages())
+            {{ $orders->links('pagination::bootstrap-5') }}
+        @endif
     </div>
-    @endif
 </div>
 
 @endsection
