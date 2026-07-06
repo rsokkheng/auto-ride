@@ -158,6 +158,9 @@ Route::prefix('admin')->group(function () {
     Route::put('airport-zones/{zone}', [AdminController::class, 'updateAirportZone'])->name('admin.airport-zones.update');
     Route::delete('airport-zones/{zone}', [AdminController::class, 'destroyAirportZone'])->name('admin.airport-zones.destroy');
 
+    // Operations Report
+    Route::get('operations-report', [AdminController::class, 'operationsReport'])->name('admin.operations-report');
+
     // Partner Contracts
     Route::get('partner-contracts',                    [AdminController::class, 'partnerContracts'])->name('admin.partner-contracts');
     Route::post('partner-contracts',                   [AdminController::class, 'storePartnerContract'])->name('admin.partner-contracts.store');

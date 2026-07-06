@@ -252,6 +252,16 @@
                         </a>
                     </li>
 
+                    {{-- ── REPORTS ── --}}
+                    <li class="nav-header" style="font-size:.65rem;color:#475569;letter-spacing:.1em;padding:8px 16px 4px;">REPORTS</li>
+
+                    <li class="nav-item">
+                        <a href="{{ route('admin.operations-report') }}" class="nav-link {{ request()->routeIs('admin.operations-report') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-chart-line"></i>
+                            <p>Operations Report</p>
+                        </a>
+                    </li>
+
                     {{-- ── SUPPORT ── --}}
                     <li class="nav-header" style="font-size:.65rem;color:#475569;letter-spacing:.1em;padding:8px 16px 4px;">SUPPORT</li>
 

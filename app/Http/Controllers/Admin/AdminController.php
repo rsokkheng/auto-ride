@@ -2198,4 +2198,140 @@ class AdminController extends Controller
         $contract->delete();
         return redirect()->route('admin.partner-contracts')->with('success', 'Contract deleted.');
     }
+
+    // ── Operations Report ─────────────────────────────────────────────────────
+
+    public function operationsReport(\Illuminate\Http\Request $request)
+    {
+        $period = (int) $request->input('period', 30);
+        $start  = now()->subDays($period)->startOfDay();
+
+        // ── Key Metrics ──────────────────────────────────────────────────────
+        $totalDeliveries   = \DB::table('deliveries')->where('created_at', '>=', $start)->count();
+        $doneDeliveries    = \DB::table('deliveries')->where('created_at', '>=', $start)
+                                ->whereIn('status', ['delivered', 'completed'])->count();
+        $cancelDeliveries  = \DB::table('deliveries')->where('created_at', '>=', $start)
+                                ->where('status', 'cancelled')->count();
+        $totalRides        = \DB::table('rides')->where('created_at', '>=', $start)->count();
+        $doneRides         = \DB::table('rides')->where('created_at', '>=', $start)->where('status', 'completed')->count();
+        $cancelRides       = \DB::table('rides')->where('created_at', '>=', $start)->where('status', 'cancelled')->count();
+
+        $deliveryRevenue   = (float) \DB::table('deliveries')->where('created_at', '>=', $start)
+                                ->whereIn('status', ['delivered', 'completed'])->sum('fee');
+        $rideRevenue       = (float) \DB::table('rides')->where('created_at', '>=', $start)
+                                ->where('status', 'completed')->sum('fare');
+
+        $commission        = (float) \DB::table('wallet_transactions')->where('created_at', '>=', $start)
+                                ->where('type', 'platform_commission')->sum('amount');
+
+        $codPending        = (float) \DB::table('deliveries')
+                                ->where('payment_by', 'recipient')
+                                ->whereIn('status', ['delivered', 'completed'])
+                                ->where('payment_status', 'unpaid')
+                                ->sum('package_amount');
+
+        $activeDrivers     = \DB::table('users')->where('role', 'driver')->where('available', 1)->count();
+        $totalDrivers      = \DB::table('users')->where('role', 'driver')->count();
+        $totalPartners     = \DB::table('users')->where('role', 'partner')->count();
+        $unassigned        = \DB::table('deliveries')
+                                ->whereNull('driver_id')
+                                ->whereNotIn('status', ['cancelled', 'completed', 'delivered'])
+                                ->count();
+
+        // ── Delivery Status Breakdown ────────────────────────────────────────
+        $deliveryStatuses  = \DB::table('deliveries')
+                                ->where('created_at', '>=', $start)
+                                ->selectRaw('status, COUNT(*) as c')
+                                ->groupBy('status')
+                                ->orderByRaw('c DESC')
+                                ->get()->keyBy('status');
+
+        // ── Partner Performance ──────────────────────────────────────────────
+        $partnerStats = \DB::table('deliveries as d')
+            ->join('users as u', 'u.id', '=', 'd.partner_id')
+            ->where('d.created_at', '>=', $start)
+            ->selectRaw('u.id, u.name,
+                COUNT(d.id) as orders,
+                SUM(CASE WHEN d.status IN ("delivered","completed") THEN 1 ELSE 0 END) as done,
+                SUM(CASE WHEN d.status = "cancelled" THEN 1 ELSE 0 END) as cancelled,
+                SUM(d.fee) as revenue')
+            ->groupBy('u.id', 'u.name')
+            ->orderByRaw('orders DESC')
+            ->get();
+
+        // ── Driver Leaderboard ───────────────────────────────────────────────
+        $driverLeaderboard = \DB::table('users as u')
+            ->leftJoin('deliveries as d', function ($j) use ($start) {
+                $j->on('d.driver_id', '=', 'u.id')
+                  ->whereIn('d.status', ['delivered', 'completed'])
+                  ->where('d.created_at', '>=', $start);
+            })
+            ->leftJoin('rides as r', function ($j) use ($start) {
+                $j->on('r.driver_id', '=', 'u.id')
+                  ->where('r.status', 'completed')
+                  ->where('r.created_at', '>=', $start);
+            })
+            ->where('u.role', 'driver')
+            ->selectRaw('u.id, u.name, u.phone, u.rating,
+                COUNT(DISTINCT d.id) as deliveries,
+                COUNT(DISTINCT r.id) as rides')
+            ->groupBy('u.id', 'u.name', 'u.phone', 'u.rating')
+            ->orderByRaw('(COUNT(DISTINCT d.id) + COUNT(DISTINCT r.id)) DESC')
+            ->limit(10)
+            ->get();
+
+        // ── Daily Trend (last 30 days) ───────────────────────────────────────
+        $deliveryTrend = \DB::table('deliveries')
+            ->where('created_at', '>=', now()->subDays(29)->startOfDay())
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as c, SUM(fee) as rev')
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get()->keyBy('date');
+
+        $rideTrend = \DB::table('rides')
+            ->where('created_at', '>=', now()->subDays(29)->startOfDay())
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as c, SUM(fare) as rev')
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get()->keyBy('date');
+
+        // Build 30-day date array
+        $trendDates = collect();
+        for ($i = 29; $i >= 0; $i--) {
+            $trendDates->push(now()->subDays($i)->format('Y-m-d'));
+        }
+
+        // ── Avg Delivery Time ────────────────────────────────────────────────
+        $avgDeliveryMin = \DB::table('deliveries')
+            ->whereIn('status', ['delivered', 'completed'])
+            ->where('created_at', '>=', $start)
+            ->whereNotNull('completed_at')
+            ->selectRaw('AVG(TIMESTAMPDIFF(MINUTE, created_at, completed_at)) as avg')
+            ->value('avg');
+
+        // ── Recent Issues ────────────────────────────────────────────────────
+        $recentCancelled = \DB::table('deliveries as d')
+            ->leftJoin('users as dr', 'dr.id', '=', 'd.driver_id')
+            ->where('d.status', 'cancelled')
+            ->where('d.created_at', '>=', $start)
+            ->selectRaw('d.id, d.recipient_name, d.cancellation_reason, d.created_at,
+                dr.name as driver_name')
+            ->orderByDesc('d.id')
+            ->limit(10)
+            ->get();
+
+        return view('admin.operations-report', compact(
+            'period', 'start',
+            'totalDeliveries', 'doneDeliveries', 'cancelDeliveries',
+            'totalRides', 'doneRides', 'cancelRides',
+            'deliveryRevenue', 'rideRevenue', 'commission',
+            'codPending', 'activeDrivers', 'totalDrivers', 'totalPartners', 'unassigned',
+            'deliveryStatuses',
+            'partnerStats',
+            'driverLeaderboard',
+            'trendDates', 'deliveryTrend', 'rideTrend',
+            'avgDeliveryMin',
+            'recentCancelled'
+        ));
+    }
 }
