@@ -130,6 +130,7 @@
                 $isReports = request()->routeIs(
                     'admin.operations-report', 'admin.report.*'
                 );
+                $isSettlements = request()->routeIs('admin.settlements.*');
             @endphp
 
             <nav class="mt-1">
@@ -252,6 +253,18 @@
                         <a href="{{ route('admin.wallet') }}" class="nav-link {{ request()->routeIs('admin.wallet') ? 'active' : '' }}">
                             <i class="nav-icon fas fa-wallet"></i>
                             <p>Wallet</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ route('admin.settlements.index') }}" class="nav-link {{ $isSettlements ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-file-invoice-dollar"></i>
+                            <p>
+                                Settlements
+                                @php $pendingSettlements = \App\Models\Settlement::where('status','pending')->count(); @endphp
+                                @if($pendingSettlements)
+                                <span class="right badge badge-warning">{{ $pendingSettlements }}</span>
+                                @endif
+                            </p>
                         </a>
                     </li>
 

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AdminController;
 use App\Http\Controllers\Admin\ReportExportController;
+use App\Http\Controllers\Admin\SettlementController;
 use App\Http\Controllers\Seller\SellerController;
 use App\Http\Controllers\TrackController;
 use Illuminate\Support\Facades\Route;
@@ -186,6 +187,22 @@ Route::prefix('admin')->group(function () {
     Route::get('export/performance',    [ReportExportController::class, 'performance'])->name('admin.export.performance');
     Route::get('export/driver-ranking', [ReportExportController::class, 'driverRanking'])->name('admin.export.driver-ranking');
     Route::get('export/analytics',      [ReportExportController::class, 'analytics'])->name('admin.export.analytics');
+
+    // Payment Settlements
+    Route::get('settlements',                                    [SettlementController::class, 'index'])->name('admin.settlements.index');
+    Route::get('settlements/create',                             [SettlementController::class, 'create'])->name('admin.settlements.create');
+    Route::get('settlements/preview',                            [SettlementController::class, 'preview'])->name('admin.settlements.preview');
+    Route::post('settlements',                                   [SettlementController::class, 'store'])->name('admin.settlements.store');
+    Route::get('settlements/{settlement}',                       [SettlementController::class, 'show'])->name('admin.settlements.show');
+    Route::patch('settlements/{settlement}/approve',             [SettlementController::class, 'approve'])->name('admin.settlements.approve');
+    Route::patch('settlements/{settlement}/reject',              [SettlementController::class, 'reject'])->name('admin.settlements.reject');
+    Route::patch('settlements/{settlement}/processing',          [SettlementController::class, 'markProcessing'])->name('admin.settlements.processing');
+    Route::patch('settlements/{settlement}/paid',                [SettlementController::class, 'markPaid'])->name('admin.settlements.paid');
+    Route::patch('settlements/{settlement}/failed',              [SettlementController::class, 'markFailed'])->name('admin.settlements.failed');
+    Route::patch('settlements/{settlement}/cancel',              [SettlementController::class, 'cancel'])->name('admin.settlements.cancel');
+    Route::delete('settlements/{settlement}',                    [SettlementController::class, 'destroy'])->name('admin.settlements.destroy');
+    Route::post('settlements/bulk-approve',                      [SettlementController::class, 'bulkApprove'])->name('admin.settlements.bulk-approve');
+    Route::post('settlements/bulk-process',                      [SettlementController::class, 'bulkProcess'])->name('admin.settlements.bulk-process');
 
     // Partner Contracts
     Route::get('partner-contracts',                    [AdminController::class, 'partnerContracts'])->name('admin.partner-contracts');
