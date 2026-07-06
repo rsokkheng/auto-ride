@@ -94,7 +94,7 @@
                 <tr><th>#</th><th>Partner</th><th>Phone</th><th>Joined</th><th class="text-center">Orders</th><th class="text-center">Done</th><th class="text-center">Cancelled</th><th class="text-center">Express</th><th class="text-center">Success %</th><th class="text-right">Revenue</th><th class="text-right">Wallet</th><th>Contract Fee</th></tr>
             </thead>
             <tbody>
-                @forelse($partners as $i => $p)
+                @forelse($partnerList as $i => $p)
                 @php $rate=$p->orders>0?round(($p->done/$p->orders)*100):0; @endphp
                 <tr>
                     <td>{{ $i+1 }}</td>
