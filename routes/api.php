@@ -116,6 +116,9 @@ Route::prefix('v1')->group(function () {
     Route::post('rides/{ride}/dispute', [RideController::class, 'dispute']);
     Route::post('rides/{ride}/tip', [RideController::class, 'tip']);
 
+    // ── QR scan (static route before wildcard) ──────────────────────────────
+    Route::post('deliveries/scan-qr', [\App\Http\Controllers\Api\DeliveryController::class, 'scanQr']);
+
     // Static delivery routes must come before {delivery} wildcard routes.
     Route::get('deliveries/available', [DeliveryController::class, 'available']);
     Route::get('deliveries/nearby-drivers', [DeliveryController::class, 'nearbyDrivers']);
@@ -329,6 +332,15 @@ Route::prefix('v1')->group(function () {
     // ── Driver withdrawals ────────────────────────────────────────────────────
     Route::post('driver/withdraw', [WithdrawalController::class, 'store']);
     Route::get('driver/withdrawals', [WithdrawalController::class, 'index']);
+
+    // ── Partner Delivery ──────────────────────────────────────────────────────
+    Route::get('partner/deliveries',                                       [\App\Http\Controllers\Api\PartnerController::class, 'index']);
+    Route::post('partner/deliveries',                                      [\App\Http\Controllers\Api\PartnerController::class, 'store']);
+    Route::get('partner/deliveries/{delivery}',                            [\App\Http\Controllers\Api\PartnerController::class, 'show']);
+    Route::post('partner/deliveries/{delivery}/assign',                    [\App\Http\Controllers\Api\PartnerController::class, 'assign']);
+    Route::post('partner/deliveries/{delivery}/auto-assign',               [\App\Http\Controllers\Api\PartnerController::class, 'autoAssignRoute']);
+    Route::post('partner/deliveries/{delivery}/cancel',                    [\App\Http\Controllers\Api\PartnerController::class, 'cancel']);
+    Route::get('partner/deliveries/{delivery}/nearby-drivers',             [\App\Http\Controllers\Api\PartnerController::class, 'nearbyDrivers']);
 
     // ── QR Payment ────────────────────────────────────────────────────────────
     Route::post('payments/qr/generate', [QrPaymentController::class, 'generate']);

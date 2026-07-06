@@ -64,13 +64,21 @@ class Delivery extends Model
         'discount_amount',
         'cancellation_reason',
         'cancellation_fee',
+        // Partner delivery
+        'partner_id',
+        'qr_token',
+        'pickup_scanned_at',
+        'delivery_scanned_at',
+        'assignment_type',
     ];
 
     protected $casts = [
-        'scheduled_at'    => 'datetime',
-        'assigned_at'     => 'datetime',
-        'started_at'      => 'datetime',
-        'completed_at'    => 'datetime',
+        'scheduled_at'       => 'datetime',
+        'assigned_at'        => 'datetime',
+        'started_at'         => 'datetime',
+        'completed_at'       => 'datetime',
+        'pickup_scanned_at'  => 'datetime',
+        'delivery_scanned_at'=> 'datetime',
         'surge_multiplier'=> 'float',
         'fee'              => 'integer',
         'rating'           => 'float',
@@ -93,6 +101,11 @@ class Delivery extends Model
     public function sender(): BelongsTo
     {
         return $this->belongsTo(User::class, 'sender_id');
+    }
+
+    public function partner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'partner_id');
     }
 
     public function driver(): BelongsTo

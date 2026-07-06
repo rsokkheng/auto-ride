@@ -175,6 +175,32 @@ Route::prefix('admin')->group(function () {
 Route::get('seller/login',  [SellerController::class, 'showLogin'])->name('seller.login');
 Route::post('seller/login', [SellerController::class, 'login'])->name('seller.login.post');
 
+// ── Partner Panel ─────────────────────────────────────────────────────────────
+Route::get('partner/login',  [\App\Http\Controllers\Partner\PartnerController::class, 'loginPage'])->name('partner.login');
+Route::post('partner/login', [\App\Http\Controllers\Partner\PartnerController::class, 'login'])->name('partner.login.post');
+
+Route::prefix('partner')->middleware(\App\Http\Middleware\PartnerAuth::class)->group(function () {
+    Route::post('logout',                [\App\Http\Controllers\Partner\PartnerController::class, 'logout'])->name('partner.logout');
+    Route::get('/',                      [\App\Http\Controllers\Partner\PartnerController::class, 'dashboard'])->name('partner.dashboard');
+
+    // Orders
+    Route::get('orders',                 [\App\Http\Controllers\Partner\PartnerController::class, 'orders'])->name('partner.orders');
+    Route::get('orders/create',          [\App\Http\Controllers\Partner\PartnerController::class, 'createOrder'])->name('partner.orders.create');
+    Route::post('orders',                [\App\Http\Controllers\Partner\PartnerController::class, 'storeOrder'])->name('partner.orders.store');
+    Route::get('orders/{delivery}',      [\App\Http\Controllers\Partner\PartnerController::class, 'showOrder'])->name('partner.orders.show');
+    Route::post('orders/{delivery}/assign', [\App\Http\Controllers\Partner\PartnerController::class, 'assignDriver'])->name('partner.orders.assign');
+    Route::post('orders/{delivery}/cancel', [\App\Http\Controllers\Partner\PartnerController::class, 'cancelOrder'])->name('partner.orders.cancel');
+
+    // Wallet
+    Route::get('wallet',                 [\App\Http\Controllers\Partner\PartnerController::class, 'wallet'])->name('partner.wallet');
+
+    // Reports
+    Route::get('reports',                [\App\Http\Controllers\Partner\PartnerController::class, 'reports'])->name('partner.reports');
+
+    // Issues
+    Route::get('issues',                 [\App\Http\Controllers\Partner\PartnerController::class, 'issues'])->name('partner.issues');
+});
+
 Route::prefix('seller')->middleware(\App\Http\Middleware\SellerAuth::class)->group(function () {
     Route::post('logout', [SellerController::class, 'logout'])->name('seller.logout');
 

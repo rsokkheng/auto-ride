@@ -48,7 +48,10 @@
                     <td>{{ $user->name }}</td>
                     <td>{{ $user->email }}</td>
                     <td>
-                        <span class="badge badge-{{ $user->role === 'admin' ? 'danger' : ($user->role === 'driver' ? 'success' : 'primary') }}">
+                        @php
+                            $rc = ['admin'=>'danger','driver'=>'success','partner'=>'warning','passenger'=>'primary'];
+                        @endphp
+                        <span class="badge badge-{{ $rc[$user->role] ?? 'secondary' }}">
                             {{ ucfirst($user->role ?? 'passenger') }}
                         </span>
                     </td>
@@ -143,6 +146,7 @@
                             <select name="role" id="f-role" class="form-control" required onchange="toggleDriverInfo()">
                                 <option value="passenger">Passenger</option>
                                 <option value="driver">Driver</option>
+                                <option value="partner">Partner</option>
                                 <option value="admin">Admin</option>
                             </select>
                         </div>

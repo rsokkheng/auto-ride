@@ -23,7 +23,7 @@ class AuthController extends ApiController
             'email'        => 'required|email|unique:users,email',
             'password'     => 'required|string|min:8',
             'phone'        => 'nullable|string|max:24',
-            'role'         => 'nullable|in:passenger,driver',
+            'role'         => 'nullable|in:passenger,driver,partner',
             'driver_type'  => 'nullable|in:owner,employee,rental',
             'company_name' => 'nullable|string|max:255',
             'city'         => 'nullable|string|max:100',

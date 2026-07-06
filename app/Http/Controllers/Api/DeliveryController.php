@@ -367,15 +367,21 @@ class DeliveryController extends ApiController
         $user = $this->authUser($request);
         if (! $user || $user->role !== 'driver') return $this->unauthorized();
 
-        // Only accept deliveries that are still open.
-        if (! in_array($delivery->status, ['requested', 'pending'], true)) {
+        // Accept open deliveries (regular) or partner-assigned deliveries.
+        $acceptableStatuses = ['requested', 'pending', 'assigned'];
+        if (! in_array($delivery->status, $acceptableStatuses, true)) {
             return response()->json([
                 'message' => "Delivery cannot be accepted — current status is \"{$delivery->status}\".",
             ], 422);
         }
 
-        // Block if another driver already claimed it.
-        if ($delivery->driver_id && $delivery->driver_id !== $user->id) {
+        // For partner-assigned deliveries, only the assigned driver can accept.
+        if ($delivery->status === 'assigned' && $delivery->driver_id !== $user->id) {
+            return response()->json(['message' => 'This delivery is assigned to a different driver.'], 403);
+        }
+
+        // For open deliveries, block if another driver already claimed it.
+        if (in_array($delivery->status, ['requested', 'pending']) && $delivery->driver_id && $delivery->driver_id !== $user->id) {
             return response()->json(['message' => 'Delivery already claimed by another driver.'], 422);
         }
 
@@ -604,6 +610,114 @@ class DeliveryController extends ApiController
                 'driver'      => $delivery->driver?->only(['id', 'name', 'phone']),
             ],
         ]);
+    }
+
+    // ── QR Code Scan ────────────────────────────────────────────────────────
+
+    /**
+     * POST /v1/deliveries/scan-qr
+     * Driver scans QR code to confirm pickup or delivery.
+     * Body: qr_token (string scanned from QR code)
+     *
+     * Transitions:
+     *   accepted  → picked_up  (pickup scan)
+     *   in_transit → delivered  (delivery scan)
+     */
+    public function scanQr(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user || $user->role !== 'driver') return $this->unauthorized();
+
+        $data = $request->validate([
+            'qr_token' => 'required|string',
+        ]);
+
+        // Strip prefix if app sends full payload "AUTORIDE:DELIVERY:{token}"
+        $token = preg_replace('/^AUTORIDE:DELIVERY:/i', '', trim($data['qr_token']));
+
+        $delivery = Delivery::where('qr_token', $token)->first();
+
+        if (! $delivery) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid QR code. Package not found.',
+            ], 404);
+        }
+
+        if ($delivery->driver_id !== $user->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This package is not assigned to you.',
+            ], 403);
+        }
+
+        // Pickup scan: accepted → picked_up
+        if ($delivery->status === 'accepted') {
+            $delivery->update([
+                'status'            => 'picked_up',
+                'pickup_scanned_at' => now(),
+                'started_at'        => now(),
+            ]);
+
+            $this->firestore->syncDelivery($delivery->fresh()->load('sender', 'driver'));
+
+            return $this->success([
+                'action'   => 'pickup_confirmed',
+                'message'  => 'Pickup confirmed. Proceed to delivery address.',
+                'delivery' => $delivery->fresh()->only(['id', 'status', 'dropoff_address', 'dropoff_lat', 'dropoff_lng', 'recipient_name', 'recipient_phone']),
+            ]);
+        }
+
+        // In-transit scan: picked_up → in_transit (optional intermediate)
+        if ($delivery->status === 'picked_up') {
+            $delivery->update(['status' => 'in_transit']);
+            $this->firestore->syncDelivery($delivery->fresh()->load('sender', 'driver'));
+
+            return $this->success([
+                'action'   => 'in_transit',
+                'message'  => 'Status updated to In Transit.',
+                'delivery' => $delivery->fresh()->only(['id', 'status', 'dropoff_address', 'recipient_name', 'recipient_phone']),
+            ]);
+        }
+
+        // Delivery scan: in_transit → delivered
+        if ($delivery->status === 'in_transit') {
+            $delivery->update([
+                'status'              => 'delivered',
+                'delivery_scanned_at' => now(),
+                'completed_at'        => now(),
+            ]);
+
+            $fresh = $delivery->fresh()->load('sender', 'driver');
+            $this->firestore->syncDelivery($fresh);
+
+            // Auto-complete and process payment
+            if ($fresh->fee > 0 && $fresh->payment_status !== 'paid') {
+                try {
+                    app(\App\Services\PaymentService::class)->processDelivery($fresh);
+                    $fresh->refresh();
+                } catch (\Throwable $e) { report($e); }
+            }
+
+            // Notify partner/sender
+            if ($fresh->sender) {
+                $this->fcm->send($fresh->sender, 'Package Delivered', 'Your package has been delivered successfully.', [
+                    'type'        => 'delivery_delivered',
+                    'delivery_id' => $fresh->id,
+                ]);
+            }
+
+            return $this->success([
+                'action'   => 'delivery_confirmed',
+                'message'  => 'Delivery confirmed. Order completed.',
+                'delivery' => $fresh->only(['id', 'status', 'completed_at', 'payment_status']),
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'QR scan not applicable at current status: ' . $delivery->status,
+        ], 422);
     }
 
     // ── Cancel ──────────────────────────────────────────────────────────────
