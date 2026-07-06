@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\GenericReportExport;
 use App\Http\Controllers\Controller;
 use App\Models\Settlement;
 use App\Models\User;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
 
 class SettlementController extends Controller
 {
@@ -233,6 +236,88 @@ class SettlementController extends Controller
         $settlement->delete();
 
         return redirect()->route('admin.settlements.index')->with('success', 'Settlement deleted.');
+    }
+
+    public function export(Request $request)
+    {
+        $query = DB::table('settlements as s')
+            ->join('users as u', 'u.id', '=', 's.user_id')
+            ->select('s.*', 'u.name as entity_name', 'u.phone as entity_phone');
+
+        if ($request->filled('type'))   { $query->where('s.settlement_type', $request->type); }
+        if ($request->filled('status')) { $query->where('s.status', $request->status); }
+        if ($request->filled('search')) { $query->where('u.name', 'like', '%' . $request->search . '%'); }
+        if ($request->filled('from'))   { $query->where('s.period_start', '>=', $request->from); }
+        if ($request->filled('to'))     { $query->where('s.period_end', '<=', $request->to); }
+
+        $rows = $query->orderByDesc('s.created_at')->get();
+
+        $headings = ['#', 'Type', 'Entity', 'Phone', 'Period Start', 'Period End', 'Status',
+                     'Gross Earnings', 'Commission', 'Tips', 'COD Collected',
+                     'Orders', 'Delivery Fees', 'COD Handled',
+                     'Adjustments', 'Net Payout (KHR)', 'Payment Method',
+                     'Bank Name', 'Account No.', 'Account Holder',
+                     'Payment Reference', 'Created At', 'Paid At'];
+
+        $data = $rows->map(function ($s) {
+            return [
+                $s->id,
+                ucfirst($s->settlement_type),
+                $s->entity_name,
+                $s->entity_phone,
+                $s->period_start,
+                $s->period_end,
+                ucfirst($s->status),
+                $s->gross_earnings,
+                $s->commission_total,
+                $s->tips_total,
+                $s->cod_collected,
+                $s->orders_count,
+                $s->delivery_fees,
+                $s->cod_handled,
+                $s->adjustments,
+                $s->net_payout,
+                $s->payment_method ?? '',
+                $s->bank_name ?? '',
+                $s->bank_account ?? '',
+                $s->account_holder ?? '',
+                $s->payment_reference ?? '',
+                $s->created_at,
+                $s->paid_at ?? '',
+            ];
+        })->toArray();
+
+        $meta = ['Generated' => now()->format('d M Y H:i'), 'Total Records' => count($data)];
+
+        return Excel::download(
+            new GenericReportExport('Payment Settlements', $headings, $data, $meta),
+            'settlements-' . now()->format('Y-m-d') . '.xlsx'
+        );
+    }
+
+    public function receipt(Settlement $settlement)
+    {
+        $settlement->load('user', 'creator', 'approver', 'processor');
+
+        $lineItems = $settlement->settlement_type === 'driver'
+            ? $this->driverLineItems($settlement)
+            : $this->partnerLineItems($settlement);
+
+        return view('admin.settlements.receipt', compact('settlement', 'lineItems'));
+    }
+
+    public function receiptPdf(Settlement $settlement)
+    {
+        $settlement->load('user', 'creator', 'approver', 'processor');
+
+        $lineItems = $settlement->settlement_type === 'driver'
+            ? $this->driverLineItems($settlement)
+            : $this->partnerLineItems($settlement);
+
+        $pdf = Pdf::loadView('admin.settlements.receipt', compact('settlement', 'lineItems'))
+            ->setPaper('a4', 'portrait');
+
+        return $pdf->download('settlement-STLMT-' . str_pad($settlement->id, 6, '0', STR_PAD_LEFT) . '.pdf');
     }
 
     public function bulkApprove(Request $request)

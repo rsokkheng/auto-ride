@@ -333,12 +333,16 @@
                 </form>
                 @endif
 
-                @if(in_array($settlement->status, ['draft','pending','approved','processing','paid','failed','cancelled']))
                 <hr>
+                <a href="{{ route('admin.settlements.receipt', $settlement) }}" target="_blank" class="btn btn-outline-info btn-block mb-2">
+                    <i class="fas fa-print mr-2"></i>Print Receipt
+                </a>
+                <a href="{{ route('admin.settlements.receipt.pdf', $settlement) }}" class="btn btn-outline-success btn-block mb-2">
+                    <i class="fas fa-file-pdf mr-2"></i>Download PDF
+                </a>
                 <a href="{{ route('admin.settlements.index') }}" class="btn btn-outline-secondary btn-block">
                     <i class="fas fa-arrow-left mr-2"></i>Back to List
                 </a>
-                @endif
             </div>
         </div>
 

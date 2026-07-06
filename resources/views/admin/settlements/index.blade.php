@@ -99,7 +99,10 @@
             <input type="date" name="to" class="form-control form-control-sm mr-2" value="{{ request('to') }}">
             <button type="submit" class="btn btn-sm btn-success mr-2"><i class="fas fa-search mr-1"></i>Filter</button>
             <a href="{{ route('admin.settlements.index') }}" class="btn btn-sm btn-outline-secondary mr-3">Reset</a>
-            <a href="{{ route('admin.settlements.create') }}" class="btn btn-sm btn-primary ml-auto">
+            <a href="{{ route('admin.settlements.export', request()->query()) }}" class="btn btn-sm btn-success ml-auto mr-1">
+                <i class="fas fa-file-excel mr-1"></i>Export Excel
+            </a>
+            <a href="{{ route('admin.settlements.create') }}" class="btn btn-sm btn-primary">
                 <i class="fas fa-plus mr-1"></i>Generate Settlement
             </a>
         </form>

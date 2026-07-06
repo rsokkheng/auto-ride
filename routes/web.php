@@ -192,8 +192,11 @@ Route::prefix('admin')->group(function () {
     Route::get('settlements',                                    [SettlementController::class, 'index'])->name('admin.settlements.index');
     Route::get('settlements/create',                             [SettlementController::class, 'create'])->name('admin.settlements.create');
     Route::get('settlements/preview',                            [SettlementController::class, 'preview'])->name('admin.settlements.preview');
+    Route::get('settlements/export',                             [SettlementController::class, 'export'])->name('admin.settlements.export');
     Route::post('settlements',                                   [SettlementController::class, 'store'])->name('admin.settlements.store');
     Route::get('settlements/{settlement}',                       [SettlementController::class, 'show'])->name('admin.settlements.show');
+    Route::get('settlements/{settlement}/receipt',               [SettlementController::class, 'receipt'])->name('admin.settlements.receipt');
+    Route::get('settlements/{settlement}/receipt/pdf',           [SettlementController::class, 'receiptPdf'])->name('admin.settlements.receipt.pdf');
     Route::patch('settlements/{settlement}/approve',             [SettlementController::class, 'approve'])->name('admin.settlements.approve');
     Route::patch('settlements/{settlement}/reject',              [SettlementController::class, 'reject'])->name('admin.settlements.reject');
     Route::patch('settlements/{settlement}/processing',          [SettlementController::class, 'markProcessing'])->name('admin.settlements.processing');
