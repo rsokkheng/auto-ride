@@ -37,15 +37,15 @@
                 </button>
             </div>
             <div class="card-body p-0 table-responsive">
-                <table class="table table-hover mb-0">
+                <table class="table table-hover mb-0 text-nowrap">
                     <thead class="thead-light">
                         <tr>
                             <th>#</th>
                             <th>Partner</th>
-                            <th>Base Fee</th>
-                            <th>Per Km</th>
-                            <th>Surcharge (S/M/L)</th>
-                            <th>Min Fee</th>
+                            <th>Normal</th>
+                            <th>Express</th>
+                            <th>+Large</th>
+                            <th>+Extra Large</th>
                             <th>Status</th>
                             <th>Updated</th>
                             <th></th>
@@ -59,14 +59,10 @@
                                 <div class="font-weight-bold">{{ $c->partner->name ?? '—' }}</div>
                                 <small class="text-muted">{{ $c->partner->phone ?? '' }}</small>
                             </td>
-                            <td>{{ number_format($c->base_fee) }} ៛</td>
-                            <td>{{ number_format($c->per_km_rate) }} ៛/km</td>
-                            <td class="small">
-                                {{ number_format($c->surcharge_small) }} /
-                                {{ number_format($c->surcharge_medium) }} /
-                                {{ number_format($c->surcharge_large) }} ៛
-                            </td>
-                            <td>{{ number_format($c->min_fee) }} ៛</td>
+                            <td><strong class="text-primary">{{ number_format($c->normal_fee) }} ៛</strong></td>
+                            <td><strong class="text-danger">{{ number_format($c->express_fee) }} ៛</strong></td>
+                            <td>+ {{ number_format($c->surcharge_large) }} ៛</td>
+                            <td>+ {{ number_format($c->surcharge_extra_large) }} ៛</td>
                             <td>
                                 @if($c->is_active)
                                     <span class="badge badge-success">Active</span>
@@ -79,12 +75,10 @@
                                 <button class="btn btn-xs btn-info mr-1"
                                     data-id="{{ $c->id }}"
                                     data-partner="{{ $c->partner->name ?? '' }}"
-                                    data-base="{{ $c->base_fee }}"
-                                    data-perkm="{{ $c->per_km_rate }}"
-                                    data-small="{{ $c->surcharge_small }}"
-                                    data-medium="{{ $c->surcharge_medium }}"
+                                    data-normal="{{ $c->normal_fee }}"
+                                    data-express="{{ $c->express_fee }}"
                                     data-large="{{ $c->surcharge_large }}"
-                                    data-min="{{ $c->min_fee }}"
+                                    data-xl="{{ $c->surcharge_extra_large }}"
                                     data-active="{{ $c->is_active ? '1' : '0' }}"
                                     data-notes="{{ $c->notes }}"
                                     onclick="openEdit(this)">
@@ -116,34 +110,49 @@
         </div>
     </div>
 
-    {{-- System Default Rates --}}
+    {{-- Info Panel --}}
     <div class="col-md-4">
-        <div class="card card-info">
-            <div class="card-header"><h3 class="card-title"><i class="fas fa-info-circle mr-1"></i>System Default Rates</h3></div>
-            <div class="card-body">
-                <p class="text-muted small mb-3">
-                    Partners without a contract use these rates. Configure them in
-                    <a href="{{ route('admin.ride-pricing') }}">Ride Pricing → Global Settings</a>.
-                </p>
-                <table class="table table-sm table-borderless mb-0">
-                    <tr><td class="text-muted small">Base Fee</td><td class="font-weight-bold">{{ number_format($defaults['base_fee']) }} ៛</td></tr>
-                    <tr><td class="text-muted small">Per Km</td><td class="font-weight-bold">{{ number_format($defaults['per_km_rate']) }} ៛</td></tr>
-                    <tr><td class="text-muted small">Surcharge Small</td><td class="font-weight-bold">{{ number_format($defaults['surcharge_small']) }} ៛</td></tr>
-                    <tr><td class="text-muted small">Surcharge Medium</td><td class="font-weight-bold">{{ number_format($defaults['surcharge_medium']) }} ៛</td></tr>
-                    <tr><td class="text-muted small">Surcharge Large</td><td class="font-weight-bold">{{ number_format($defaults['surcharge_large']) }} ៛</td></tr>
+        <div class="card card-primary">
+            <div class="card-header"><h3 class="card-title"><i class="fas fa-calculator mr-1"></i>Default Pricing</h3></div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0 text-center">
+                    <thead class="thead-light">
+                        <tr><th>Package</th><th class="text-primary">Normal</th><th class="text-danger">Express</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="text-left">Small / Medium</td>
+                            <td class="font-weight-bold text-primary">{{ number_format($defaults['normal_fee']) }} ៛</td>
+                            <td class="font-weight-bold text-danger">{{ number_format($defaults['express_fee']) }} ៛</td>
+                        </tr>
+                        <tr>
+                            <td class="text-left">Large</td>
+                            <td class="font-weight-bold text-primary">{{ number_format($defaults['normal_fee'] + $defaults['surcharge_large']) }} ៛</td>
+                            <td class="font-weight-bold text-danger">{{ number_format($defaults['express_fee'] + $defaults['surcharge_large']) }} ៛</td>
+                        </tr>
+                        <tr>
+                            <td class="text-left">Extra Large</td>
+                            <td class="font-weight-bold text-primary">{{ number_format($defaults['normal_fee'] + $defaults['surcharge_extra_large']) }} ៛</td>
+                            <td class="font-weight-bold text-danger">{{ number_format($defaults['express_fee'] + $defaults['surcharge_extra_large']) }} ៛</td>
+                        </tr>
+                    </tbody>
                 </table>
+            </div>
+            <div class="card-footer py-2">
+                <small class="text-muted">Applied to partners without a custom contract.</small>
+                <a href="{{ route('admin.ride-pricing') }}" class="float-right small">Edit defaults</a>
             </div>
         </div>
 
         <div class="card card-warning">
             <div class="card-header"><h3 class="card-title"><i class="fas fa-lightbulb mr-1"></i>How It Works</h3></div>
-            <div class="card-body text-sm text-muted" style="font-size:.85rem">
+            <div class="card-body" style="font-size:.85rem">
                 <ul class="pl-3 mb-0">
                     <li>Each partner can have <strong>one active contract</strong>.</li>
-                    <li>When a partner creates an order, the system checks for an active contract first.</li>
-                    <li>If no contract → system default pricing applies.</li>
-                    <li>Creating a new contract <strong>deactivates</strong> the previous one automatically.</li>
-                    <li>Fee formula: <code>base_fee + (km × per_km) + surcharge</code>, rounded up to 100 ៛, minimum = <code>min_fee</code>.</li>
+                    <li>Fee = <code>Normal/Express + size surcharge</code>.</li>
+                    <li>Small &amp; Medium → no surcharge.</li>
+                    <li>Creating a new contract deactivates the previous one.</li>
+                    <li>No contract → uses Ride Pricing defaults above.</li>
                 </ul>
             </div>
         </div>
@@ -164,7 +173,7 @@
             <form method="POST" action="{{ route('admin.partner-contracts.store') }}">
                 @csrf
                 <div class="modal-body">
-                    @include('admin.partials.contract-form', ['contract' => null, 'partners' => $partners, 'defaults' => $defaults])
+                    @include('admin.partials.contract-form', ['contract' => null, 'partners' => $partners, 'defaults' => $defaults, 'formId' => 'add'])
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
@@ -186,64 +195,7 @@
             <form method="POST" id="editForm">
                 @csrf @method('PUT')
                 <div class="modal-body">
-                    <div class="form-row">
-                        <div class="form-group col-md-6">
-                            <label>Base Fee (KHR) <span class="text-danger">*</span></label>
-                            <div class="input-group">
-                                <input type="number" name="base_fee" id="e-base" class="form-control" min="0" step="100" required>
-                                <div class="input-group-append"><span class="input-group-text">៛</span></div>
-                            </div>
-                        </div>
-                        <div class="form-group col-md-6">
-                            <label>Per Km Rate (KHR) <span class="text-danger">*</span></label>
-                            <div class="input-group">
-                                <input type="number" name="per_km_rate" id="e-perkm" class="form-control" min="0" step="100" required>
-                                <div class="input-group-append"><span class="input-group-text">៛/km</span></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group col-md-4">
-                            <label>Surcharge — Small</label>
-                            <div class="input-group">
-                                <input type="number" name="surcharge_small" id="e-small" class="form-control" min="0" step="100">
-                                <div class="input-group-append"><span class="input-group-text">៛</span></div>
-                            </div>
-                        </div>
-                        <div class="form-group col-md-4">
-                            <label>Surcharge — Medium</label>
-                            <div class="input-group">
-                                <input type="number" name="surcharge_medium" id="e-medium" class="form-control" min="0" step="100">
-                                <div class="input-group-append"><span class="input-group-text">៛</span></div>
-                            </div>
-                        </div>
-                        <div class="form-group col-md-4">
-                            <label>Surcharge — Large</label>
-                            <div class="input-group">
-                                <input type="number" name="surcharge_large" id="e-large" class="form-control" min="0" step="100">
-                                <div class="input-group-append"><span class="input-group-text">៛</span></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group col-md-6">
-                            <label>Minimum Fee (KHR)</label>
-                            <div class="input-group">
-                                <input type="number" name="min_fee" id="e-min" class="form-control" min="0" step="100">
-                                <div class="input-group-append"><span class="input-group-text">៛</span></div>
-                            </div>
-                        </div>
-                        <div class="form-group col-md-6 d-flex align-items-end">
-                            <div class="custom-control custom-switch mb-2">
-                                <input type="checkbox" class="custom-control-input" name="is_active" id="e-active" value="1">
-                                <label class="custom-control-label" for="e-active">Active</label>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Notes</label>
-                        <textarea name="notes" id="e-notes" class="form-control" rows="2" placeholder="Optional notes about this contract"></textarea>
-                    </div>
+                    @include('admin.partials.contract-form', ['contract' => null, 'defaults' => $defaults, 'formId' => 'edit'])
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
@@ -259,14 +211,16 @@
 function openEdit(btn) {
     document.getElementById('edit-partner-name').textContent = btn.dataset.partner;
     document.getElementById('editForm').action = '/admin/partner-contracts/' + btn.dataset.id;
-    document.getElementById('e-base').value   = btn.dataset.base;
-    document.getElementById('e-perkm').value  = btn.dataset.perkm;
-    document.getElementById('e-small').value  = btn.dataset.small;
-    document.getElementById('e-medium').value = btn.dataset.medium;
-    document.getElementById('e-large').value  = btn.dataset.large;
-    document.getElementById('e-min').value    = btn.dataset.min;
-    document.getElementById('e-active').checked = btn.dataset.active === '1';
-    document.getElementById('e-notes').value  = btn.dataset.notes || '';
+
+    var modal = document.getElementById('editModal');
+    modal.querySelector('[name=normal_fee]').value            = btn.dataset.normal;
+    modal.querySelector('[name=express_fee]').value           = btn.dataset.express;
+    modal.querySelector('[name=surcharge_large]').value       = btn.dataset.large;
+    modal.querySelector('[name=surcharge_extra_large]').value = btn.dataset.xl;
+    modal.querySelector('[name=is_active]').checked           = btn.dataset.active === '1';
+    modal.querySelector('[name=notes]').value                 = btn.dataset.notes || '';
+
+    modal.querySelector('[name=normal_fee]').dispatchEvent(new Event('input', {bubbles: true}));
     $('#editModal').modal('show');
 }
 </script>

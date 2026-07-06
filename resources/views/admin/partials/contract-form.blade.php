@@ -1,3 +1,4 @@
+@isset($partners)
 <div class="form-group">
     <label>Partner <span class="text-danger">*</span></label>
     <select name="partner_id" class="form-control" required>
@@ -8,102 +9,117 @@
     </select>
     <small class="text-muted">Only users with role = Partner are listed.</small>
 </div>
+@endisset
+
+<h6 class="text-muted text-uppercase font-weight-bold mb-3" style="font-size:.7rem;letter-spacing:.1em;">Delivery Rates (Flat Fee)</h6>
 <div class="form-row">
     <div class="form-group col-md-6">
-        <label>Base Fee (KHR) <span class="text-danger">*</span></label>
+        <label>Normal Delivery Fee <span class="text-danger">*</span></label>
         <div class="input-group">
-            <input type="number" name="base_fee" class="form-control" value="{{ $defaults['base_fee'] }}" min="0" step="100" required>
+            <input type="number" name="normal_fee" class="form-control"
+                   value="{{ $contract->normal_fee ?? $defaults['normal_fee'] }}" min="0" step="500" required>
             <div class="input-group-append"><span class="input-group-text">៛</span></div>
         </div>
-        <small class="text-muted">Flat charge per delivery</small>
+        <small class="text-muted">Flat fee for normal delivery (Small &amp; Medium)</small>
     </div>
     <div class="form-group col-md-6">
-        <label>Per Km Rate (KHR) <span class="text-danger">*</span></label>
+        <label>Express Delivery Fee <span class="text-danger">*</span></label>
         <div class="input-group">
-            <input type="number" name="per_km_rate" class="form-control" value="{{ $defaults['per_km_rate'] }}" min="0" step="100" required>
-            <div class="input-group-append"><span class="input-group-text">៛/km</span></div>
-        </div>
-        <small class="text-muted">Charged per km of route distance</small>
-    </div>
-</div>
-<div class="form-row">
-    <div class="form-group col-md-4">
-        <label>Surcharge — Small</label>
-        <div class="input-group">
-            <input type="number" name="surcharge_small" class="form-control" value="{{ $defaults['surcharge_small'] }}" min="0" step="100">
+            <input type="number" name="express_fee" class="form-control"
+                   value="{{ $contract->express_fee ?? $defaults['express_fee'] }}" min="0" step="500" required>
             <div class="input-group-append"><span class="input-group-text">៛</span></div>
         </div>
+        <small class="text-muted">Flat fee for express delivery (Small &amp; Medium)</small>
     </div>
-    <div class="form-group col-md-4">
-        <label>Surcharge — Medium</label>
-        <div class="input-group">
-            <input type="number" name="surcharge_medium" class="form-control" value="{{ $defaults['surcharge_medium'] }}" min="0" step="100">
-            <div class="input-group-append"><span class="input-group-text">៛</span></div>
-        </div>
-    </div>
-    <div class="form-group col-md-4">
-        <label>Surcharge — Large</label>
-        <div class="input-group">
-            <input type="number" name="surcharge_large" class="form-control" value="{{ $defaults['surcharge_large'] }}" min="0" step="100">
-            <div class="input-group-append"><span class="input-group-text">៛</span></div>
-        </div>
-    </div>
-</div>
-<div class="form-row">
-    <div class="form-group col-md-6">
-        <label>Minimum Fee (KHR)</label>
-        <div class="input-group">
-            <input type="number" name="min_fee" class="form-control" value="{{ $defaults['min_fee'] }}" min="0" step="100">
-            <div class="input-group-append"><span class="input-group-text">៛</span></div>
-        </div>
-        <small class="text-muted">Delivery fee will never go below this amount</small>
-    </div>
-    <div class="form-group col-md-6 d-flex align-items-center pt-2">
-        <div class="custom-control custom-switch mt-3">
-            <input type="checkbox" class="custom-control-input" name="is_active" id="a-active" value="1" checked>
-            <label class="custom-control-label" for="a-active">Active immediately</label>
-        </div>
-    </div>
-</div>
-<div class="form-group">
-    <label>Notes</label>
-    <textarea name="notes" class="form-control" rows="2" placeholder="Optional notes (e.g. contract period, special terms)"></textarea>
 </div>
 
-{{-- Live fee preview --}}
-<div class="card bg-light mt-2">
-    <div class="card-body py-2">
-        <div class="d-flex align-items-center justify-content-between">
-            <div>
-                <div class="small text-muted font-weight-bold">Example Fee Preview</div>
-                <div class="small text-muted">5 km, Medium package</div>
-            </div>
-            <div class="h5 mb-0 font-weight-bold text-primary" id="preview-fee">—</div>
+<h6 class="text-muted text-uppercase font-weight-bold mb-3 mt-2" style="font-size:.7rem;letter-spacing:.1em;">Package Size Surcharges</h6>
+<div class="form-row">
+    <div class="form-group col-md-6">
+        <label>Large Package (+)</label>
+        <div class="input-group">
+            <div class="input-group-prepend"><span class="input-group-text">+</span></div>
+            <input type="number" name="surcharge_large" class="form-control"
+                   value="{{ $contract->surcharge_large ?? $defaults['surcharge_large'] }}" min="0" step="500">
+            <div class="input-group-append"><span class="input-group-text">៛</span></div>
         </div>
+    </div>
+    <div class="form-group col-md-6">
+        <label>Extra Large Package (+)</label>
+        <div class="input-group">
+            <div class="input-group-prepend"><span class="input-group-text">+</span></div>
+            <input type="number" name="surcharge_extra_large" class="form-control"
+                   value="{{ $contract->surcharge_extra_large ?? $defaults['surcharge_extra_large'] }}" min="0" step="500">
+            <div class="input-group-append"><span class="input-group-text">៛</span></div>
+        </div>
+    </div>
+</div>
+
+<div class="form-row align-items-center mb-3">
+    <div class="col-md-6">
+        <div class="custom-control custom-switch">
+            <input type="checkbox" class="custom-control-input" name="is_active"
+                   id="is_active_{{ $formId ?? 'form' }}" value="1"
+                   {{ ($contract->is_active ?? true) ? 'checked' : '' }}>
+            <label class="custom-control-label" for="is_active_{{ $formId ?? 'form' }}">Active</label>
+        </div>
+    </div>
+</div>
+
+<div class="form-group">
+    <label>Notes</label>
+    <textarea name="notes" class="form-control" rows="2"
+              placeholder="Optional — contract period, special terms…">{{ $contract->notes ?? '' }}</textarea>
+</div>
+
+{{-- Fee Preview Table --}}
+<div class="card bg-light mt-2">
+    <div class="card-header py-2"><strong class="small">Fee Preview</strong></div>
+    <div class="card-body p-0">
+        <table class="table table-sm mb-0 text-center">
+            <thead class="thead-light">
+                <tr><th>Package</th><th class="text-primary">Normal</th><th class="text-danger">Express</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="text-left text-muted">Small / Medium</td>
+                    <td class="font-weight-bold text-primary" id="prev-n-sm-{{ $formId ?? 'form' }}">—</td>
+                    <td class="font-weight-bold text-danger" id="prev-e-sm-{{ $formId ?? 'form' }}">—</td>
+                </tr>
+                <tr>
+                    <td class="text-left text-muted">Large</td>
+                    <td class="font-weight-bold text-primary" id="prev-n-lg-{{ $formId ?? 'form' }}">—</td>
+                    <td class="font-weight-bold text-danger" id="prev-e-lg-{{ $formId ?? 'form' }}">—</td>
+                </tr>
+                <tr>
+                    <td class="text-left text-muted">Extra Large</td>
+                    <td class="font-weight-bold text-primary" id="prev-n-xl-{{ $formId ?? 'form' }}">—</td>
+                    <td class="font-weight-bold text-danger" id="prev-e-xl-{{ $formId ?? 'form' }}">—</td>
+                </tr>
+            </tbody>
+        </table>
     </div>
 </div>
 
 <script>
 (function() {
-    function fmt(n) { return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
-    function calcPreview() {
-        var form    = document.querySelector('#addModal form, #editModal form');
-        if (!form) return;
-        var base    = parseInt(form.querySelector('[name=base_fee]').value)    || 0;
-        var perkm   = parseInt(form.querySelector('[name=per_km_rate]').value) || 0;
-        var med     = parseInt(form.querySelector('[name=surcharge_medium]').value) || 0;
-        var minFee  = parseInt(form.querySelector('[name=min_fee]').value)     || 0;
-        var raw     = base + Math.ceil(5 * perkm) + med;
-        var fee     = Math.ceil(raw / 100) * 100;
-        fee         = Math.max(fee, minFee);
-        var el      = document.getElementById('preview-fee');
-        if (el) el.textContent = fmt(fee) + ' ៛';
+    var fid = '{{ $formId ?? "form" }}';
+    function fmt(n) { return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' ៛'; }
+    function update() {
+        var scope = document.getElementById('addModal') || document.getElementById('editModal') || document;
+        function v(name) { var el = scope.querySelector('[name=' + name + ']'); return el ? (parseInt(el.value) || 0) : 0; }
+        var n = v('normal_fee'), e = v('express_fee');
+        var sl = v('surcharge_large'), sx = v('surcharge_extra_large');
+        document.getElementById('prev-n-sm-' + fid).textContent = fmt(n);
+        document.getElementById('prev-e-sm-' + fid).textContent = fmt(e);
+        document.getElementById('prev-n-lg-' + fid).textContent = fmt(n + sl);
+        document.getElementById('prev-e-lg-' + fid).textContent = fmt(e + sl);
+        document.getElementById('prev-n-xl-' + fid).textContent = fmt(n + sx);
+        document.getElementById('prev-e-xl-' + fid).textContent = fmt(e + sx);
     }
-    document.addEventListener('input', function(e) {
-        if (['base_fee','per_km_rate','surcharge_medium','min_fee'].includes(e.target.name)) {
-            calcPreview();
-        }
+    document.addEventListener('input', function(ev) {
+        if (['normal_fee','express_fee','surcharge_large','surcharge_extra_large'].includes(ev.target.name)) update();
     });
-    setTimeout(calcPreview, 300);
+    setTimeout(update, 300);
 })();
 </script>
