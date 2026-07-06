@@ -6,7 +6,7 @@
     <title>Partner Login — AutoRide</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
-    @vite(['resources/css/app.css'])
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="h-full flex items-center justify-center min-h-screen" style="background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%)">
 
