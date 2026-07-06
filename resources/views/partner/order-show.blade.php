@@ -101,49 +101,84 @@
 
         {{-- Timeline --}}
         <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
-            <h3 class="font-semibold text-slate-800 flex items-center gap-2 mb-4">
+            <h3 class="font-semibold text-slate-800 flex items-center gap-2 mb-5">
                 <i class="fas fa-route text-amber-500"></i> Delivery Timeline
             </h3>
             @php
+            /*  [label, icon, dot-color, row-bg, text-color, timestamp] */
             $steps = [
-                'created'    => ['Created', 'fas fa-plus', '#6b7280', $delivery->created_at],
-                'assigned'   => ['Assigned to Driver', 'fas fa-user-check', '#f59e0b', $delivery->assigned_at ?? null],
-                'accepted'   => ['Driver Accepted', 'fas fa-thumbs-up', '#3b82f6', null],
-                'picked_up'  => ['Picked Up (QR Scanned)', 'fas fa-qrcode', '#8b5cf6', $delivery->pickup_scanned_at ?? null],
-                'in_transit' => ['In Transit (QR Scanned)', 'fas fa-truck', '#0ea5e9', $delivery->delivery_scanned_at ?? null],
-                'delivered'  => ['Delivered', 'fas fa-check', '#10b981', $delivery->completed_at ?? null],
+                'created'    => ['Order Created',            'fas fa-plus-circle',  '#64748b', '#f8fafc', '#374151', $delivery->created_at],
+                'assigned'   => ['Assigned to Driver',       'fas fa-user-check',   '#f59e0b', '#fffbeb', '#92400e', $delivery->assigned_at ?? null],
+                'accepted'   => ['Driver Accepted',          'fas fa-thumbs-up',    '#3b82f6', '#eff6ff', '#1e40af', null],
+                'picked_up'  => ['Picked Up — QR Scanned',   'fas fa-qrcode',       '#8b5cf6', '#f5f3ff', '#5b21b6', $delivery->pickup_scanned_at ?? null],
+                'in_transit' => ['In Transit — QR Scanned',  'fas fa-truck',        '#0ea5e9', '#f0f9ff', '#0c4a6e', $delivery->delivery_scanned_at ?? null],
+                'delivered'  => ['Delivered',                'fas fa-check-circle', '#10b981', '#f0fdf4', '#065f46', $delivery->completed_at ?? null],
             ];
             $statusOrder = ['created','assigned','accepted','picked_up','in_transit','delivered','completed'];
-            $curIdx = array_search($delivery->status, $statusOrder);
+            $curIdx      = array_search($delivery->status, $statusOrder);
             @endphp
-            <div class="space-y-3">
-                @foreach($steps as $key => [$label, $icon, $color, $ts])
+
+            <div class="relative">
+                {{-- Vertical connector line --}}
+                <div class="absolute bg-slate-200"
+                     style="left:17px;top:18px;bottom:18px;width:2px;z-index:0"></div>
+
+                <div class="space-y-2" style="position:relative;z-index:1">
+                @foreach($steps as $key => [$label, $icon, $dotColor, $rowBg, $textColor, $ts])
                 @php
-                $stepIdx = array_search($key, $statusOrder);
-                $done    = $curIdx !== false && $curIdx >= $stepIdx;
+                    $stepIdx = array_search($key, $statusOrder);
+                    $done    = $curIdx !== false && $curIdx >= $stepIdx;
+                    $current = $curIdx === $stepIdx && $delivery->status !== 'cancelled';
                 @endphp
-                <div class="flex items-start gap-3">
-                    <div class="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
-                         style="background:{{ $done ? $color : '#e2e8f0' }}">
-                        <i class="{{ $icon }} text-white" style="font-size:.6rem"></i>
+                <div class="flex items-center gap-3 rounded-xl px-3 py-2"
+                     style="{{ $done ? 'background:'.$rowBg.';border:1.5px solid '.($current ? $dotColor : 'transparent') : 'background:transparent;border:1.5px solid transparent' }}">
+
+                    <div class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm"
+                         style="background:{{ $done ? $dotColor : '#e2e8f0' }};min-width:2.25rem">
+                        <i class="{{ $icon }} text-white" style="font-size:.8rem"></i>
                     </div>
-                    <div>
-                        <p class="mb-0 text-sm {{ $done ? 'fw-semibold text-slate-800' : 'text-slate-400' }}">{{ $label }}</p>
-                        @if($ts)<small class="text-muted">{{ \Carbon\Carbon::parse($ts)->format('d M Y H:i') }}</small>@endif
+
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-sm font-semibold leading-tight"
+                                  style="color:{{ $done ? $textColor : '#cbd5e1' }}">{{ $label }}</span>
+                            @if($current)
+                                <span class="badge rounded-pill text-white px-2"
+                                      style="font-size:.6rem;background:{{ $dotColor }}">Now</span>
+                            @elseif($done)
+                                <i class="fas fa-check" style="font-size:.6rem;color:{{ $dotColor }}"></i>
+                            @endif
+                        </div>
+                        @if($ts)
+                            <p class="mb-0 text-xs text-slate-400 mt-0.5">
+                                {{ \Carbon\Carbon::parse($ts)->format('d M Y, H:i') }}
+                            </p>
+                        @elseif(!$done)
+                            <p class="mb-0 text-xs mt-0.5" style="color:#cbd5e1">Waiting…</p>
+                        @endif
                     </div>
                 </div>
                 @endforeach
+
                 @if($delivery->status === 'cancelled')
-                <div class="flex items-start gap-3">
-                    <div class="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 bg-red-500">
-                        <i class="fas fa-times text-white" style="font-size:.6rem"></i>
+                <div class="flex items-center gap-3 rounded-xl px-3 py-2"
+                     style="background:#fef2f2;border:1.5px solid #ef4444">
+                    <div class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm bg-red-500"
+                         style="min-width:2.25rem">
+                        <i class="fas fa-times text-white" style="font-size:.8rem"></i>
                     </div>
                     <div>
-                        <p class="mb-0 text-sm fw-semibold text-danger">Cancelled</p>
-                        @if($delivery->cancellation_reason)<small class="text-muted">{{ $delivery->cancellation_reason }}</small>@endif
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-semibold text-red-700">Order Cancelled</span>
+                            <span class="badge rounded-pill bg-red-500 text-white px-2" style="font-size:.6rem">Now</span>
+                        </div>
+                        @if($delivery->cancellation_reason)
+                            <p class="mb-0 text-xs text-red-400 mt-0.5">{{ $delivery->cancellation_reason }}</p>
+                        @endif
                     </div>
                 </div>
                 @endif
+                </div>
             </div>
         </div>
 
