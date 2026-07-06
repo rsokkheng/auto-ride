@@ -38,14 +38,18 @@
                     <form method="POST" action="{{ route('partner.login.post') }}">
                         @csrf
                         <div class="form-group">
-                            <label class="font-weight-600 small">Phone Number</label>
+                            <label class="font-weight-600 small">Phone Number or Email</label>
                             <div class="input-group">
                                 <div class="input-group-prepend">
-                                    <span class="input-group-text"><i class="fas fa-phone"></i></span>
+                                    <span class="input-group-text"><i class="fas fa-user"></i></span>
                                 </div>
-                                <input type="text" name="phone" class="form-control"
-                                       placeholder="0XX XXX XXXX" value="{{ old('phone') }}" required autofocus>
+                                <input type="text" name="login" class="form-control"
+                                       placeholder="0XX XXX XXXX or email@example.com"
+                                       value="{{ old('login') }}" required autofocus>
                             </div>
+                            @error('login')
+                                <small class="text-danger">{{ $message }}</small>
+                            @enderror
                         </div>
                         <div class="form-group">
                             <label class="font-weight-600 small">Password</label>

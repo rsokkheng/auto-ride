@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Delivery;
 use App\Models\TopUpRequest;
 use App\Models\User;
-use App\Models\WalletTransaction;
 use App\Models\WithdrawalRequest;
 use App\Services\DriverMatchingService;
 use Illuminate\Http\Request;
@@ -29,14 +28,19 @@ class PartnerController extends Controller
     public function login(Request $request)
     {
         $data = $request->validate([
-            'phone'    => 'required|string|max:24',
+            'login'    => 'required|string|max:255',
             'password' => 'required|string',
         ]);
 
-        $user = User::where('phone', $data['phone'])->where('role', 'partner')->first();
+        $login = trim($data['login']);
+
+        $user = User::where('role', 'partner')
+            ->where(function ($q) use ($login) {
+                $q->where('phone', $login)->orWhere('email', $login);
+            })->first();
 
         if (! $user || ! Hash::check($data['password'], $user->password)) {
-            return back()->withErrors(['phone' => 'Invalid phone number or password.'])->withInput();
+            return back()->withErrors(['login' => 'Invalid phone/email or password.'])->withInput();
         }
 
         Auth::guard('partner')->login($user, $request->boolean('remember'));
@@ -55,7 +59,6 @@ class PartnerController extends Controller
     public function dashboard()
     {
         $partner = Auth::guard('partner')->user();
-        $today   = now()->startOfDay();
         $week    = now()->startOfWeek();
         $month   = now()->startOfMonth();
 
