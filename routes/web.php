@@ -194,6 +194,8 @@ Route::prefix('admin')->group(function () {
     Route::get('settlements/preview',                            [SettlementController::class, 'preview'])->name('admin.settlements.preview');
     Route::get('settlements/export',                             [SettlementController::class, 'export'])->name('admin.settlements.export');
     Route::post('settlements',                                   [SettlementController::class, 'store'])->name('admin.settlements.store');
+    Route::post('settlements/bulk-approve',                      [SettlementController::class, 'bulkApprove'])->name('admin.settlements.bulk-approve');
+    Route::post('settlements/bulk-process',                      [SettlementController::class, 'bulkProcess'])->name('admin.settlements.bulk-process');
     Route::get('settlements/{settlement}',                       [SettlementController::class, 'show'])->name('admin.settlements.show');
     Route::get('settlements/{settlement}/receipt',               [SettlementController::class, 'receipt'])->name('admin.settlements.receipt');
     Route::get('settlements/{settlement}/receipt/pdf',           [SettlementController::class, 'receiptPdf'])->name('admin.settlements.receipt.pdf');
@@ -204,8 +206,6 @@ Route::prefix('admin')->group(function () {
     Route::patch('settlements/{settlement}/failed',              [SettlementController::class, 'markFailed'])->name('admin.settlements.failed');
     Route::patch('settlements/{settlement}/cancel',              [SettlementController::class, 'cancel'])->name('admin.settlements.cancel');
     Route::delete('settlements/{settlement}',                    [SettlementController::class, 'destroy'])->name('admin.settlements.destroy');
-    Route::post('settlements/bulk-approve',                      [SettlementController::class, 'bulkApprove'])->name('admin.settlements.bulk-approve');
-    Route::post('settlements/bulk-process',                      [SettlementController::class, 'bulkProcess'])->name('admin.settlements.bulk-process');
 
     // Partner Contracts
     Route::get('partner-contracts',                    [AdminController::class, 'partnerContracts'])->name('admin.partner-contracts');

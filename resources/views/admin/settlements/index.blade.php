@@ -222,6 +222,12 @@ document.getElementById('checkAll').addEventListener('change', function() {
     document.querySelectorAll('input[name="ids[]"]').forEach(cb => cb.checked = this.checked);
 });
 function submitBulk(url) {
+    var checked = document.querySelectorAll('input[name="ids[]"]:checked');
+    if (checked.length === 0) {
+        alert('Please select at least one settlement first.');
+        return;
+    }
+    if (!confirm('Apply action to ' + checked.length + ' selected settlement(s)?')) return;
     var form = document.getElementById('bulkForm');
     form.action = url;
     form.submit();
