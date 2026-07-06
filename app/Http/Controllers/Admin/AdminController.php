@@ -619,9 +619,11 @@ class AdminController extends Controller
         ]);
 
         $delivery->update([
-            'driver_id'   => $data['driver_id'],
-            'status'      => in_array($delivery->status, ['requested', 'pending']) ? 'accepted' : $delivery->status,
-            'assigned_at' => $delivery->assigned_at ?? now(),
+            'driver_id'       => $data['driver_id'],
+            'status'          => in_array($delivery->status, ['requested', 'pending']) ? 'accepted'
+                                : (in_array($delivery->status, ['created']) ? 'assigned' : $delivery->status),
+            'assigned_at'     => $delivery->assigned_at ?? now(),
+            'assignment_type' => $delivery->assignment_type ?? 'manual',
         ]);
 
         $driver = User::find($data['driver_id']);
