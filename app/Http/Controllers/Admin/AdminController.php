@@ -2199,6 +2199,473 @@ class AdminController extends Controller
         return redirect()->route('admin.partner-contracts')->with('success', 'Contract deleted.');
     }
 
+    // ── Report Helpers ────────────────────────────────────────────────────────
+
+    private function reportPeriod(\Illuminate\Http\Request $request): array
+    {
+        $period = (int) $request->input('period', 30);
+        $start  = now()->subDays($period)->startOfDay();
+        $prev   = now()->subDays($period * 2)->startOfDay();
+        return [$period, $start, $prev];
+    }
+
+    private function trendDates(int $days = 30): \Illuminate\Support\Collection
+    {
+        $dates = collect();
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $dates->push(now()->subDays($i)->format('Y-m-d'));
+        }
+        return $dates;
+    }
+
+    // ── 1. Order Report ───────────────────────────────────────────────────────
+    public function reportOrders(\Illuminate\Http\Request $request)
+    {
+        [$period, $start] = $this->reportPeriod($request);
+
+        $totals = \DB::table('deliveries')->where('created_at', '>=', $start)
+            ->selectRaw('COUNT(*) as total,
+                SUM(CASE WHEN status IN("delivered","completed") THEN 1 ELSE 0 END) as done,
+                SUM(CASE WHEN status="cancelled" THEN 1 ELSE 0 END) as cancelled,
+                SUM(CASE WHEN partner_id IS NOT NULL THEN 1 ELSE 0 END) as partner_orders,
+                SUM(CASE WHEN partner_id IS NULL THEN 1 ELSE 0 END) as regular_orders,
+                SUM(CASE WHEN service_option="express" THEN 1 ELSE 0 END) as express_orders,
+                SUM(fee) as total_fee,
+                SUM(package_amount) as total_cod,
+                AVG(CASE WHEN status IN("delivered","completed") AND completed_at IS NOT NULL THEN TIMESTAMPDIFF(MINUTE,created_at,completed_at) END) as avg_minutes')
+            ->first();
+
+        $byStatus = \DB::table('deliveries')->where('created_at', '>=', $start)
+            ->selectRaw('status, COUNT(*) as c, SUM(fee) as rev')->groupBy('status')->orderByRaw('c DESC')->get();
+
+        $bySize = \DB::table('deliveries')->where('created_at', '>=', $start)
+            ->selectRaw('package_size, COUNT(*) as c')->groupBy('package_size')->orderByRaw('c DESC')->get();
+
+        $byPayment = \DB::table('deliveries')->where('created_at', '>=', $start)
+            ->selectRaw('payment_by, COUNT(*) as c, SUM(package_amount) as cod')->groupBy('payment_by')->get();
+
+        $daily = \DB::table('deliveries')->where('created_at', '>=', $start)
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as c, SUM(fee) as rev,
+                SUM(CASE WHEN status IN("delivered","completed") THEN 1 ELSE 0 END) as done,
+                SUM(CASE WHEN status="cancelled" THEN 1 ELSE 0 END) as cancelled')
+            ->groupBy('date')->orderBy('date')->get()->keyBy('date');
+
+        $trendDates = $this->trendDates($period);
+
+        $recent = \DB::table('deliveries as d')
+            ->leftJoin('users as dr', 'dr.id', '=', 'd.driver_id')
+            ->leftJoin('users as p', 'p.id', '=', 'd.partner_id')
+            ->where('d.created_at', '>=', $start)
+            ->selectRaw('d.id, d.recipient_name, d.recipient_phone, d.status, d.service_option,
+                d.package_size, d.fee, d.created_at, dr.name as driver_name, p.name as partner_name')
+            ->orderByDesc('d.id')->limit(20)->get();
+
+        return view('admin.reports.orders', compact('period','start','totals','byStatus','bySize','byPayment','daily','trendDates','recent'));
+    }
+
+    // ── 2. Driver Report ──────────────────────────────────────────────────────
+    public function reportDrivers(\Illuminate\Http\Request $request)
+    {
+        [$period, $start] = $this->reportPeriod($request);
+
+        $totals = \DB::table('users')->where('role', 'driver')
+            ->selectRaw('COUNT(*) as total,
+                SUM(CASE WHEN available=1 THEN 1 ELSE 0 END) as online,
+                SUM(CASE WHEN approval_status="approved" THEN 1 ELSE 0 END) as approved,
+                SUM(CASE WHEN approval_status="pending" THEN 1 ELSE 0 END) as pending,
+                AVG(rating) as avg_rating')->first();
+
+        $newDrivers = \DB::table('users')->where('role','driver')
+            ->where('created_at', '>=', $start)->count();
+
+        $driverActivity = \DB::table('users as u')
+            ->where('u.role', 'driver')
+            ->leftJoin('rides as r', function($j) use ($start) {
+                $j->on('r.driver_id','=','u.id')->where('r.status','completed')->where('r.created_at','>=',$start);
+            })
+            ->leftJoin('deliveries as d', function($j) use ($start) {
+                $j->on('d.driver_id','=','u.id')->whereIn('d.status',['delivered','completed'])->where('d.created_at','>=',$start);
+            })
+            ->selectRaw('u.id, u.name, u.phone, u.rating, u.available, u.wallet_balance, u.approval_status,
+                COUNT(DISTINCT r.id) as rides, COUNT(DISTINCT d.id) as deliveries,
+                COALESCE(SUM(DISTINCT r.fare),0) + COALESCE(SUM(DISTINCT d.fee),0) as gross_revenue')
+            ->groupBy('u.id','u.name','u.phone','u.rating','u.available','u.wallet_balance','u.approval_status')
+            ->orderByRaw('(COUNT(DISTINCT r.id)+COUNT(DISTINCT d.id)) DESC')
+            ->get();
+
+        $daily = \DB::table('rides')->where('created_at', '>=', $start)->where('status','completed')
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as rides')->groupBy('date')
+            ->orderBy('date')->get()->keyBy('date');
+
+        $trendDates = $this->trendDates($period);
+
+        $cancellations = \DB::table('users as u')
+            ->where('u.role','driver')
+            ->join('rides as r', function($j) use ($start) {
+                $j->on('r.driver_id','=','u.id')->where('r.status','cancelled')->where('r.created_at','>=',$start);
+            })
+            ->selectRaw('u.id, u.name, COUNT(r.id) as cancelled')
+            ->groupBy('u.id','u.name')->orderByRaw('cancelled DESC')->limit(10)->get();
+
+        return view('admin.reports.drivers', compact('period','start','totals','newDrivers','driverActivity','daily','trendDates','cancellations'));
+    }
+
+    // ── 3. Partner Report ─────────────────────────────────────────────────────
+    public function reportPartners(\Illuminate\Http\Request $request)
+    {
+        [$period, $start] = $this->reportPeriod($request);
+
+        $partners = \DB::table('users as u')
+            ->where('u.role','partner')
+            ->leftJoin('deliveries as d', function($j) use ($start) {
+                $j->on('d.partner_id','=','u.id')->where('d.created_at','>=',$start);
+            })
+            ->leftJoin('partner_contracts as pc', function($j) {
+                $j->on('pc.partner_id','=','u.id')->where('pc.is_active',1);
+            })
+            ->selectRaw('u.id, u.name, u.phone, u.wallet_balance, u.created_at as joined,
+                COUNT(DISTINCT d.id) as orders,
+                SUM(CASE WHEN d.status IN("delivered","completed") THEN 1 ELSE 0 END) as done,
+                SUM(CASE WHEN d.status="cancelled" THEN 1 ELSE 0 END) as cancelled,
+                SUM(d.fee) as revenue,
+                SUM(CASE WHEN d.service_option="express" THEN 1 ELSE 0 END) as express,
+                MAX(pc.normal_fee) as contract_normal_fee')
+            ->groupBy('u.id','u.name','u.phone','u.wallet_balance','u.created_at')
+            ->orderByRaw('orders DESC')->get();
+
+        $totalPartners = \DB::table('users')->where('role','partner')->count();
+        $totalOrders   = \DB::table('deliveries')->where('created_at','>=',$start)->whereNotNull('partner_id')->count();
+        $totalRevenue  = \DB::table('deliveries')->where('created_at','>=',$start)->whereNotNull('partner_id')
+                            ->whereIn('status',['delivered','completed'])->sum('fee');
+
+        $daily = \DB::table('deliveries')->where('created_at','>=',$start)->whereNotNull('partner_id')
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as c, SUM(fee) as rev')
+            ->groupBy('date')->orderBy('date')->get()->keyBy('date');
+
+        $trendDates = $this->trendDates($period);
+
+        return view('admin.reports.partners', compact('period','start','partners','totalPartners','totalOrders','totalRevenue','daily','trendDates'));
+    }
+
+    // ── 4. Customer Report ────────────────────────────────────────────────────
+    public function reportCustomers(\Illuminate\Http\Request $request)
+    {
+        [$period, $start] = $this->reportPeriod($request);
+
+        $totals = \DB::table('users')->where('role','passenger')
+            ->selectRaw('COUNT(*) as total')->first();
+        $newCustomers = \DB::table('users')->where('role','passenger')
+            ->where('created_at','>=',$start)->count();
+        $activeCustomers = \DB::table('users as u')
+            ->where('u.role','passenger')
+            ->where(function($q) use ($start) {
+                $q->whereExists(function($s) use ($start) {
+                    $s->from('rides')->whereColumn('passenger_id','u.id')->where('created_at','>=',$start);
+                })->orWhereExists(function($s) use ($start) {
+                    $s->from('deliveries')->whereColumn('sender_id','u.id')->where('created_at','>=',$start)->whereNull('partner_id');
+                });
+            })->count();
+
+        $topCustomers = \DB::table('users as u')
+            ->where('u.role','passenger')
+            ->leftJoin('rides as r', function($j) use ($start) {
+                $j->on('r.passenger_id','=','u.id')->where('r.created_at','>=',$start);
+            })
+            ->selectRaw('u.id, u.name, u.phone, u.created_at as joined,
+                COUNT(DISTINCT r.id) as rides,
+                SUM(CASE WHEN r.status="completed" THEN r.fare ELSE 0 END) as spent,
+                AVG(r.passenger_rating) as avg_rating_given')
+            ->groupBy('u.id','u.name','u.phone','u.created_at')
+            ->orderByRaw('rides DESC')->limit(20)->get();
+
+        $registrations = \DB::table('users')->where('role','passenger')
+            ->where('created_at','>=',$start)
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as c')
+            ->groupBy('date')->orderBy('date')->get()->keyBy('date');
+
+        $trendDates = $this->trendDates($period);
+
+        return view('admin.reports.customers', compact('period','start','totals','newCustomers','activeCustomers','topCustomers','registrations','trendDates'));
+    }
+
+    // ── 5. Financial Report ───────────────────────────────────────────────────
+    public function reportFinancial(\Illuminate\Http\Request $request)
+    {
+        [$period, $start] = $this->reportPeriod($request);
+
+        $rideRev     = (float)\DB::table('rides')->where('created_at','>=',$start)->where('status','completed')->sum('fare');
+        $deliveryRev = (float)\DB::table('deliveries')->where('created_at','>=',$start)->whereIn('status',['delivered','completed'])->sum('fee');
+        $commission  = (float)\DB::table('wallet_transactions')->where('created_at','>=',$start)->where('type','platform_commission')->sum('amount');
+        $tips        = (float)\DB::table('wallet_transactions')->where('created_at','>=',$start)->where('type','tip_in')->sum('amount');
+        $cod         = (float)\DB::table('deliveries')->where('payment_by','recipient')->whereIn('status',['delivered','completed'])->where('payment_status','unpaid')->sum('package_amount');
+        $topups      = (float)\DB::table('top_up_requests')->where('status','approved')->where('created_at','>=',$start)->sum('amount');
+        $withdrawals = (float)\DB::table('withdrawal_requests')->where('status','approved')->where('created_at','>=',$start)->sum('amount_khr');
+
+        $dailyRevenue = \DB::table('rides as r')
+            ->where('r.status','completed')->where('r.created_at','>=',$start)
+            ->selectRaw('DATE(r.created_at) as date, SUM(r.fare) as ride_rev')
+            ->groupBy('date')->orderBy('date')->get()->keyBy('date');
+
+        $dailyDelivery = \DB::table('deliveries')
+            ->whereIn('status',['delivered','completed'])->where('created_at','>=',$start)
+            ->selectRaw('DATE(created_at) as date, SUM(fee) as del_rev')
+            ->groupBy('date')->orderBy('date')->get()->keyBy('date');
+
+        $trendDates = $this->trendDates($period);
+
+        $paymentMethods = \DB::table('rides')->where('created_at','>=',$start)->where('status','completed')
+            ->selectRaw('payment_method, COUNT(*) as c, SUM(fare) as rev')
+            ->groupBy('payment_method')->orderByRaw('rev DESC')->get();
+
+        return view('admin.reports.financial', compact(
+            'period','start','rideRev','deliveryRev','commission','tips','cod','topups','withdrawals',
+            'dailyRevenue','dailyDelivery','trendDates','paymentMethods'
+        ));
+    }
+
+    // ── 6. Wallet Report ──────────────────────────────────────────────────────
+    public function reportWallet(\Illuminate\Http\Request $request)
+    {
+        [$period, $start] = $this->reportPeriod($request);
+
+        $byType = \DB::table('wallet_transactions')->where('created_at','>=',$start)
+            ->selectRaw('type, direction, COUNT(*) as c, SUM(amount) as total')
+            ->groupBy('type','direction')->orderByRaw('total DESC')->get();
+
+        $topBalances = \DB::table('users')
+            ->where('wallet_balance','>',0)
+            ->selectRaw('id, name, phone, role, wallet_balance')
+            ->orderByDesc('wallet_balance')->limit(15)->get();
+
+        $recent = \DB::table('wallet_transactions as wt')
+            ->join('users as u','u.id','=','wt.user_id')
+            ->where('wt.created_at','>=',$start)
+            ->selectRaw('wt.id, u.name, u.role, wt.type, wt.direction, wt.amount, wt.balance_after, wt.note, wt.created_at')
+            ->orderByDesc('wt.id')->limit(30)->get();
+
+        $topups = \DB::table('top_up_requests as t')
+            ->join('users as u','u.id','=','t.user_id')
+            ->where('t.created_at','>=',$start)
+            ->selectRaw('t.id, u.name, u.phone, t.amount, t.method, t.status, t.created_at')
+            ->orderByDesc('t.id')->limit(20)->get();
+
+        $totalIn  = (float)\DB::table('wallet_transactions')->where('direction','credit')->where('created_at','>=',$start)->sum('amount');
+        $totalOut = (float)\DB::table('wallet_transactions')->where('direction','debit')->where('created_at','>=',$start)->sum('amount');
+
+        return view('admin.reports.wallet', compact('period','start','byType','topBalances','recent','topups','totalIn','totalOut'));
+    }
+
+    // ── 7. Withdrawal Report ──────────────────────────────────────────────────
+    public function reportWithdrawals(\Illuminate\Http\Request $request)
+    {
+        [$period, $start] = $this->reportPeriod($request);
+
+        $totals = \DB::table('withdrawal_requests')->where('created_at','>=',$start)
+            ->selectRaw('COUNT(*) as total,
+                SUM(CASE WHEN status="pending" THEN 1 ELSE 0 END) as pending,
+                SUM(CASE WHEN status="approved" THEN 1 ELSE 0 END) as approved,
+                SUM(CASE WHEN status="rejected" THEN 1 ELSE 0 END) as rejected,
+                SUM(CASE WHEN status="approved" THEN amount_khr ELSE 0 END) as total_paid,
+                SUM(CASE WHEN status="pending" THEN amount_khr ELSE 0 END) as total_pending')
+            ->first();
+
+        $byMethod = \DB::table('withdrawal_requests')->where('created_at','>=',$start)
+            ->selectRaw('payment_method, COUNT(*) as c, SUM(amount_khr) as total')
+            ->groupBy('payment_method')->orderByRaw('total DESC')->get();
+
+        $withdrawals = \DB::table('withdrawal_requests as w')
+            ->join('users as u','u.id','=','w.driver_id')
+            ->where('w.created_at','>=',$start)
+            ->selectRaw('w.id, u.name, u.phone, w.amount_khr, w.payment_method, w.account_number,
+                w.bank_name, w.status, w.admin_note, w.processed_at, w.created_at')
+            ->orderByDesc('w.id')->paginate(25);
+
+        $daily = \DB::table('withdrawal_requests')->where('created_at','>=',$start)
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as c, SUM(amount_khr) as total')
+            ->groupBy('date')->orderBy('date')->get()->keyBy('date');
+
+        $trendDates = $this->trendDates($period);
+
+        return view('admin.reports.withdrawals', compact('period','start','totals','byMethod','withdrawals','daily','trendDates'));
+    }
+
+    // ── 8. Commission Report ──────────────────────────────────────────────────
+    public function reportCommission(\Illuminate\Http\Request $request)
+    {
+        [$period, $start] = $this->reportPeriod($request);
+
+        $totalCommission = (float)\DB::table('wallet_transactions')
+            ->where('type','platform_commission')->where('created_at','>=',$start)->sum('amount');
+        $totalTrips = \DB::table('wallet_transactions')
+            ->where('type','platform_commission')->where('created_at','>=',$start)->count();
+        $avgCommission = $totalTrips > 0 ? round($totalCommission / $totalTrips) : 0;
+
+        $byDriver = \DB::table('wallet_transactions as wt')
+            ->join('users as u','u.id','=','wt.user_id')
+            ->where('wt.type','platform_commission')->where('wt.created_at','>=',$start)
+            ->selectRaw('u.id, u.name, u.phone, COUNT(wt.id) as trips, SUM(wt.amount) as commission')
+            ->groupBy('u.id','u.name','u.phone')
+            ->orderByRaw('commission DESC')->get();
+
+        $daily = \DB::table('wallet_transactions')
+            ->where('type','platform_commission')->where('created_at','>=',$start)
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as c, SUM(amount) as total')
+            ->groupBy('date')->orderBy('date')->get()->keyBy('date');
+
+        $trendDates = $this->trendDates($period);
+
+        $recent = \DB::table('wallet_transactions as wt')
+            ->join('users as u','u.id','=','wt.user_id')
+            ->where('wt.type','platform_commission')->where('wt.created_at','>=',$start)
+            ->selectRaw('wt.id, u.name, wt.amount, wt.balance_before, wt.balance_after, wt.note, wt.created_at')
+            ->orderByDesc('wt.id')->limit(30)->get();
+
+        return view('admin.reports.commission', compact('period','start','totalCommission','totalTrips','avgCommission','byDriver','daily','trendDates','recent'));
+    }
+
+    // ── 9. Performance Report ─────────────────────────────────────────────────
+    public function reportPerformance(\Illuminate\Http\Request $request)
+    {
+        [$period, $start] = $this->reportPeriod($request);
+
+        $rideKpi = \DB::table('rides')->where('created_at','>=',$start)
+            ->selectRaw('COUNT(*) as total,
+                SUM(CASE WHEN status="completed" THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN status="cancelled" THEN 1 ELSE 0 END) as cancelled,
+                AVG(CASE WHEN status="completed" AND completed_at IS NOT NULL THEN TIMESTAMPDIFF(MINUTE,created_at,completed_at) END) as avg_duration,
+                AVG(CASE WHEN rating IS NOT NULL THEN rating END) as avg_rating,
+                AVG(CASE WHEN accepted_at IS NOT NULL THEN TIMESTAMPDIFF(SECOND,created_at,accepted_at) END) as avg_accept_seconds')
+            ->first();
+
+        $deliveryKpi = \DB::table('deliveries')->where('created_at','>=',$start)
+            ->selectRaw('COUNT(*) as total,
+                SUM(CASE WHEN status IN("delivered","completed") THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN status="cancelled" THEN 1 ELSE 0 END) as cancelled,
+                AVG(CASE WHEN status IN("delivered","completed") AND completed_at IS NOT NULL THEN TIMESTAMPDIFF(MINUTE,created_at,completed_at) END) as avg_duration,
+                AVG(CASE WHEN rating IS NOT NULL THEN rating END) as avg_rating,
+                SUM(CASE WHEN driver_id IS NULL AND status NOT IN("cancelled","completed","delivered") THEN 1 ELSE 0 END) as unassigned')
+            ->first();
+
+        $hourly = \DB::table('rides')->where('created_at','>=',$start)->where('status','completed')
+            ->selectRaw('HOUR(created_at) as hour, COUNT(*) as c')->groupBy('hour')->orderBy('hour')->get()->keyBy('hour');
+
+        $cancellationReasons = \DB::table('rides')->where('created_at','>=',$start)->where('status','cancelled')
+            ->whereNotNull('cancellation_reason')
+            ->selectRaw('cancellation_reason, COUNT(*) as c')->groupBy('cancellation_reason')->orderByRaw('c DESC')->limit(10)->get();
+
+        $deliCancelReasons = \DB::table('deliveries')->where('created_at','>=',$start)->where('status','cancelled')
+            ->whereNotNull('cancellation_reason')
+            ->selectRaw('cancellation_reason, COUNT(*) as c')->groupBy('cancellation_reason')->orderByRaw('c DESC')->limit(10)->get();
+
+        $ratingDist = \DB::table('rides')->where('created_at','>=',$start)->whereNotNull('rating')
+            ->selectRaw('FLOOR(rating) as star, COUNT(*) as c')->groupBy('star')->orderBy('star')->get()->keyBy('star');
+
+        return view('admin.reports.performance', compact(
+            'period','start','rideKpi','deliveryKpi','hourly','cancellationReasons','deliCancelReasons','ratingDist'
+        ));
+    }
+
+    // ── 10. Driver Ranking Report ─────────────────────────────────────────────
+    public function reportDriverRanking(\Illuminate\Http\Request $request)
+    {
+        [$period, $start] = $this->reportPeriod($request);
+        $sortBy = $request->input('sort', 'total');
+
+        $drivers = \DB::table('users as u')
+            ->where('u.role','driver')
+            ->leftJoin('rides as r', function($j) use ($start) {
+                $j->on('r.driver_id','=','u.id')->where('r.status','completed')->where('r.created_at','>=',$start);
+            })
+            ->leftJoin('deliveries as d', function($j) use ($start) {
+                $j->on('d.driver_id','=','u.id')->whereIn('d.status',['delivered','completed'])->where('d.created_at','>=',$start);
+            })
+            ->selectRaw('u.id, u.name, u.phone, u.rating, u.available, u.wallet_balance,
+                COUNT(DISTINCT r.id) as rides,
+                COUNT(DISTINCT d.id) as deliveries,
+                COALESCE(SUM(DISTINCT r.fare),0) as ride_revenue,
+                COALESCE(SUM(DISTINCT d.fee),0) as delivery_revenue,
+                AVG(DISTINCT r.rating) as avg_ride_rating')
+            ->groupBy('u.id','u.name','u.phone','u.rating','u.available','u.wallet_balance');
+
+        $drivers = match($sortBy) {
+            'rides'    => $drivers->orderByRaw('rides DESC'),
+            'delivery' => $drivers->orderByRaw('deliveries DESC'),
+            'revenue'  => $drivers->orderByRaw('(COALESCE(SUM(DISTINCT r.fare),0)+COALESCE(SUM(DISTINCT d.fee),0)) DESC'),
+            'rating'   => $drivers->orderByRaw('u.rating DESC'),
+            default    => $drivers->orderByRaw('(COUNT(DISTINCT r.id)+COUNT(DISTINCT d.id)) DESC'),
+        };
+
+        $drivers = $drivers->get();
+
+        return view('admin.reports.driver-ranking', compact('period','start','drivers','sortBy'));
+    }
+
+    // ── 11. Analytics Report ──────────────────────────────────────────────────
+    public function reportAnalytics(\Illuminate\Http\Request $request)
+    {
+        $view = $request->input('view', 'daily');
+
+        $groupFmt = match($view) {
+            'weekly'  => "YEARWEEK(created_at,1)",
+            'monthly' => "DATE_FORMAT(created_at,'%Y-%m')",
+            'yearly'  => "YEAR(created_at)",
+            default   => "DATE(created_at)",
+        };
+        $labelFmt = match($view) {
+            'weekly'  => "CONCAT('W',WEEK(created_at,1),' ',YEAR(created_at))",
+            'monthly' => "DATE_FORMAT(created_at,'%b %Y')",
+            'yearly'  => "YEAR(created_at)",
+            default   => "DATE(created_at)",
+        };
+
+        $start = match($view) {
+            'weekly'  => now()->subWeeks(16)->startOfWeek(),
+            'monthly' => now()->subMonths(12)->startOfMonth(),
+            'yearly'  => now()->subYears(3)->startOfYear(),
+            default   => now()->subDays(60)->startOfDay(),
+        };
+
+        $rideTrend = \DB::table('rides')->where('created_at','>=',$start)
+            ->selectRaw("{$groupFmt} as grp, {$labelFmt} as label,
+                COUNT(*) as total,
+                SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN status='cancelled' THEN 1 ELSE 0 END) as cancelled,
+                SUM(CASE WHEN status='completed' THEN fare ELSE 0 END) as revenue")
+            ->groupBy('grp','label')->orderBy('grp')->get();
+
+        $deliveryTrend = \DB::table('deliveries')->where('created_at','>=',$start)
+            ->selectRaw("{$groupFmt} as grp, {$labelFmt} as label,
+                COUNT(*) as total,
+                SUM(CASE WHEN status IN('delivered','completed') THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN status='cancelled' THEN 1 ELSE 0 END) as cancelled,
+                SUM(CASE WHEN status IN('delivered','completed') THEN fee ELSE 0 END) as revenue")
+            ->groupBy('grp','label')->orderBy('grp')->get();
+
+        $userGrowth = \DB::table('users')->where('created_at','>=',$start)
+            ->selectRaw("{$groupFmt} as grp, {$labelFmt} as label, role, COUNT(*) as c")
+            ->groupBy('grp','label','role')->orderBy('grp')->get();
+
+        // Commission trend
+        $commissionTrend = \DB::table('wallet_transactions')->where('type','platform_commission')
+            ->where('created_at','>=',$start)
+            ->selectRaw("{$groupFmt} as grp, {$labelFmt} as label, SUM(amount) as total")
+            ->groupBy('grp','label')->orderBy('grp')->get();
+
+        // Summary totals (all time)
+        $allTime = [
+            'rides'      => \DB::table('rides')->count(),
+            'deliveries' => \DB::table('deliveries')->count(),
+            'users'      => \DB::table('users')->count(),
+            'drivers'    => \DB::table('users')->where('role','driver')->count(),
+            'partners'   => \DB::table('users')->where('role','partner')->count(),
+            'revenue'    => (float)\DB::table('rides')->where('status','completed')->sum('fare')
+                          + (float)\DB::table('deliveries')->whereIn('status',['delivered','completed'])->sum('fee'),
+            'commission' => (float)\DB::table('wallet_transactions')->where('type','platform_commission')->sum('amount'),
+        ];
+
+        return view('admin.reports.analytics', compact('view','start','rideTrend','deliveryTrend','userGrowth','commissionTrend','allTime'));
+    }
+
     // ── Operations Report ─────────────────────────────────────────────────────
 
     public function operationsReport(\Illuminate\Http\Request $request)

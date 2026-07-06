@@ -127,6 +127,9 @@
                     'admin.subscription-plans*', 'admin.business-accounts*',
                     'admin.banners', 'admin.chat'
                 );
+                $isReports = request()->routeIs(
+                    'admin.operations-report', 'admin.report.*'
+                );
             @endphp
 
             <nav class="mt-1">
@@ -252,14 +255,76 @@
                         </a>
                     </li>
 
-                    {{-- ── REPORTS ── --}}
+                    {{-- ── REPORTS (collapsible) ── --}}
                     <li class="nav-header" style="font-size:.65rem;color:#475569;letter-spacing:.1em;padding:8px 16px 4px;">REPORTS</li>
 
-                    <li class="nav-item">
-                        <a href="{{ route('admin.operations-report') }}" class="nav-link {{ request()->routeIs('admin.operations-report') ? 'active' : '' }}">
-                            <i class="nav-icon fas fa-chart-line"></i>
-                            <p>Operations Report</p>
+                    <li class="nav-item {{ $isReports ? 'menu-open' : '' }}">
+                        <a href="#" class="nav-link {{ $isReports ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-chart-bar"></i>
+                            <p>Reports <i class="right fas fa-angle-left"></i></p>
                         </a>
+                        <ul class="nav nav-treeview">
+                            <li class="nav-item">
+                                <a href="{{ route('admin.operations-report') }}" class="nav-link {{ request()->routeIs('admin.operations-report') ? 'active' : '' }}">
+                                    <i class="far fa-circle nav-icon"></i><p>Operations</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.report.orders') }}" class="nav-link {{ request()->routeIs('admin.report.orders') ? 'active' : '' }}">
+                                    <i class="far fa-circle nav-icon"></i><p>Order Report</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.report.drivers') }}" class="nav-link {{ request()->routeIs('admin.report.drivers') ? 'active' : '' }}">
+                                    <i class="far fa-circle nav-icon"></i><p>Driver Report</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.report.partners') }}" class="nav-link {{ request()->routeIs('admin.report.partners') ? 'active' : '' }}">
+                                    <i class="far fa-circle nav-icon"></i><p>Partner Report</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.report.customers') }}" class="nav-link {{ request()->routeIs('admin.report.customers') ? 'active' : '' }}">
+                                    <i class="far fa-circle nav-icon"></i><p>Customer Report</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.report.financial') }}" class="nav-link {{ request()->routeIs('admin.report.financial') ? 'active' : '' }}">
+                                    <i class="far fa-circle nav-icon"></i><p>Financial Report</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.report.wallet') }}" class="nav-link {{ request()->routeIs('admin.report.wallet') ? 'active' : '' }}">
+                                    <i class="far fa-circle nav-icon"></i><p>Wallet Report</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.report.withdrawals') }}" class="nav-link {{ request()->routeIs('admin.report.withdrawals') ? 'active' : '' }}">
+                                    <i class="far fa-circle nav-icon"></i><p>Withdrawal Report</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.report.commission') }}" class="nav-link {{ request()->routeIs('admin.report.commission') ? 'active' : '' }}">
+                                    <i class="far fa-circle nav-icon"></i><p>Commission Report</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.report.performance') }}" class="nav-link {{ request()->routeIs('admin.report.performance') ? 'active' : '' }}">
+                                    <i class="far fa-circle nav-icon"></i><p>Performance Report</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.report.driver-ranking') }}" class="nav-link {{ request()->routeIs('admin.report.driver-ranking') ? 'active' : '' }}">
+                                    <i class="far fa-circle nav-icon"></i><p>Driver Ranking</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.report.analytics') }}" class="nav-link {{ request()->routeIs('admin.report.analytics') ? 'active' : '' }}">
+                                    <i class="far fa-circle nav-icon"></i><p>Analytics</p>
+                                </a>
+                            </li>
+                        </ul>
                     </li>
 
                     {{-- ── SUPPORT ── --}}

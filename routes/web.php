@@ -158,8 +158,19 @@ Route::prefix('admin')->group(function () {
     Route::put('airport-zones/{zone}', [AdminController::class, 'updateAirportZone'])->name('admin.airport-zones.update');
     Route::delete('airport-zones/{zone}', [AdminController::class, 'destroyAirportZone'])->name('admin.airport-zones.destroy');
 
-    // Operations Report
-    Route::get('operations-report', [AdminController::class, 'operationsReport'])->name('admin.operations-report');
+    // Reports
+    Route::get('operations-report',  [AdminController::class, 'operationsReport'])->name('admin.operations-report');
+    Route::get('report/orders',       [AdminController::class, 'reportOrders'])->name('admin.report.orders');
+    Route::get('report/drivers',      [AdminController::class, 'reportDrivers'])->name('admin.report.drivers');
+    Route::get('report/partners',     [AdminController::class, 'reportPartners'])->name('admin.report.partners');
+    Route::get('report/customers',    [AdminController::class, 'reportCustomers'])->name('admin.report.customers');
+    Route::get('report/financial',    [AdminController::class, 'reportFinancial'])->name('admin.report.financial');
+    Route::get('report/wallet',       [AdminController::class, 'reportWallet'])->name('admin.report.wallet');
+    Route::get('report/withdrawals',  [AdminController::class, 'reportWithdrawals'])->name('admin.report.withdrawals');
+    Route::get('report/commission',   [AdminController::class, 'reportCommission'])->name('admin.report.commission');
+    Route::get('report/performance',  [AdminController::class, 'reportPerformance'])->name('admin.report.performance');
+    Route::get('report/driver-ranking', [AdminController::class, 'reportDriverRanking'])->name('admin.report.driver-ranking');
+    Route::get('report/analytics',    [AdminController::class, 'reportAnalytics'])->name('admin.report.analytics');
 
     // Partner Contracts
     Route::get('partner-contracts',                    [AdminController::class, 'partnerContracts'])->name('admin.partner-contracts');
