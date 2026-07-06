@@ -8,6 +8,7 @@ use App\Models\TopUpRequest;
 use App\Models\User;
 use App\Models\WithdrawalRequest;
 use App\Services\DriverMatchingService;
+use App\Services\FareService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -147,12 +148,23 @@ class PartnerController extends Controller
             'pickup_lng'        => 'nullable|numeric',
             'dropoff_lat'       => 'nullable|numeric',
             'dropoff_lng'       => 'nullable|numeric',
-            'package_size'      => 'nullable|in:small,medium,large,extra_large',
-            'fee'               => 'required|integer|min:0',
+            'package_size'      => 'nullable|in:small,medium,large',
+            'package_amount'    => 'nullable|integer|min:0',
             'payment_by'        => 'nullable|in:sender,recipient',
             'notes'             => 'nullable|string|max:500',
             'partner_reference' => 'nullable|string|max:100',
         ]);
+
+        // Auto-calculate fee from system pricing
+        $fare    = app(FareService::class);
+        $route   = $fare->getRoute(
+            (float) ($data['pickup_lat']  ?? 11.5564),
+            (float) ($data['pickup_lng']  ?? 104.9282),
+            (float) ($data['dropoff_lat'] ?? 11.5564),
+            (float) ($data['dropoff_lng'] ?? 104.9282),
+        );
+        $result  = $fare->calculateDeliveryFare($data['package_size'] ?? 'small', $route);
+        $fee     = (int) $result['total'];
 
         $delivery = Delivery::create([
             'partner_id'        => $partner->id,
@@ -167,8 +179,9 @@ class PartnerController extends Controller
             'pickup_lng'        => $data['pickup_lng'] ?? 0,
             'dropoff_lat'       => $data['dropoff_lat'] ?? 0,
             'dropoff_lng'       => $data['dropoff_lng'] ?? 0,
-            'package_size'      => $data['package_size'] ?? 'medium',
-            'fee'               => $data['fee'],
+            'package_size'      => $data['package_size'] ?? 'small',
+            'fee'               => $fee,
+            'package_amount'    => $data['package_amount'] ?? 0,
             'payment_method'    => 'cash',
             'payment_by'        => $data['payment_by'] ?? 'recipient',
             'payment_status'    => 'unpaid',
@@ -180,7 +193,7 @@ class PartnerController extends Controller
         ]);
 
         return redirect()->route('partner.orders.show', $delivery)
-            ->with('success', 'Order #' . $delivery->id . ' created. QR code is ready.');
+            ->with('success', 'Order #' . $delivery->id . ' created. Delivery fee: ' . number_format($fee) . ' ៛. QR code is ready.');
     }
 
     public function showOrder(Delivery $delivery)

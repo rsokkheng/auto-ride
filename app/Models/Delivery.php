@@ -29,6 +29,7 @@ class Delivery extends Model
         'status',
         'package_details',
         'fee',
+        'package_amount',
         'payment_by',
         'payment_method',
         'payment_status',

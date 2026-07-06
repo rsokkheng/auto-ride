@@ -26,8 +26,9 @@
             $sc = ['created'=>'light','assigned'=>'warning','accepted'=>'info','picked_up'=>'primary',
                    'in_transit'=>'secondary','delivered'=>'success','completed'=>'success','cancelled'=>'danger'];
         @endphp
+        @php $statusTextDark = $delivery->status === 'created' ? 'color:#333' : ''; @endphp
         <span class="badge badge-{{ $sc[$delivery->status] ?? 'secondary' }} p-2"
-              style="font-size:.85rem; {{ $delivery->status==='created'?'color:#333':'' }}">
+              style="font-size:.85rem; {{ $statusTextDark }}">
             {{ ucfirst(str_replace('_',' ',$delivery->status)) }}
         </span>
     </div>
@@ -72,15 +73,20 @@
                 @endif
                 <hr class="my-3">
                 <div class="row text-center">
-                    <div class="col-4">
-                        <div class="text-muted small">Fee</div>
-                        <div class="font-weight-bold">{{ number_format($delivery->fee) }} ៛</div>
+                    <div class="col-3">
+                        <div class="text-muted small">Delivery Fee</div>
+                        <div class="font-weight-bold text-success">{{ number_format($delivery->fee) }} ៛</div>
+                        <div class="text-muted" style="font-size:.65rem">Auto-calculated</div>
                     </div>
-                    <div class="col-4">
+                    <div class="col-3">
+                        <div class="text-muted small">Package Value</div>
+                        <div class="font-weight-bold">{{ number_format($delivery->package_amount ?? 0) }} ៛</div>
+                    </div>
+                    <div class="col-3">
                         <div class="text-muted small">Paid By</div>
                         <div class="font-weight-bold">{{ ucfirst($delivery->payment_by ?? 'recipient') }}</div>
                     </div>
-                    <div class="col-4">
+                    <div class="col-3">
                         <div class="text-muted small">Payment</div>
                         <div class="font-weight-bold">
                             @php $ps = ['unpaid'=>'danger','paid'=>'success','pending'=>'warning']; @endphp
@@ -110,13 +116,15 @@
                     $current_idx   = array_search($delivery->status, $order_statuses);
                 @endphp
                 @foreach($steps as $key => [$label, $icon, $color, $ts])
-                @php
-                    $step_idx = array_search($key, $order_statuses);
-                    $done     = $current_idx !== false && $current_idx >= $step_idx;
-                @endphp
+                    @php
+                        $stepIdx  = array_search($key, $order_statuses);
+                        $done     = $current_idx !== false && $current_idx >= $stepIdx;
+                        $dotBg    = $done ? $color : '#e2e8f0';
+                        $iconStyle = $done ? '' : 'color:#9ca3af';
+                    @endphp
                 <div class="timeline-step">
-                    <div class="timeline-dot" style="background: {{ $done ? $color : '#e2e8f0' }}">
-                        <i class="{{ $icon }}" style="{{ $done ? '' : 'color:#9ca3af' }}"></i>
+                    <div class="timeline-dot" style="background: {{ $dotBg }}">
+                        <i class="{{ $icon }}" style="{{ $iconStyle }}"></i>
                     </div>
                     <div>
                         <div class="{{ $done ? 'font-weight-bold' : 'text-muted' }}">{{ $label }}</div>
@@ -215,10 +223,11 @@
 
         {{-- Assign Driver --}}
         @if(in_array($delivery->status, ['created','assigned']) && count($nearbyDrivers) > 0)
+        @php $assignUrl = route('partner.orders.assign', $delivery->id); @endphp
         <div class="card">
             <div class="card-header"><h5 class="mb-0"><i class="fas fa-user-plus text-success mr-2"></i>Assign Driver</h5></div>
             <div class="card-body">
-                <form method="POST" action="{{ route('partner.orders.assign', $delivery) }}" id="assign-form">
+                <form method="POST" action="{{ $assignUrl }}" id="assign-form">
                     @csrf
                     <input type="hidden" name="driver_id" id="selected-driver-id">
                     <div style="max-height:320px;overflow-y:auto;" class="pr-1">
