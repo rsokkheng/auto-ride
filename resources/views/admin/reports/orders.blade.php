@@ -18,6 +18,7 @@
             <a href="{{ request()->fullUrlWithQuery(['period'=>$d]) }}" class="btn btn-sm {{ $period==$d?'btn-info':'btn-outline-secondary' }}">{{ $l }}</a>
             @endforeach
             <span class="text-muted small ml-3">{{ $start->format('d M Y') }} → Today</span>
+            @include('admin.reports.partials.export-buttons', ['route' => 'admin.export.orders'])
         </form>
     </div>
 </div>

@@ -20,6 +20,7 @@
             @foreach(['total'=>'Total Jobs','rides'=>'Rides','delivery'=>'Deliveries','revenue'=>'Revenue','rating'=>'Rating'] as $k=>$l)
             <a href="{{ request()->fullUrlWithQuery(['sort'=>$k]) }}" class="btn btn-sm {{ $sortBy==$k?'btn-dark':'btn-outline-dark' }}">{{ $l }}</a>
             @endforeach
+            @include('admin.reports.partials.export-buttons', ['route' => 'admin.export.driver-ranking'])
         </form>
     </div>
 </div>

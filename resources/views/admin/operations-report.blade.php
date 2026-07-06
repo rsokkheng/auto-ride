@@ -30,6 +30,7 @@
             </a>
             @endforeach
             <span class="text-muted small ml-3">From {{ $start->format('d M Y') }} → Today</span>
+            @include('admin.reports.partials.export-buttons', ['route' => 'admin.export.operations'])
         </form>
     </div>
 </div>

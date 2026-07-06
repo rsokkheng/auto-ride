@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminController;
+use App\Http\Controllers\Admin\ReportExportController;
 use App\Http\Controllers\Seller\SellerController;
 use App\Http\Controllers\TrackController;
 use Illuminate\Support\Facades\Route;
@@ -171,6 +172,20 @@ Route::prefix('admin')->group(function () {
     Route::get('report/performance',  [AdminController::class, 'reportPerformance'])->name('admin.report.performance');
     Route::get('report/driver-ranking', [AdminController::class, 'reportDriverRanking'])->name('admin.report.driver-ranking');
     Route::get('report/analytics',    [AdminController::class, 'reportAnalytics'])->name('admin.report.analytics');
+
+    // Report Exports
+    Route::get('export/operations',     [ReportExportController::class, 'operations'])->name('admin.export.operations');
+    Route::get('export/orders',         [ReportExportController::class, 'orders'])->name('admin.export.orders');
+    Route::get('export/drivers',        [ReportExportController::class, 'drivers'])->name('admin.export.drivers');
+    Route::get('export/partners',       [ReportExportController::class, 'partners'])->name('admin.export.partners');
+    Route::get('export/customers',      [ReportExportController::class, 'customers'])->name('admin.export.customers');
+    Route::get('export/financial',      [ReportExportController::class, 'financial'])->name('admin.export.financial');
+    Route::get('export/wallet',         [ReportExportController::class, 'wallet'])->name('admin.export.wallet');
+    Route::get('export/withdrawals',    [ReportExportController::class, 'withdrawals'])->name('admin.export.withdrawals');
+    Route::get('export/commission',     [ReportExportController::class, 'commission'])->name('admin.export.commission');
+    Route::get('export/performance',    [ReportExportController::class, 'performance'])->name('admin.export.performance');
+    Route::get('export/driver-ranking', [ReportExportController::class, 'driverRanking'])->name('admin.export.driver-ranking');
+    Route::get('export/analytics',      [ReportExportController::class, 'analytics'])->name('admin.export.analytics');
 
     // Partner Contracts
     Route::get('partner-contracts',                    [AdminController::class, 'partnerContracts'])->name('admin.partner-contracts');
