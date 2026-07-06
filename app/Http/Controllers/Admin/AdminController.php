@@ -494,24 +494,60 @@ class AdminController extends Controller
 
     public function deliveries(\Illuminate\Http\Request $request)
     {
-        $type  = $request->input('type', 'all');
-        $query = Delivery::with(['sender', 'driver'])->orderBy('created_at', 'desc');
+        $type      = $request->input('type', 'all');
+        $status    = $request->input('status');
+        $search    = $request->input('search');
+        $partnerId = $request->input('partner_id');
+
+        $query = Delivery::with(['sender', 'driver', 'partner'])->orderBy('created_at', 'desc');
 
         if ($type !== 'all') {
             $query->where('service_type', $type);
         }
+        if ($status) {
+            $query->where('status', $status);
+        }
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('recipient_name', 'like', "%{$search}%")
+                  ->orWhere('recipient_phone', 'like', "%{$search}%")
+                  ->orWhere('sender_name', 'like', "%{$search}%")
+                  ->orWhere('partner_reference', 'like', "%{$search}%");
+            });
+        }
+        if ($partnerId) {
+            $query->where('partner_id', $partnerId);
+        }
 
         return view('admin.deliveries', [
-            'deliveries' => $query->paginate(10)->appends(['type' => $type]),
-            'senders'    => User::where('role', 'passenger')->orderBy('name')->get(),
-            'drivers'    => User::where('role', 'driver')->orderBy('name')->get(),
-            'activeType' => $type,
-            'counts'     => [
+            'deliveries'    => $query->paginate(10)->withQueryString(),
+            'senders'       => User::where('role', 'passenger')->orderBy('name')->get(),
+            'drivers'       => User::where('role', 'driver')->orderBy('name')->get(),
+            'partners'      => User::where('role', 'partner')->orderBy('name')->get(),
+            'activeType'    => $type,
+            'activeStatus'  => $status,
+            'search'        => $search,
+            'activePartner' => $partnerId,
+            'counts'        => [
                 'all'      => Delivery::count(),
                 'delivery' => Delivery::where('service_type', 'delivery')->count(),
                 'moving'   => Delivery::where('service_type', 'moving')->count(),
             ],
         ]);
+    }
+
+    public function completeDelivery(Delivery $delivery)
+    {
+        if (in_array($delivery->status, ['completed', 'cancelled'])) {
+            return back()->with('error', "Order #{$delivery->id} is already {$delivery->status}.");
+        }
+
+        $delivery->update([
+            'status'       => 'completed',
+            'completed_at' => $delivery->completed_at ?? now(),
+        ]);
+
+        return back()->with('success', "Order #{$delivery->id} marked as completed.");
     }
 
     public function storeDelivery(Request $request)

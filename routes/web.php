@@ -51,6 +51,7 @@ Route::prefix('admin')->group(function () {
     Route::put('deliveries/{delivery}', [AdminController::class, 'updateDelivery'])->name('admin.deliveries.update');
     Route::delete('deliveries/{delivery}', [AdminController::class, 'destroyDelivery'])->name('admin.deliveries.destroy');
     Route::post('deliveries/{delivery}/assign', [AdminController::class, 'assignDelivery'])->name('admin.deliveries.assign');
+    Route::post('deliveries/{delivery}/complete', [AdminController::class, 'completeDelivery'])->name('admin.deliveries.complete');
 
     // Marketplace
     Route::get('marketplace', [AdminController::class, 'marketplace'])->name('admin.marketplace');

@@ -26,6 +26,45 @@
     @endforeach
 </ul>
 
+{{-- ── Filter Bar ───────────────────────────────────────────────────────── --}}
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="GET" action="{{ route('admin.deliveries') }}" class="form-inline flex-wrap" style="gap:6px">
+            <input type="hidden" name="type" value="{{ $activeType }}">
+
+            <input type="text" name="search" class="form-control form-control-sm"
+                   placeholder="Recipient name / phone / ref…"
+                   value="{{ $search ?? '' }}" style="min-width:200px">
+
+            <select name="status" class="form-control form-control-sm">
+                <option value="">All Statuses</option>
+                @foreach([
+                    'created','assigned','accepted','picked_up','in_transit','delivered','completed',
+                    'requested','pending','in_progress','cancelled'
+                ] as $s)
+                    <option value="{{ $s }}" {{ ($activeStatus ?? '') == $s ? 'selected' : '' }}>
+                        {{ ucfirst(str_replace('_',' ',$s)) }}
+                    </option>
+                @endforeach
+            </select>
+
+            @if(count($partners) > 0)
+            <select name="partner_id" class="form-control form-control-sm">
+                <option value="">All Partners</option>
+                @foreach($partners as $p)
+                    <option value="{{ $p->id }}" {{ ($activePartner ?? '') == $p->id ? 'selected' : '' }}>
+                        {{ $p->name }}
+                    </option>
+                @endforeach
+            </select>
+            @endif
+
+            <button class="btn btn-sm btn-primary"><i class="fas fa-search mr-1"></i>Search</button>
+            <a href="{{ route('admin.deliveries', ['type' => $activeType]) }}" class="btn btn-sm btn-secondary">Reset</a>
+        </form>
+    </div>
+</div>
+
 {{-- ── Table ────────────────────────────────────────────────────────────── --}}
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -37,6 +76,7 @@
             @else
                 <i class="fas fa-layer-group text-muted mr-2"></i>All Orders
             @endif
+            <span class="badge badge-secondary ml-1">{{ $deliveries->total() }}</span>
         </h3>
         <button class="btn btn-sm btn-primary"
                 onclick="openCreate('{{ $activeType === 'all' ? 'delivery' : $activeType }}')">
@@ -51,6 +91,7 @@
                 <tr>
                     <th>#</th>
                     <th>Type</th>
+                    <th>Partner</th>
                     <th>Sender</th>
                     <th>Recipient</th>
                     <th>Phone</th>
@@ -73,7 +114,22 @@
                 @forelse($deliveries as $d)
                 @php
                     $isMoving = ($d->service_type ?? 'delivery') === 'moving';
-                    $sc = ['requested'=>'secondary','pending'=>'warning','accepted'=>'info','in_progress'=>'primary','completed'=>'success','cancelled'=>'danger'];
+                    $sc = [
+                        // Regular delivery/moving statuses
+                        'requested'   => 'secondary',
+                        'pending'     => 'warning',
+                        'accepted'    => 'info',
+                        'in_progress' => 'primary',
+                        'completed'   => 'success',
+                        'cancelled'   => 'danger',
+                        // Partner delivery statuses
+                        'created'     => 'light',
+                        'assigned'    => 'warning',
+                        'picked_up'   => 'primary',
+                        'in_transit'  => 'dark',
+                        'delivered'   => 'success',
+                    ];
+                    $canComplete = !in_array($d->status, ['completed', 'cancelled']);
                 @endphp
                 <tr>
                     <td>{{ ($deliveries->currentPage() - 1) * $deliveries->perPage() + $loop->iteration }}</td>
@@ -86,6 +142,14 @@
                             <span class="badge badge-light" style="border:1px solid #e2e8f0;">
                                 <i class="fas fa-box mr-1 text-primary"></i>Delivery
                             </span>
+                        @endif
+                    </td>
+                    <td>
+                        @if($d->partner)
+                            <div class="font-weight-bold small">{{ $d->partner->name }}</div>
+                            <small class="text-muted">{{ $d->partner->phone }}</small>
+                        @else
+                            <span class="text-muted small">—</span>
                         @endif
                     </td>
                     <td>
@@ -139,7 +203,7 @@
                     <td>{{ Str::limit($d->pickup_address, 20) }}</td>
                     <td>{{ Str::limit($d->dropoff_address, 20) }}</td>
                     <td>
-                        <span class="badge badge-{{ $sc[$d->status] ?? 'secondary' }}">
+                        <span class="badge badge-{{ $sc[$d->status] ?? 'secondary' }} {{ in_array($d->status, ['created','light']) ? 'text-dark' : '' }}">
                             {{ ucfirst(str_replace('_', ' ', $d->status)) }}
                         </span>
                     </td>
@@ -193,6 +257,15 @@
                     </td>
                     <td>{{ $d->created_at->format('Y-m-d') }}</td>
                     <td>
+                        @if($canComplete)
+                        <form method="POST" action="{{ route('admin.deliveries.complete', $d) }}" class="d-inline"
+                              onsubmit="return confirm('Mark order #{{ $d->id }} as completed?')">
+                            @csrf
+                            <button class="btn btn-xs btn-success mr-1" title="Mark Completed">
+                                <i class="fas fa-check"></i>
+                            </button>
+                        </form>
+                        @endif
                         <button class="btn btn-xs btn-info mr-1"
                             data-delivery="{{ e(json_encode([
                                 'id'                => $d->id,
@@ -236,7 +309,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="18" class="text-center text-muted py-4">No orders found.</td></tr>
+                <tr><td colspan="19" class="text-center text-muted py-4">No orders found.</td></tr>
                 @endforelse
             </tbody>
         </table>

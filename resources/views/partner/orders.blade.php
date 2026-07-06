@@ -69,7 +69,7 @@
             <thead class="table-light">
                 <tr>
                     <th>#</th><th>Ref</th><th>Recipient</th><th>Dropoff</th>
-                    <th>Fee</th><th>Driver</th><th>Status</th><th>Date</th><th></th>
+                    <th>Pkg Value</th><th>Fee</th><th>Driver</th><th>Status</th><th>Date</th><th></th>
                 </tr>
             </thead>
             <tbody>
@@ -90,6 +90,13 @@
                         <small class="text-muted">{{ $d->recipient_phone }}</small>
                     </td>
                     <td><small class="text-muted">{{ Str::limit($d->dropoff_address, 28) }}</small></td>
+                    <td>
+                        @if(($d->package_amount ?? 0) > 0)
+                            <span class="fw-semibold">{{ number_format($d->package_amount) }} ៛</span>
+                        @else
+                            <span class="text-muted small">—</span>
+                        @endif
+                    </td>
                     <td><strong>{{ number_format($d->fee) }} ៛</strong></td>
                     <td>
                         @if($d->driver)
@@ -113,7 +120,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="9" class="text-center py-12">
+                    <td colspan="10" class="text-center py-12">
                         <i class="fas fa-box-open fa-2x text-slate-300 mb-3 d-block"></i>
                         <p class="text-slate-500 mb-0">No orders found.</p>
                         <a href="{{ route('partner.orders.create') }}" class="btn btn-sm btn-primary mt-3">
