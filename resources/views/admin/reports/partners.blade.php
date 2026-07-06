@@ -16,6 +16,7 @@
             @foreach([7=>'7 Days',30=>'30 Days',60=>'60 Days',90=>'90 Days'] as $d=>$l)
             <a href="{{ request()->fullUrlWithQuery(['period'=>$d]) }}" class="btn btn-sm {{ $period==$d?'btn-warning':'btn-outline-secondary' }}">{{ $l }}</a>
             @endforeach
+            @include('admin.reports.partials.scope-filter')
             @include('admin.reports.partials.export-buttons', ['route' => 'admin.export.partners'])
         </form>
     </div>
@@ -69,7 +70,7 @@
                 <table class="table table-sm mb-0">
                     <thead class="thead-light"><tr><th>Partner</th><th>Orders</th><th>Rate</th><th class="text-right">Revenue</th></tr></thead>
                     <tbody>
-                        @foreach($partners as $p)
+                        @foreach($partnerList as $p)
                         @php $rate=$p->orders>0?round(($p->done/$p->orders)*100):0; @endphp
                         <tr>
                             <td><strong>{{ $p->name }}</strong><br><small class="text-muted">{{ $p->phone }}</small></td>

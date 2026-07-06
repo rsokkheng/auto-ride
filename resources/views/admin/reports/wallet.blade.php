@@ -16,6 +16,7 @@
             @foreach([7=>'7 Days',30=>'30 Days',60=>'60 Days',90=>'90 Days'] as $d=>$l)
             <a href="{{ request()->fullUrlWithQuery(['period'=>$d]) }}" class="btn btn-sm {{ $period==$d?'btn-info':'btn-outline-secondary' }}">{{ $l }}</a>
             @endforeach
+            @include('admin.reports.partials.scope-filter')
             @include('admin.reports.partials.export-buttons', ['route' => 'admin.export.wallet'])
         </form>
     </div>

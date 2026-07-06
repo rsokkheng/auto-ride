@@ -2218,13 +2218,35 @@ class AdminController extends Controller
         return $dates;
     }
 
+    private function extractScope(\Illuminate\Http\Request $request): array
+    {
+        $scope    = in_array($request->input('scope', 'company'), ['company', 'partner', 'driver'])
+                    ? $request->input('scope', 'company') : 'company';
+        $entityId = (int) $request->input('entity_id', 0);
+        $partners = \DB::table('users')->where('role', 'partner')->orderBy('name')->get(['id', 'name']);
+        $drivers  = \DB::table('users')->where('role', 'driver')->orderBy('name')->get(['id', 'name']);
+        return [$scope, $entityId, $partners, $drivers];
+    }
+
     // ── 1. Order Report ───────────────────────────────────────────────────────
     public function reportOrders(\Illuminate\Http\Request $request)
     {
         [$period, $start] = $this->reportPeriod($request);
+        [$scope, $entityId, $partners, $drivers] = $this->extractScope($request);
 
-        $totals = \DB::table('deliveries')->where('created_at', '>=', $start)
-            ->selectRaw('COUNT(*) as total,
+        $applyScope = function ($q) use ($scope, $entityId) {
+            if ($scope === 'partner') {
+                $q->whereNotNull('partner_id');
+                if ($entityId) $q->where('partner_id', $entityId);
+            } elseif ($scope === 'driver') {
+                $q->whereNotNull('driver_id');
+                if ($entityId) $q->where('driver_id', $entityId);
+            }
+        };
+
+        $totals = \DB::table('deliveries')->where('created_at', '>=', $start);
+        $applyScope($totals);
+        $totals = $totals->selectRaw('COUNT(*) as total,
                 SUM(CASE WHEN status IN("delivered","completed") THEN 1 ELSE 0 END) as done,
                 SUM(CASE WHEN status="cancelled" THEN 1 ELSE 0 END) as cancelled,
                 SUM(CASE WHEN partner_id IS NOT NULL THEN 1 ELSE 0 END) as partner_orders,
@@ -2235,90 +2257,112 @@ class AdminController extends Controller
                 AVG(CASE WHEN status IN("delivered","completed") AND completed_at IS NOT NULL THEN TIMESTAMPDIFF(MINUTE,created_at,completed_at) END) as avg_minutes')
             ->first();
 
-        $byStatus = \DB::table('deliveries')->where('created_at', '>=', $start)
-            ->selectRaw('status, COUNT(*) as c, SUM(fee) as rev')->groupBy('status')->orderByRaw('c DESC')->get();
+        $byStatusQ = \DB::table('deliveries')->where('created_at', '>=', $start);
+        $applyScope($byStatusQ);
+        $byStatus = $byStatusQ->selectRaw('status, COUNT(*) as c, SUM(fee) as rev')->groupBy('status')->orderByRaw('c DESC')->get();
 
-        $bySize = \DB::table('deliveries')->where('created_at', '>=', $start)
-            ->selectRaw('package_size, COUNT(*) as c')->groupBy('package_size')->orderByRaw('c DESC')->get();
+        $bySizeQ = \DB::table('deliveries')->where('created_at', '>=', $start);
+        $applyScope($bySizeQ);
+        $bySize = $bySizeQ->selectRaw('package_size, COUNT(*) as c')->groupBy('package_size')->orderByRaw('c DESC')->get();
 
-        $byPayment = \DB::table('deliveries')->where('created_at', '>=', $start)
-            ->selectRaw('payment_by, COUNT(*) as c, SUM(package_amount) as cod')->groupBy('payment_by')->get();
+        $byPaymentQ = \DB::table('deliveries')->where('created_at', '>=', $start);
+        $applyScope($byPaymentQ);
+        $byPayment = $byPaymentQ->selectRaw('payment_by, COUNT(*) as c, SUM(package_amount) as cod')->groupBy('payment_by')->get();
 
-        $daily = \DB::table('deliveries')->where('created_at', '>=', $start)
-            ->selectRaw('DATE(created_at) as date, COUNT(*) as c, SUM(fee) as rev,
+        $dailyQ = \DB::table('deliveries')->where('created_at', '>=', $start);
+        $applyScope($dailyQ);
+        $daily = $dailyQ->selectRaw('DATE(created_at) as date, COUNT(*) as c, SUM(fee) as rev,
                 SUM(CASE WHEN status IN("delivered","completed") THEN 1 ELSE 0 END) as done,
                 SUM(CASE WHEN status="cancelled" THEN 1 ELSE 0 END) as cancelled')
             ->groupBy('date')->orderBy('date')->get()->keyBy('date');
 
         $trendDates = $this->trendDates($period);
 
-        $recent = \DB::table('deliveries as d')
+        $recentQ = \DB::table('deliveries as d')
             ->leftJoin('users as dr', 'dr.id', '=', 'd.driver_id')
             ->leftJoin('users as p', 'p.id', '=', 'd.partner_id')
-            ->where('d.created_at', '>=', $start)
-            ->selectRaw('d.id, d.recipient_name, d.recipient_phone, d.status, d.service_option,
+            ->where('d.created_at', '>=', $start);
+        if ($scope === 'partner') {
+            $recentQ->whereNotNull('d.partner_id');
+            if ($entityId) $recentQ->where('d.partner_id', $entityId);
+        } elseif ($scope === 'driver') {
+            $recentQ->whereNotNull('d.driver_id');
+            if ($entityId) $recentQ->where('d.driver_id', $entityId);
+        }
+        $recent = $recentQ->selectRaw('d.id, d.recipient_name, d.recipient_phone, d.status, d.service_option,
                 d.package_size, d.fee, d.created_at, dr.name as driver_name, p.name as partner_name')
             ->orderByDesc('d.id')->limit(20)->get();
 
-        return view('admin.reports.orders', compact('period','start','totals','byStatus','bySize','byPayment','daily','trendDates','recent'));
+        return view('admin.reports.orders', compact('period','start','scope','entityId','partners','drivers','totals','byStatus','bySize','byPayment','daily','trendDates','recent'));
     }
 
     // ── 2. Driver Report ──────────────────────────────────────────────────────
     public function reportDrivers(\Illuminate\Http\Request $request)
     {
         [$period, $start] = $this->reportPeriod($request);
+        [$scope, $entityId, $partners, $drivers] = $this->extractScope($request);
 
-        $totals = \DB::table('users')->where('role', 'driver')
-            ->selectRaw('COUNT(*) as total,
+        $driverBaseQ = \DB::table('users')->where('role', 'driver');
+        if ($scope === 'driver' && $entityId) $driverBaseQ->where('id', $entityId);
+
+        $totals = (clone $driverBaseQ)->selectRaw('COUNT(*) as total,
                 SUM(CASE WHEN available=1 THEN 1 ELSE 0 END) as online,
                 SUM(CASE WHEN approval_status="approved" THEN 1 ELSE 0 END) as approved,
                 SUM(CASE WHEN approval_status="pending" THEN 1 ELSE 0 END) as pending,
                 AVG(rating) as avg_rating')->first();
 
-        $newDrivers = \DB::table('users')->where('role','driver')
-            ->where('created_at', '>=', $start)->count();
+        $newDrivers = (clone $driverBaseQ)->where('created_at', '>=', $start)->count();
 
-        $driverActivity = \DB::table('users as u')
-            ->where('u.role', 'driver')
-            ->leftJoin('rides as r', function($j) use ($start) {
-                $j->on('r.driver_id','=','u.id')->where('r.status','completed')->where('r.created_at','>=',$start);
-            })
-            ->leftJoin('deliveries as d', function($j) use ($start) {
-                $j->on('d.driver_id','=','u.id')->whereIn('d.status',['delivered','completed'])->where('d.created_at','>=',$start);
-            })
-            ->selectRaw('u.id, u.name, u.phone, u.rating, u.available, u.wallet_balance, u.approval_status,
+        $driverActivityQ = \DB::table('users as u')->where('u.role', 'driver');
+        if ($scope === 'driver' && $entityId) $driverActivityQ->where('u.id', $entityId);
+
+        $driverActivityQ->leftJoin('rides as r', function($j) use ($start, $scope, $entityId) {
+            $j->on('r.driver_id','=','u.id')->where('r.status','completed')->where('r.created_at','>=',$start);
+        })->leftJoin('deliveries as d', function($j) use ($start, $scope, $entityId) {
+            $cond = $j->on('d.driver_id','=','u.id')->whereIn('d.status',['delivered','completed'])->where('d.created_at','>=',$start);
+            if ($scope === 'partner' && $entityId) $cond->where('d.partner_id', $entityId);
+            elseif ($scope === 'partner')           $cond->whereNotNull('d.partner_id');
+        });
+
+        $driverActivity = $driverActivityQ->selectRaw('u.id, u.name, u.phone, u.rating, u.available, u.wallet_balance, u.approval_status,
                 COUNT(DISTINCT r.id) as rides, COUNT(DISTINCT d.id) as deliveries,
                 COALESCE(SUM(DISTINCT r.fare),0) + COALESCE(SUM(DISTINCT d.fee),0) as gross_revenue')
             ->groupBy('u.id','u.name','u.phone','u.rating','u.available','u.wallet_balance','u.approval_status')
             ->orderByRaw('(COUNT(DISTINCT r.id)+COUNT(DISTINCT d.id)) DESC')
             ->get();
 
-        $daily = \DB::table('rides')->where('created_at', '>=', $start)->where('status','completed')
-            ->selectRaw('DATE(created_at) as date, COUNT(*) as rides')->groupBy('date')
+        $dailyQ = \DB::table('rides')->where('created_at', '>=', $start)->where('status','completed');
+        if ($scope === 'driver' && $entityId) $dailyQ->where('driver_id', $entityId);
+        $daily = $dailyQ->selectRaw('DATE(created_at) as date, COUNT(*) as rides')->groupBy('date')
             ->orderBy('date')->get()->keyBy('date');
 
         $trendDates = $this->trendDates($period);
 
-        $cancellations = \DB::table('users as u')
-            ->where('u.role','driver')
-            ->join('rides as r', function($j) use ($start) {
+        $cancellationsQ = \DB::table('users as u')->where('u.role','driver');
+        if ($scope === 'driver' && $entityId) $cancellationsQ->where('u.id', $entityId);
+        $cancellations = $cancellationsQ->join('rides as r', function($j) use ($start) {
                 $j->on('r.driver_id','=','u.id')->where('r.status','cancelled')->where('r.created_at','>=',$start);
             })
             ->selectRaw('u.id, u.name, COUNT(r.id) as cancelled')
             ->groupBy('u.id','u.name')->orderByRaw('cancelled DESC')->limit(10)->get();
 
-        return view('admin.reports.drivers', compact('period','start','totals','newDrivers','driverActivity','daily','trendDates','cancellations'));
+        return view('admin.reports.drivers', compact('period','start','scope','entityId','partners','drivers','totals','newDrivers','driverActivity','daily','trendDates','cancellations'));
     }
 
     // ── 3. Partner Report ─────────────────────────────────────────────────────
     public function reportPartners(\Illuminate\Http\Request $request)
     {
         [$period, $start] = $this->reportPeriod($request);
+        [$scope, $entityId, $partners, $drivers] = $this->extractScope($request);
 
-        $partners = \DB::table('users as u')
-            ->where('u.role','partner')
-            ->leftJoin('deliveries as d', function($j) use ($start) {
-                $j->on('d.partner_id','=','u.id')->where('d.created_at','>=',$start);
+        $partnerListQ = \DB::table('users as u')->where('u.role','partner');
+        if ($scope === 'partner' && $entityId) $partnerListQ->where('u.id', $entityId);
+
+        $partnerList = $partnerListQ
+            ->leftJoin('deliveries as d', function($j) use ($start, $scope, $entityId) {
+                $cond = $j->on('d.partner_id','=','u.id')->where('d.created_at','>=',$start);
+                if ($scope === 'driver' && $entityId) $cond->where('d.driver_id', $entityId);
+                elseif ($scope === 'driver')           $cond->whereNotNull('d.driver_id');
             })
             ->leftJoin('partner_contracts as pc', function($j) {
                 $j->on('pc.partner_id','=','u.id')->where('pc.is_active',1);
@@ -2334,23 +2378,34 @@ class AdminController extends Controller
             ->orderByRaw('orders DESC')->get();
 
         $totalPartners = \DB::table('users')->where('role','partner')->count();
-        $totalOrders   = \DB::table('deliveries')->where('created_at','>=',$start)->whereNotNull('partner_id')->count();
-        $totalRevenue  = \DB::table('deliveries')->where('created_at','>=',$start)->whereNotNull('partner_id')
-                            ->whereIn('status',['delivered','completed'])->sum('fee');
 
-        $daily = \DB::table('deliveries')->where('created_at','>=',$start)->whereNotNull('partner_id')
-            ->selectRaw('DATE(created_at) as date, COUNT(*) as c, SUM(fee) as rev')
+        $totalOrdersQ = \DB::table('deliveries')->where('created_at','>=',$start)->whereNotNull('partner_id');
+        if ($scope === 'partner' && $entityId) $totalOrdersQ->where('partner_id', $entityId);
+        if ($scope === 'driver' && $entityId)  $totalOrdersQ->where('driver_id', $entityId);
+        $totalOrders = $totalOrdersQ->count();
+
+        $totalRevenueQ = \DB::table('deliveries')->where('created_at','>=',$start)->whereNotNull('partner_id')
+                            ->whereIn('status',['delivered','completed']);
+        if ($scope === 'partner' && $entityId) $totalRevenueQ->where('partner_id', $entityId);
+        if ($scope === 'driver' && $entityId)  $totalRevenueQ->where('driver_id', $entityId);
+        $totalRevenue = $totalRevenueQ->sum('fee');
+
+        $dailyQ = \DB::table('deliveries')->where('created_at','>=',$start)->whereNotNull('partner_id');
+        if ($scope === 'partner' && $entityId) $dailyQ->where('partner_id', $entityId);
+        if ($scope === 'driver' && $entityId)  $dailyQ->where('driver_id', $entityId);
+        $daily = $dailyQ->selectRaw('DATE(created_at) as date, COUNT(*) as c, SUM(fee) as rev')
             ->groupBy('date')->orderBy('date')->get()->keyBy('date');
 
         $trendDates = $this->trendDates($period);
 
-        return view('admin.reports.partners', compact('period','start','partners','totalPartners','totalOrders','totalRevenue','daily','trendDates'));
+        return view('admin.reports.partners', compact('period','start','scope','entityId','partners','drivers','partnerList','totalPartners','totalOrders','totalRevenue','daily','trendDates'));
     }
 
     // ── 4. Customer Report ────────────────────────────────────────────────────
     public function reportCustomers(\Illuminate\Http\Request $request)
     {
         [$period, $start] = $this->reportPeriod($request);
+        [$scope, $entityId, $partners, $drivers] = $this->extractScope($request);
 
         $totals = \DB::table('users')->where('role','passenger')
             ->selectRaw('COUNT(*) as total')->first();
@@ -2366,12 +2421,14 @@ class AdminController extends Controller
                 });
             })->count();
 
-        $topCustomers = \DB::table('users as u')
-            ->where('u.role','passenger')
-            ->leftJoin('rides as r', function($j) use ($start) {
-                $j->on('r.passenger_id','=','u.id')->where('r.created_at','>=',$start);
-            })
-            ->selectRaw('u.id, u.name, u.phone, u.created_at as joined,
+        $topCustomersQ = \DB::table('users as u')->where('u.role','passenger');
+        $topCustomersQ->leftJoin('rides as r', function($j) use ($start, $scope, $entityId) {
+            $cond = $j->on('r.passenger_id','=','u.id')->where('r.created_at','>=',$start);
+            if ($scope === 'driver' && $entityId) $cond->where('r.driver_id', $entityId);
+            elseif ($scope === 'partner')          $cond->whereRaw('1=0'); // rides not partner-scoped
+        });
+
+        $topCustomers = $topCustomersQ->selectRaw('u.id, u.name, u.phone, u.created_at as joined,
                 COUNT(DISTINCT r.id) as rides,
                 SUM(CASE WHEN r.status="completed" THEN r.fare ELSE 0 END) as spent,
                 AVG(r.passenger_rating) as avg_rating_given')
@@ -2385,40 +2442,75 @@ class AdminController extends Controller
 
         $trendDates = $this->trendDates($period);
 
-        return view('admin.reports.customers', compact('period','start','totals','newCustomers','activeCustomers','topCustomers','registrations','trendDates'));
+        return view('admin.reports.customers', compact('period','start','scope','entityId','partners','drivers','totals','newCustomers','activeCustomers','topCustomers','registrations','trendDates'));
     }
 
     // ── 5. Financial Report ───────────────────────────────────────────────────
     public function reportFinancial(\Illuminate\Http\Request $request)
     {
         [$period, $start] = $this->reportPeriod($request);
+        [$scope, $entityId, $partners, $drivers] = $this->extractScope($request);
 
-        $rideRev     = (float)\DB::table('rides')->where('created_at','>=',$start)->where('status','completed')->sum('fare');
-        $deliveryRev = (float)\DB::table('deliveries')->where('created_at','>=',$start)->whereIn('status',['delivered','completed'])->sum('fee');
-        $commission  = (float)\DB::table('wallet_transactions')->where('created_at','>=',$start)->where('type','platform_commission')->sum('amount');
-        $tips        = (float)\DB::table('wallet_transactions')->where('created_at','>=',$start)->where('type','tip_in')->sum('amount');
-        $cod         = (float)\DB::table('deliveries')->where('payment_by','recipient')->whereIn('status',['delivered','completed'])->where('payment_status','unpaid')->sum('package_amount');
+        // Rides revenue — partners don't have rides, driver scope filters by driver_id
+        $rideQ = \DB::table('rides')->where('created_at','>=',$start)->where('status','completed');
+        if ($scope === 'partner')                   $rideQ->whereRaw('1=0');
+        elseif ($scope === 'driver' && $entityId)   $rideQ->where('driver_id', $entityId);
+        $rideRev = (float) (clone $rideQ)->sum('fare');
+
+        // Delivery revenue
+        $delQ = \DB::table('deliveries')->where('created_at','>=',$start)->whereIn('status',['delivered','completed']);
+        if ($scope === 'partner') {
+            $delQ->whereNotNull('partner_id');
+            if ($entityId) $delQ->where('partner_id', $entityId);
+        } elseif ($scope === 'driver') {
+            if ($entityId) $delQ->where('driver_id', $entityId);
+        }
+        $deliveryRev = (float) (clone $delQ)->sum('fee');
+
+        // Commission
+        $commQ = \DB::table('wallet_transactions')->where('created_at','>=',$start)->where('type','platform_commission');
+        if ($scope === 'partner') $commQ->whereRaw('1=0'); // commission is from drivers
+        elseif ($scope === 'driver' && $entityId) $commQ->where('user_id', $entityId);
+        $commission = (float) $commQ->sum('amount');
+
+        // Tips
+        $tipsQ = \DB::table('wallet_transactions')->where('created_at','>=',$start)->where('type','tip_in');
+        if ($scope === 'partner')                   $tipsQ->whereRaw('1=0');
+        elseif ($scope === 'driver' && $entityId)   $tipsQ->where('user_id', $entityId);
+        $tips = (float) $tipsQ->sum('amount');
+
+        // COD outstanding
+        $codQ = \DB::table('deliveries')->where('payment_by','recipient')->whereIn('status',['delivered','completed'])->where('payment_status','unpaid');
+        if ($scope === 'partner' && $entityId) $codQ->where('partner_id', $entityId);
+        elseif ($scope === 'driver' && $entityId) $codQ->where('driver_id', $entityId);
+        $cod = (float) $codQ->sum('package_amount');
+
         $topups      = (float)\DB::table('top_up_requests')->where('status','approved')->where('created_at','>=',$start)->sum('amount');
         $withdrawals = (float)\DB::table('withdrawal_requests')->where('status','approved')->where('created_at','>=',$start)->sum('amount_khr');
 
-        $dailyRevenue = \DB::table('rides as r')
-            ->where('r.status','completed')->where('r.created_at','>=',$start)
-            ->selectRaw('DATE(r.created_at) as date, SUM(r.fare) as ride_rev')
+        $dailyRideQ = \DB::table('rides as r')->where('r.status','completed')->where('r.created_at','>=',$start);
+        if ($scope === 'partner')                   $dailyRideQ->whereRaw('1=0');
+        elseif ($scope === 'driver' && $entityId)   $dailyRideQ->where('r.driver_id', $entityId);
+        $dailyRevenue = $dailyRideQ->selectRaw('DATE(r.created_at) as date, SUM(r.fare) as ride_rev')
             ->groupBy('date')->orderBy('date')->get()->keyBy('date');
 
-        $dailyDelivery = \DB::table('deliveries')
-            ->whereIn('status',['delivered','completed'])->where('created_at','>=',$start)
-            ->selectRaw('DATE(created_at) as date, SUM(fee) as del_rev')
+        $dailyDelQ = \DB::table('deliveries')->whereIn('status',['delivered','completed'])->where('created_at','>=',$start);
+        if ($scope === 'partner') { $dailyDelQ->whereNotNull('partner_id'); if ($entityId) $dailyDelQ->where('partner_id', $entityId); }
+        elseif ($scope === 'driver' && $entityId) $dailyDelQ->where('driver_id', $entityId);
+        $dailyDelivery = $dailyDelQ->selectRaw('DATE(created_at) as date, SUM(fee) as del_rev')
             ->groupBy('date')->orderBy('date')->get()->keyBy('date');
 
         $trendDates = $this->trendDates($period);
 
-        $paymentMethods = \DB::table('rides')->where('created_at','>=',$start)->where('status','completed')
-            ->selectRaw('payment_method, COUNT(*) as c, SUM(fare) as rev')
+        $pmQ = \DB::table('rides')->where('created_at','>=',$start)->where('status','completed');
+        if ($scope === 'partner')                   $pmQ->whereRaw('1=0');
+        elseif ($scope === 'driver' && $entityId)   $pmQ->where('driver_id', $entityId);
+        $paymentMethods = $pmQ->selectRaw('payment_method, COUNT(*) as c, SUM(fare) as rev')
             ->groupBy('payment_method')->orderByRaw('rev DESC')->get();
 
         return view('admin.reports.financial', compact(
-            'period','start','rideRev','deliveryRev','commission','tips','cod','topups','withdrawals',
+            'period','start','scope','entityId','partners','drivers',
+            'rideRev','deliveryRev','commission','tips','cod','topups','withdrawals',
             'dailyRevenue','dailyDelivery','trendDates','paymentMethods'
         ));
     }
@@ -2427,20 +2519,39 @@ class AdminController extends Controller
     public function reportWallet(\Illuminate\Http\Request $request)
     {
         [$period, $start] = $this->reportPeriod($request);
+        [$scope, $entityId, $partners, $drivers] = $this->extractScope($request);
 
-        $byType = \DB::table('wallet_transactions')->where('created_at','>=',$start)
-            ->selectRaw('type, direction, COUNT(*) as c, SUM(amount) as total')
+        $walletUserIds = null;
+        if ($scope === 'driver') {
+            $walletUserIds = $entityId
+                ? collect([$entityId])
+                : \DB::table('users')->where('role','driver')->pluck('id');
+        } elseif ($scope === 'partner') {
+            $walletUserIds = $entityId
+                ? collect([$entityId])
+                : \DB::table('users')->where('role','partner')->pluck('id');
+        }
+
+        $applyWalletScope = function($q) use ($walletUserIds) {
+            if ($walletUserIds) $q->whereIn('user_id', $walletUserIds);
+        };
+
+        $byTypeQ = \DB::table('wallet_transactions')->where('created_at','>=',$start);
+        $applyWalletScope($byTypeQ);
+        $byType = $byTypeQ->selectRaw('type, direction, COUNT(*) as c, SUM(amount) as total')
             ->groupBy('type','direction')->orderByRaw('total DESC')->get();
 
-        $topBalances = \DB::table('users')
-            ->where('wallet_balance','>',0)
-            ->selectRaw('id, name, phone, role, wallet_balance')
+        $topBalancesQ = \DB::table('users')->where('wallet_balance','>',0);
+        if ($scope === 'driver')  $topBalancesQ->where('role','driver');
+        if ($scope === 'partner') $topBalancesQ->where('role','partner');
+        if ($walletUserIds && $entityId) $topBalancesQ->whereIn('id', $walletUserIds);
+        $topBalances = $topBalancesQ->selectRaw('id, name, phone, role, wallet_balance')
             ->orderByDesc('wallet_balance')->limit(15)->get();
 
-        $recent = \DB::table('wallet_transactions as wt')
-            ->join('users as u','u.id','=','wt.user_id')
-            ->where('wt.created_at','>=',$start)
-            ->selectRaw('wt.id, u.name, u.role, wt.type, wt.direction, wt.amount, wt.balance_after, wt.note, wt.created_at')
+        $recentQ = \DB::table('wallet_transactions as wt')->join('users as u','u.id','=','wt.user_id')
+            ->where('wt.created_at','>=',$start);
+        $applyWalletScope($recentQ);
+        $recent = $recentQ->selectRaw('wt.id, u.name, u.role, wt.type, wt.direction, wt.amount, wt.balance_after, wt.note, wt.created_at')
             ->orderByDesc('wt.id')->limit(30)->get();
 
         $topups = \DB::table('top_up_requests as t')
@@ -2449,19 +2560,30 @@ class AdminController extends Controller
             ->selectRaw('t.id, u.name, u.phone, t.amount, t.method, t.status, t.created_at')
             ->orderByDesc('t.id')->limit(20)->get();
 
-        $totalIn  = (float)\DB::table('wallet_transactions')->where('direction','credit')->where('created_at','>=',$start)->sum('amount');
-        $totalOut = (float)\DB::table('wallet_transactions')->where('direction','debit')->where('created_at','>=',$start)->sum('amount');
+        $totalInQ  = \DB::table('wallet_transactions')->where('direction','credit')->where('created_at','>=',$start);
+        $totalOutQ = \DB::table('wallet_transactions')->where('direction','debit')->where('created_at','>=',$start);
+        $applyWalletScope($totalInQ); $applyWalletScope($totalOutQ);
+        $totalIn  = (float)$totalInQ->sum('amount');
+        $totalOut = (float)$totalOutQ->sum('amount');
 
-        return view('admin.reports.wallet', compact('period','start','byType','topBalances','recent','topups','totalIn','totalOut'));
+        return view('admin.reports.wallet', compact('period','start','scope','entityId','partners','drivers','byType','topBalances','recent','topups','totalIn','totalOut'));
     }
 
     // ── 7. Withdrawal Report ──────────────────────────────────────────────────
     public function reportWithdrawals(\Illuminate\Http\Request $request)
     {
         [$period, $start] = $this->reportPeriod($request);
+        [$scope, $entityId, $partners, $drivers] = $this->extractScope($request);
 
-        $totals = \DB::table('withdrawal_requests')->where('created_at','>=',$start)
-            ->selectRaw('COUNT(*) as total,
+        // Withdrawals are always driver-scoped (partners don't withdraw the same way)
+        $applyScope = function($q) use ($scope, $entityId) {
+            if ($scope === 'driver' && $entityId) $q->where('driver_id', $entityId);
+            elseif ($scope === 'partner')          $q->whereRaw('1=0'); // no partner withdrawals
+        };
+
+        $totalsQ = \DB::table('withdrawal_requests')->where('created_at','>=',$start);
+        $applyScope($totalsQ);
+        $totals = $totalsQ->selectRaw('COUNT(*) as total,
                 SUM(CASE WHEN status="pending" THEN 1 ELSE 0 END) as pending,
                 SUM(CASE WHEN status="approved" THEN 1 ELSE 0 END) as approved,
                 SUM(CASE WHEN status="rejected" THEN 1 ELSE 0 END) as rejected,
@@ -2469,67 +2591,85 @@ class AdminController extends Controller
                 SUM(CASE WHEN status="pending" THEN amount_khr ELSE 0 END) as total_pending')
             ->first();
 
-        $byMethod = \DB::table('withdrawal_requests')->where('created_at','>=',$start)
-            ->selectRaw('payment_method, COUNT(*) as c, SUM(amount_khr) as total')
+        $byMethodQ = \DB::table('withdrawal_requests')->where('created_at','>=',$start);
+        $applyScope($byMethodQ);
+        $byMethod = $byMethodQ->selectRaw('payment_method, COUNT(*) as c, SUM(amount_khr) as total')
             ->groupBy('payment_method')->orderByRaw('total DESC')->get();
 
-        $withdrawals = \DB::table('withdrawal_requests as w')
+        $withdrawalsQ = \DB::table('withdrawal_requests as w')
             ->join('users as u','u.id','=','w.driver_id')
-            ->where('w.created_at','>=',$start)
-            ->selectRaw('w.id, u.name, u.phone, w.amount_khr, w.payment_method, w.account_number,
+            ->where('w.created_at','>=',$start);
+        if ($scope === 'driver' && $entityId) $withdrawalsQ->where('w.driver_id', $entityId);
+        elseif ($scope === 'partner')          $withdrawalsQ->whereRaw('1=0');
+        $withdrawals = $withdrawalsQ->selectRaw('w.id, u.name, u.phone, w.amount_khr, w.payment_method, w.account_number,
                 w.bank_name, w.status, w.admin_note, w.processed_at, w.created_at')
             ->orderByDesc('w.id')->paginate(25);
 
-        $daily = \DB::table('withdrawal_requests')->where('created_at','>=',$start)
-            ->selectRaw('DATE(created_at) as date, COUNT(*) as c, SUM(amount_khr) as total')
+        $dailyQ = \DB::table('withdrawal_requests')->where('created_at','>=',$start);
+        $applyScope($dailyQ);
+        $daily = $dailyQ->selectRaw('DATE(created_at) as date, COUNT(*) as c, SUM(amount_khr) as total')
             ->groupBy('date')->orderBy('date')->get()->keyBy('date');
 
         $trendDates = $this->trendDates($period);
 
-        return view('admin.reports.withdrawals', compact('period','start','totals','byMethod','withdrawals','daily','trendDates'));
+        return view('admin.reports.withdrawals', compact('period','start','scope','entityId','partners','drivers','totals','byMethod','withdrawals','daily','trendDates'));
     }
 
     // ── 8. Commission Report ──────────────────────────────────────────────────
     public function reportCommission(\Illuminate\Http\Request $request)
     {
         [$period, $start] = $this->reportPeriod($request);
+        [$scope, $entityId, $partners, $drivers] = $this->extractScope($request);
 
-        $totalCommission = (float)\DB::table('wallet_transactions')
-            ->where('type','platform_commission')->where('created_at','>=',$start)->sum('amount');
-        $totalTrips = \DB::table('wallet_transactions')
-            ->where('type','platform_commission')->where('created_at','>=',$start)->count();
+        // Commission is always between drivers and the platform
+        $applyScope = function($q) use ($scope, $entityId) {
+            if ($scope === 'driver' && $entityId) $q->where('user_id', $entityId);
+            elseif ($scope === 'partner')          $q->whereRaw('1=0');
+        };
+
+        $commBaseQ = \DB::table('wallet_transactions')->where('type','platform_commission')->where('created_at','>=',$start);
+        $applyScope($commBaseQ);
+        $totalCommission = (float)(clone $commBaseQ)->sum('amount');
+        $totalTrips = (clone $commBaseQ)->count();
         $avgCommission = $totalTrips > 0 ? round($totalCommission / $totalTrips) : 0;
 
-        $byDriver = \DB::table('wallet_transactions as wt')
+        $byDriverQ = \DB::table('wallet_transactions as wt')
             ->join('users as u','u.id','=','wt.user_id')
-            ->where('wt.type','platform_commission')->where('wt.created_at','>=',$start)
-            ->selectRaw('u.id, u.name, u.phone, COUNT(wt.id) as trips, SUM(wt.amount) as commission')
-            ->groupBy('u.id','u.name','u.phone')
-            ->orderByRaw('commission DESC')->get();
+            ->where('wt.type','platform_commission')->where('wt.created_at','>=',$start);
+        if ($scope === 'driver' && $entityId) $byDriverQ->where('wt.user_id', $entityId);
+        elseif ($scope === 'partner')          $byDriverQ->whereRaw('1=0');
+        $byDriver = $byDriverQ->selectRaw('u.id, u.name, u.phone, COUNT(wt.id) as trips, SUM(wt.amount) as commission')
+            ->groupBy('u.id','u.name','u.phone')->orderByRaw('commission DESC')->get();
 
-        $daily = \DB::table('wallet_transactions')
-            ->where('type','platform_commission')->where('created_at','>=',$start)
-            ->selectRaw('DATE(created_at) as date, COUNT(*) as c, SUM(amount) as total')
+        $dailyQ = \DB::table('wallet_transactions')->where('type','platform_commission')->where('created_at','>=',$start);
+        $applyScope($dailyQ);
+        $daily = $dailyQ->selectRaw('DATE(created_at) as date, COUNT(*) as c, SUM(amount) as total')
             ->groupBy('date')->orderBy('date')->get()->keyBy('date');
 
         $trendDates = $this->trendDates($period);
 
-        $recent = \DB::table('wallet_transactions as wt')
+        $recentQ = \DB::table('wallet_transactions as wt')
             ->join('users as u','u.id','=','wt.user_id')
-            ->where('wt.type','platform_commission')->where('wt.created_at','>=',$start)
-            ->selectRaw('wt.id, u.name, wt.amount, wt.balance_before, wt.balance_after, wt.note, wt.created_at')
+            ->where('wt.type','platform_commission')->where('wt.created_at','>=',$start);
+        if ($scope === 'driver' && $entityId) $recentQ->where('wt.user_id', $entityId);
+        elseif ($scope === 'partner')          $recentQ->whereRaw('1=0');
+        $recent = $recentQ->selectRaw('wt.id, u.name, wt.amount, wt.balance_before, wt.balance_after, wt.note, wt.created_at')
             ->orderByDesc('wt.id')->limit(30)->get();
 
-        return view('admin.reports.commission', compact('period','start','totalCommission','totalTrips','avgCommission','byDriver','daily','trendDates','recent'));
+        return view('admin.reports.commission', compact('period','start','scope','entityId','partners','drivers','totalCommission','totalTrips','avgCommission','byDriver','daily','trendDates','recent'));
     }
 
     // ── 9. Performance Report ─────────────────────────────────────────────────
     public function reportPerformance(\Illuminate\Http\Request $request)
     {
         [$period, $start] = $this->reportPeriod($request);
+        [$scope, $entityId, $partners, $drivers] = $this->extractScope($request);
 
-        $rideKpi = \DB::table('rides')->where('created_at','>=',$start)
-            ->selectRaw('COUNT(*) as total,
+        $rideQ = \DB::table('rides')->where('created_at','>=',$start);
+        if ($scope === 'partner')                   $rideQ->whereRaw('1=0');
+        elseif ($scope === 'driver' && $entityId)   $rideQ->where('driver_id', $entityId);
+
+        $rideKpi = (clone $rideQ)->selectRaw('COUNT(*) as total,
                 SUM(CASE WHEN status="completed" THEN 1 ELSE 0 END) as completed,
                 SUM(CASE WHEN status="cancelled" THEN 1 ELSE 0 END) as cancelled,
                 AVG(CASE WHEN status="completed" AND completed_at IS NOT NULL THEN TIMESTAMPDIFF(MINUTE,created_at,completed_at) END) as avg_duration,
@@ -2537,8 +2677,11 @@ class AdminController extends Controller
                 AVG(CASE WHEN accepted_at IS NOT NULL THEN TIMESTAMPDIFF(SECOND,created_at,accepted_at) END) as avg_accept_seconds')
             ->first();
 
-        $deliveryKpi = \DB::table('deliveries')->where('created_at','>=',$start)
-            ->selectRaw('COUNT(*) as total,
+        $delQ = \DB::table('deliveries')->where('created_at','>=',$start);
+        if ($scope === 'partner') { $delQ->whereNotNull('partner_id'); if ($entityId) $delQ->where('partner_id', $entityId); }
+        elseif ($scope === 'driver' && $entityId) $delQ->where('driver_id', $entityId);
+
+        $deliveryKpi = (clone $delQ)->selectRaw('COUNT(*) as total,
                 SUM(CASE WHEN status IN("delivered","completed") THEN 1 ELSE 0 END) as completed,
                 SUM(CASE WHEN status="cancelled" THEN 1 ELSE 0 END) as cancelled,
                 AVG(CASE WHEN status IN("delivered","completed") AND completed_at IS NOT NULL THEN TIMESTAMPDIFF(MINUTE,created_at,completed_at) END) as avg_duration,
@@ -2546,22 +2689,25 @@ class AdminController extends Controller
                 SUM(CASE WHEN driver_id IS NULL AND status NOT IN("cancelled","completed","delivered") THEN 1 ELSE 0 END) as unassigned')
             ->first();
 
-        $hourly = \DB::table('rides')->where('created_at','>=',$start)->where('status','completed')
-            ->selectRaw('HOUR(created_at) as hour, COUNT(*) as c')->groupBy('hour')->orderBy('hour')->get()->keyBy('hour');
+        $hourlyQ = \DB::table('rides')->where('created_at','>=',$start)->where('status','completed');
+        if ($scope === 'partner')                   $hourlyQ->whereRaw('1=0');
+        elseif ($scope === 'driver' && $entityId)   $hourlyQ->where('driver_id', $entityId);
+        $hourly = $hourlyQ->selectRaw('HOUR(created_at) as hour, COUNT(*) as c')->groupBy('hour')->orderBy('hour')->get()->keyBy('hour');
 
-        $cancellationReasons = \DB::table('rides')->where('created_at','>=',$start)->where('status','cancelled')
-            ->whereNotNull('cancellation_reason')
-            ->selectRaw('cancellation_reason, COUNT(*) as c')->groupBy('cancellation_reason')->orderByRaw('c DESC')->limit(10)->get();
+        $cancelRideQ = (clone $rideQ)->where('status','cancelled')->whereNotNull('cancellation_reason');
+        $cancellationReasons = $cancelRideQ->selectRaw('cancellation_reason, COUNT(*) as c')->groupBy('cancellation_reason')->orderByRaw('c DESC')->limit(10)->get();
 
-        $deliCancelReasons = \DB::table('deliveries')->where('created_at','>=',$start)->where('status','cancelled')
-            ->whereNotNull('cancellation_reason')
-            ->selectRaw('cancellation_reason, COUNT(*) as c')->groupBy('cancellation_reason')->orderByRaw('c DESC')->limit(10)->get();
+        $cancelDelQ = (clone $delQ)->where('status','cancelled')->whereNotNull('cancellation_reason');
+        $deliCancelReasons = $cancelDelQ->selectRaw('cancellation_reason, COUNT(*) as c')->groupBy('cancellation_reason')->orderByRaw('c DESC')->limit(10)->get();
 
-        $ratingDist = \DB::table('rides')->where('created_at','>=',$start)->whereNotNull('rating')
-            ->selectRaw('FLOOR(rating) as star, COUNT(*) as c')->groupBy('star')->orderBy('star')->get()->keyBy('star');
+        $ratingDistQ = \DB::table('rides')->where('created_at','>=',$start)->whereNotNull('rating');
+        if ($scope === 'partner')                   $ratingDistQ->whereRaw('1=0');
+        elseif ($scope === 'driver' && $entityId)   $ratingDistQ->where('driver_id', $entityId);
+        $ratingDist = $ratingDistQ->selectRaw('FLOOR(rating) as star, COUNT(*) as c')->groupBy('star')->orderBy('star')->get()->keyBy('star');
 
         return view('admin.reports.performance', compact(
-            'period','start','rideKpi','deliveryKpi','hourly','cancellationReasons','deliCancelReasons','ratingDist'
+            'period','start','scope','entityId','partners','drivers',
+            'rideKpi','deliveryKpi','hourly','cancellationReasons','deliCancelReasons','ratingDist'
         ));
     }
 
@@ -2569,17 +2715,22 @@ class AdminController extends Controller
     public function reportDriverRanking(\Illuminate\Http\Request $request)
     {
         [$period, $start] = $this->reportPeriod($request);
+        [$scope, $entityId, $partners, $drivers] = $this->extractScope($request);
         $sortBy = $request->input('sort', 'total');
 
-        $drivers = \DB::table('users as u')
-            ->where('u.role','driver')
-            ->leftJoin('rides as r', function($j) use ($start) {
-                $j->on('r.driver_id','=','u.id')->where('r.status','completed')->where('r.created_at','>=',$start);
-            })
-            ->leftJoin('deliveries as d', function($j) use ($start) {
-                $j->on('d.driver_id','=','u.id')->whereIn('d.status',['delivered','completed'])->where('d.created_at','>=',$start);
-            })
-            ->selectRaw('u.id, u.name, u.phone, u.rating, u.available, u.wallet_balance,
+        $rankQ = \DB::table('users as u')->where('u.role','driver');
+        if ($scope === 'driver' && $entityId) $rankQ->where('u.id', $entityId);
+
+        $rankQ->leftJoin('rides as r', function($j) use ($start, $scope) {
+            $cond = $j->on('r.driver_id','=','u.id')->where('r.status','completed')->where('r.created_at','>=',$start);
+            if ($scope === 'partner') $cond->whereRaw('1=0'); // partners don't do rides
+        })->leftJoin('deliveries as d', function($j) use ($start, $scope, $entityId) {
+            $cond = $j->on('d.driver_id','=','u.id')->whereIn('d.status',['delivered','completed'])->where('d.created_at','>=',$start);
+            if ($scope === 'partner' && $entityId) $cond->where('d.partner_id', $entityId);
+            elseif ($scope === 'partner')           $cond->whereNotNull('d.partner_id');
+        });
+
+        $rankQ->selectRaw('u.id, u.name, u.phone, u.rating, u.available, u.wallet_balance,
                 COUNT(DISTINCT r.id) as rides,
                 COUNT(DISTINCT d.id) as deliveries,
                 COALESCE(SUM(DISTINCT r.fare),0) as ride_revenue,
@@ -2587,23 +2738,24 @@ class AdminController extends Controller
                 AVG(DISTINCT r.rating) as avg_ride_rating')
             ->groupBy('u.id','u.name','u.phone','u.rating','u.available','u.wallet_balance');
 
-        $drivers = match($sortBy) {
-            'rides'    => $drivers->orderByRaw('rides DESC'),
-            'delivery' => $drivers->orderByRaw('deliveries DESC'),
-            'revenue'  => $drivers->orderByRaw('(COALESCE(SUM(DISTINCT r.fare),0)+COALESCE(SUM(DISTINCT d.fee),0)) DESC'),
-            'rating'   => $drivers->orderByRaw('u.rating DESC'),
-            default    => $drivers->orderByRaw('(COUNT(DISTINCT r.id)+COUNT(DISTINCT d.id)) DESC'),
+        $rankQ = match($sortBy) {
+            'rides'    => $rankQ->orderByRaw('rides DESC'),
+            'delivery' => $rankQ->orderByRaw('deliveries DESC'),
+            'revenue'  => $rankQ->orderByRaw('(COALESCE(SUM(DISTINCT r.fare),0)+COALESCE(SUM(DISTINCT d.fee),0)) DESC'),
+            'rating'   => $rankQ->orderByRaw('u.rating DESC'),
+            default    => $rankQ->orderByRaw('(COUNT(DISTINCT r.id)+COUNT(DISTINCT d.id)) DESC'),
         };
 
-        $drivers = $drivers->get();
+        $driverRanking = $rankQ->get();
 
-        return view('admin.reports.driver-ranking', compact('period','start','drivers','sortBy'));
+        return view('admin.reports.driver-ranking', compact('period','start','scope','entityId','partners','drivers','driverRanking','sortBy'));
     }
 
     // ── 11. Analytics Report ──────────────────────────────────────────────────
     public function reportAnalytics(\Illuminate\Http\Request $request)
     {
         $view = $request->input('view', 'daily');
+        [$scope, $entityId, $partners, $drivers] = $this->extractScope($request);
 
         $groupFmt = match($view) {
             'weekly'  => "YEARWEEK(created_at,1)",
@@ -2625,16 +2777,22 @@ class AdminController extends Controller
             default   => now()->subDays(60)->startOfDay(),
         };
 
-        $rideTrend = \DB::table('rides')->where('created_at','>=',$start)
-            ->selectRaw("{$groupFmt} as grp, {$labelFmt} as label,
+        $rideQ = \DB::table('rides')->where('created_at','>=',$start);
+        if ($scope === 'partner')                   $rideQ->whereRaw('1=0');
+        elseif ($scope === 'driver' && $entityId)   $rideQ->where('driver_id', $entityId);
+
+        $rideTrend = $rideQ->selectRaw("{$groupFmt} as grp, {$labelFmt} as label,
                 COUNT(*) as total,
                 SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) as completed,
                 SUM(CASE WHEN status='cancelled' THEN 1 ELSE 0 END) as cancelled,
                 SUM(CASE WHEN status='completed' THEN fare ELSE 0 END) as revenue")
             ->groupBy('grp','label')->orderBy('grp')->get();
 
-        $deliveryTrend = \DB::table('deliveries')->where('created_at','>=',$start)
-            ->selectRaw("{$groupFmt} as grp, {$labelFmt} as label,
+        $delQ = \DB::table('deliveries')->where('created_at','>=',$start);
+        if ($scope === 'partner') { $delQ->whereNotNull('partner_id'); if ($entityId) $delQ->where('partner_id', $entityId); }
+        elseif ($scope === 'driver' && $entityId) $delQ->where('driver_id', $entityId);
+
+        $deliveryTrend = $delQ->selectRaw("{$groupFmt} as grp, {$labelFmt} as label,
                 COUNT(*) as total,
                 SUM(CASE WHEN status IN('delivered','completed') THEN 1 ELSE 0 END) as completed,
                 SUM(CASE WHEN status='cancelled' THEN 1 ELSE 0 END) as cancelled,
@@ -2645,25 +2803,33 @@ class AdminController extends Controller
             ->selectRaw("{$groupFmt} as grp, {$labelFmt} as label, role, COUNT(*) as c")
             ->groupBy('grp','label','role')->orderBy('grp')->get();
 
-        // Commission trend
-        $commissionTrend = \DB::table('wallet_transactions')->where('type','platform_commission')
-            ->where('created_at','>=',$start)
-            ->selectRaw("{$groupFmt} as grp, {$labelFmt} as label, SUM(amount) as total")
+        $commQ = \DB::table('wallet_transactions')->where('type','platform_commission')->where('created_at','>=',$start);
+        if ($scope === 'partner')                   $commQ->whereRaw('1=0');
+        elseif ($scope === 'driver' && $entityId)   $commQ->where('user_id', $entityId);
+        $commissionTrend = (clone $commQ)->selectRaw("{$groupFmt} as grp, {$labelFmt} as label, SUM(amount) as total")
             ->groupBy('grp','label')->orderBy('grp')->get();
 
-        // Summary totals (all time)
+        $allTimeRideQ = \DB::table('rides');
+        $allTimeDelQ  = \DB::table('deliveries');
+        if ($scope === 'partner') { $allTimeRideQ->whereRaw('1=0'); $allTimeDelQ->whereNotNull('partner_id'); if ($entityId) $allTimeDelQ->where('partner_id', $entityId); }
+        elseif ($scope === 'driver' && $entityId) { $allTimeRideQ->where('driver_id', $entityId); $allTimeDelQ->where('driver_id', $entityId); }
+
+        $allTimeCommQ = \DB::table('wallet_transactions')->where('type','platform_commission');
+        if ($scope === 'partner')                   $allTimeCommQ->whereRaw('1=0');
+        elseif ($scope === 'driver' && $entityId)   $allTimeCommQ->where('user_id', $entityId);
+
         $allTime = [
-            'rides'      => \DB::table('rides')->count(),
-            'deliveries' => \DB::table('deliveries')->count(),
+            'rides'      => (clone $allTimeRideQ)->count(),
+            'deliveries' => (clone $allTimeDelQ)->count(),
             'users'      => \DB::table('users')->count(),
             'drivers'    => \DB::table('users')->where('role','driver')->count(),
             'partners'   => \DB::table('users')->where('role','partner')->count(),
-            'revenue'    => (float)\DB::table('rides')->where('status','completed')->sum('fare')
-                          + (float)\DB::table('deliveries')->whereIn('status',['delivered','completed'])->sum('fee'),
-            'commission' => (float)\DB::table('wallet_transactions')->where('type','platform_commission')->sum('amount'),
+            'revenue'    => (float)(clone $allTimeRideQ)->where('status','completed')->sum('fare')
+                          + (float)(clone $allTimeDelQ)->whereIn('status',['delivered','completed'])->sum('fee'),
+            'commission' => (float)$allTimeCommQ->sum('amount'),
         ];
 
-        return view('admin.reports.analytics', compact('view','start','rideTrend','deliveryTrend','userGrowth','commissionTrend','allTime'));
+        return view('admin.reports.analytics', compact('view','start','scope','entityId','partners','drivers','rideTrend','deliveryTrend','userGrowth','commissionTrend','allTime'));
     }
 
     // ── Operations Report ─────────────────────────────────────────────────────
@@ -2672,133 +2838,108 @@ class AdminController extends Controller
     {
         $period = (int) $request->input('period', 30);
         $start  = now()->subDays($period)->startOfDay();
+        [$scope, $entityId, $partners, $drivers] = $this->extractScope($request);
 
-        // ── Key Metrics ──────────────────────────────────────────────────────
-        $totalDeliveries   = \DB::table('deliveries')->where('created_at', '>=', $start)->count();
-        $doneDeliveries    = \DB::table('deliveries')->where('created_at', '>=', $start)
-                                ->whereIn('status', ['delivered', 'completed'])->count();
-        $cancelDeliveries  = \DB::table('deliveries')->where('created_at', '>=', $start)
-                                ->where('status', 'cancelled')->count();
-        $totalRides        = \DB::table('rides')->where('created_at', '>=', $start)->count();
-        $doneRides         = \DB::table('rides')->where('created_at', '>=', $start)->where('status', 'completed')->count();
-        $cancelRides       = \DB::table('rides')->where('created_at', '>=', $start)->where('status', 'cancelled')->count();
+        $applyDelScope = function($q) use ($scope, $entityId) {
+            if ($scope === 'partner') { $q->whereNotNull('partner_id'); if ($entityId) $q->where('partner_id', $entityId); }
+            elseif ($scope === 'driver' && $entityId) $q->where('driver_id', $entityId);
+        };
+        $applyRideScope = function($q) use ($scope, $entityId) {
+            if ($scope === 'partner') $q->whereRaw('1=0');
+            elseif ($scope === 'driver' && $entityId) $q->where('driver_id', $entityId);
+        };
 
-        $deliveryRevenue   = (float) \DB::table('deliveries')->where('created_at', '>=', $start)
-                                ->whereIn('status', ['delivered', 'completed'])->sum('fee');
-        $rideRevenue       = (float) \DB::table('rides')->where('created_at', '>=', $start)
-                                ->where('status', 'completed')->sum('fare');
+        $delBase = \DB::table('deliveries')->where('created_at', '>=', $start);
+        $applyDelScope($delBase);
 
-        $commission        = (float) \DB::table('wallet_transactions')->where('created_at', '>=', $start)
-                                ->where('type', 'platform_commission')->sum('amount');
+        $totalDeliveries  = (clone $delBase)->count();
+        $doneDeliveries   = (clone $delBase)->whereIn('status', ['delivered', 'completed'])->count();
+        $cancelDeliveries = (clone $delBase)->where('status', 'cancelled')->count();
 
-        $codPending        = (float) \DB::table('deliveries')
-                                ->where('payment_by', 'recipient')
-                                ->whereIn('status', ['delivered', 'completed'])
-                                ->where('payment_status', 'unpaid')
-                                ->sum('package_amount');
+        $rideBase = \DB::table('rides')->where('created_at', '>=', $start);
+        $applyRideScope($rideBase);
 
-        $activeDrivers     = \DB::table('users')->where('role', 'driver')->where('available', 1)->count();
-        $totalDrivers      = \DB::table('users')->where('role', 'driver')->count();
-        $totalPartners     = \DB::table('users')->where('role', 'partner')->count();
-        $unassigned        = \DB::table('deliveries')
-                                ->whereNull('driver_id')
-                                ->whereNotIn('status', ['cancelled', 'completed', 'delivered'])
-                                ->count();
+        $totalRides  = (clone $rideBase)->count();
+        $doneRides   = (clone $rideBase)->where('status', 'completed')->count();
+        $cancelRides = (clone $rideBase)->where('status', 'cancelled')->count();
 
-        // ── Delivery Status Breakdown ────────────────────────────────────────
-        $deliveryStatuses  = \DB::table('deliveries')
-                                ->where('created_at', '>=', $start)
-                                ->selectRaw('status, COUNT(*) as c')
-                                ->groupBy('status')
-                                ->orderByRaw('c DESC')
-                                ->get()->keyBy('status');
+        $deliveryRevenue = (float)(clone $delBase)->whereIn('status', ['delivered', 'completed'])->sum('fee');
+        $rideRevenue     = (float)(clone $rideBase)->where('status', 'completed')->sum('fare');
 
-        // ── Partner Performance ──────────────────────────────────────────────
-        $partnerStats = \DB::table('deliveries as d')
-            ->join('users as u', 'u.id', '=', 'd.partner_id')
-            ->where('d.created_at', '>=', $start)
-            ->selectRaw('u.id, u.name,
+        $commQ = \DB::table('wallet_transactions')->where('created_at', '>=', $start)->where('type', 'platform_commission');
+        if ($scope === 'partner') $commQ->whereRaw('1=0');
+        elseif ($scope === 'driver' && $entityId) $commQ->where('user_id', $entityId);
+        $commission = (float)$commQ->sum('amount');
+
+        $codQ = \DB::table('deliveries')->where('payment_by', 'recipient')->whereIn('status', ['delivered', 'completed'])->where('payment_status', 'unpaid');
+        $applyDelScope($codQ);
+        $codPending = (float)$codQ->sum('package_amount');
+
+        $activeDrivers = \DB::table('users')->where('role', 'driver')->where('available', 1)->count();
+        $totalDrivers  = \DB::table('users')->where('role', 'driver')->count();
+        $totalPartners = \DB::table('users')->where('role', 'partner')->count();
+        $unassigned    = (clone $delBase)->whereNull('driver_id')->whereNotIn('status', ['cancelled', 'completed', 'delivered'])->count();
+
+        $deliveryStatuses = (clone $delBase)->selectRaw('status, COUNT(*) as c')->groupBy('status')->orderByRaw('c DESC')->get()->keyBy('status');
+
+        $partnerStatsQ = \DB::table('deliveries as d')->join('users as u', 'u.id', '=', 'd.partner_id')->where('d.created_at', '>=', $start);
+        if ($scope === 'partner' && $entityId) $partnerStatsQ->where('d.partner_id', $entityId);
+        $partnerStats = $partnerStatsQ->selectRaw('u.id, u.name,
                 COUNT(d.id) as orders,
                 SUM(CASE WHEN d.status IN ("delivered","completed") THEN 1 ELSE 0 END) as done,
                 SUM(CASE WHEN d.status = "cancelled" THEN 1 ELSE 0 END) as cancelled,
                 SUM(d.fee) as revenue')
-            ->groupBy('u.id', 'u.name')
-            ->orderByRaw('orders DESC')
-            ->get();
+            ->groupBy('u.id', 'u.name')->orderByRaw('orders DESC')->get();
 
-        // ── Driver Leaderboard ───────────────────────────────────────────────
-        $driverLeaderboard = \DB::table('users as u')
-            ->leftJoin('deliveries as d', function ($j) use ($start) {
-                $j->on('d.driver_id', '=', 'u.id')
-                  ->whereIn('d.status', ['delivered', 'completed'])
-                  ->where('d.created_at', '>=', $start);
-            })
-            ->leftJoin('rides as r', function ($j) use ($start) {
-                $j->on('r.driver_id', '=', 'u.id')
-                  ->where('r.status', 'completed')
-                  ->where('r.created_at', '>=', $start);
-            })
-            ->where('u.role', 'driver')
-            ->selectRaw('u.id, u.name, u.phone, u.rating,
-                COUNT(DISTINCT d.id) as deliveries,
-                COUNT(DISTINCT r.id) as rides')
+        $leaderQ = \DB::table('users as u')->where('u.role', 'driver');
+        if ($scope === 'driver' && $entityId) $leaderQ->where('u.id', $entityId);
+        $leaderQ->leftJoin('deliveries as d', function ($j) use ($start, $scope, $entityId) {
+            $cond = $j->on('d.driver_id', '=', 'u.id')->whereIn('d.status', ['delivered', 'completed'])->where('d.created_at', '>=', $start);
+            if ($scope === 'partner' && $entityId) $cond->where('d.partner_id', $entityId);
+            elseif ($scope === 'partner')           $cond->whereNotNull('d.partner_id');
+        })->leftJoin('rides as r', function ($j) use ($start, $scope) {
+            $cond = $j->on('r.driver_id', '=', 'u.id')->where('r.status', 'completed')->where('r.created_at', '>=', $start);
+            if ($scope === 'partner') $cond->whereRaw('1=0');
+        });
+        $driverLeaderboard = $leaderQ->selectRaw('u.id, u.name, u.phone, u.rating,
+                COUNT(DISTINCT d.id) as deliveries, COUNT(DISTINCT r.id) as rides')
             ->groupBy('u.id', 'u.name', 'u.phone', 'u.rating')
-            ->orderByRaw('(COUNT(DISTINCT d.id) + COUNT(DISTINCT r.id)) DESC')
-            ->limit(10)
-            ->get();
+            ->orderByRaw('(COUNT(DISTINCT d.id) + COUNT(DISTINCT r.id)) DESC')->limit(10)->get();
 
-        // ── Daily Trend (last 30 days) ───────────────────────────────────────
-        $deliveryTrend = \DB::table('deliveries')
-            ->where('created_at', '>=', now()->subDays(29)->startOfDay())
-            ->selectRaw('DATE(created_at) as date, COUNT(*) as c, SUM(fee) as rev')
-            ->groupBy('date')
-            ->orderBy('date')
-            ->get()->keyBy('date');
+        $trendBase30 = now()->subDays(29)->startOfDay();
+        $delTrendQ = \DB::table('deliveries')->where('created_at', '>=', $trendBase30);
+        $applyDelScope($delTrendQ);
+        $deliveryTrend = $delTrendQ->selectRaw('DATE(created_at) as date, COUNT(*) as c, SUM(fee) as rev')
+            ->groupBy('date')->orderBy('date')->get()->keyBy('date');
 
-        $rideTrend = \DB::table('rides')
-            ->where('created_at', '>=', now()->subDays(29)->startOfDay())
-            ->selectRaw('DATE(created_at) as date, COUNT(*) as c, SUM(fare) as rev')
-            ->groupBy('date')
-            ->orderBy('date')
-            ->get()->keyBy('date');
+        $rideTrendQ = \DB::table('rides')->where('created_at', '>=', $trendBase30);
+        $applyRideScope($rideTrendQ);
+        $rideTrend = $rideTrendQ->selectRaw('DATE(created_at) as date, COUNT(*) as c, SUM(fare) as rev')
+            ->groupBy('date')->orderBy('date')->get()->keyBy('date');
 
-        // Build 30-day date array
         $trendDates = collect();
-        for ($i = 29; $i >= 0; $i--) {
-            $trendDates->push(now()->subDays($i)->format('Y-m-d'));
-        }
+        for ($i = 29; $i >= 0; $i--) { $trendDates->push(now()->subDays($i)->format('Y-m-d')); }
 
-        // ── Avg Delivery Time ────────────────────────────────────────────────
-        $avgDeliveryMin = \DB::table('deliveries')
-            ->whereIn('status', ['delivered', 'completed'])
-            ->where('created_at', '>=', $start)
-            ->whereNotNull('completed_at')
-            ->selectRaw('AVG(TIMESTAMPDIFF(MINUTE, created_at, completed_at)) as avg')
-            ->value('avg');
+        $avgDelQ = (clone $delBase)->whereIn('status', ['delivered', 'completed'])->whereNotNull('completed_at');
+        $avgDeliveryMin = $avgDelQ->selectRaw('AVG(TIMESTAMPDIFF(MINUTE, created_at, completed_at)) as avg')->value('avg');
 
-        // ── Recent Issues ────────────────────────────────────────────────────
+        $cancelQ = (clone $delBase)->where('status', 'cancelled');
         $recentCancelled = \DB::table('deliveries as d')
             ->leftJoin('users as dr', 'dr.id', '=', 'd.driver_id')
-            ->where('d.status', 'cancelled')
-            ->where('d.created_at', '>=', $start)
-            ->selectRaw('d.id, d.recipient_name, d.cancellation_reason, d.created_at,
-                dr.name as driver_name')
-            ->orderByDesc('d.id')
-            ->limit(10)
-            ->get();
+            ->where('d.status', 'cancelled')->where('d.created_at', '>=', $start);
+        $applyDelScope($recentCancelled);
+        $recentCancelled = $recentCancelled->selectRaw('d.id, d.recipient_name, d.cancellation_reason, d.created_at, dr.name as driver_name')
+            ->orderByDesc('d.id')->limit(10)->get();
 
         return view('admin.operations-report', compact(
-            'period', 'start',
+            'period', 'start', 'scope', 'entityId', 'partners', 'drivers',
             'totalDeliveries', 'doneDeliveries', 'cancelDeliveries',
             'totalRides', 'doneRides', 'cancelRides',
             'deliveryRevenue', 'rideRevenue', 'commission',
             'codPending', 'activeDrivers', 'totalDrivers', 'totalPartners', 'unassigned',
-            'deliveryStatuses',
-            'partnerStats',
-            'driverLeaderboard',
+            'deliveryStatuses', 'partnerStats', 'driverLeaderboard',
             'trendDates', 'deliveryTrend', 'rideTrend',
-            'avgDeliveryMin',
-            'recentCancelled'
+            'avgDeliveryMin', 'recentCancelled'
         ));
     }
 }

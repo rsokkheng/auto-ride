@@ -297,8 +297,6 @@ document.getElementById('calcBtn').addEventListener('click', function() {
         document.getElementById('formUserId').value = uid;
         document.getElementById('formStart').value  = start;
         document.getElementById('formEnd').value    = end;
-        if (data.bank_name)    document.getElementById('formBankName').value    = data.bank_name;
-        if (data.bank_account) document.getElementById('formBankAccount').value = data.bank_account;
         document.getElementById('settlementForm').style.display = '';
     })
     .catch(err => {

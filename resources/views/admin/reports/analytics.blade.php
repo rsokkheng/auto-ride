@@ -17,6 +17,7 @@
             @foreach(['daily'=>'Daily','weekly'=>'Weekly','monthly'=>'Monthly','yearly'=>'Yearly'] as $k=>$l)
             <a href="{{ request()->fullUrlWithQuery(['view'=>$k]) }}" class="btn btn-sm {{ $view==$k?'btn-primary':'btn-outline-secondary' }}">{{ $l }}</a>
             @endforeach
+            @include('admin.reports.partials.scope-filter')
             @include('admin.reports.partials.export-buttons', ['route' => 'admin.export.analytics', 'extraParams' => ['view' => $view]])
         </div>
     </div>

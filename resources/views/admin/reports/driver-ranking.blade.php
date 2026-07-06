@@ -20,6 +20,7 @@
             @foreach(['total'=>'Total Jobs','rides'=>'Rides','delivery'=>'Deliveries','revenue'=>'Revenue','rating'=>'Rating'] as $k=>$l)
             <a href="{{ request()->fullUrlWithQuery(['sort'=>$k]) }}" class="btn btn-sm {{ $sortBy==$k?'btn-dark':'btn-outline-dark' }}">{{ $l }}</a>
             @endforeach
+            @include('admin.reports.partials.scope-filter')
             @include('admin.reports.partials.export-buttons', ['route' => 'admin.export.driver-ranking'])
         </form>
     </div>
@@ -32,7 +33,7 @@
             <span class="info-box-icon bg-warning"><i class="fas fa-users"></i></span>
             <div class="info-box-content">
                 <span class="info-box-text">Total Drivers</span>
-                <span class="info-box-number">{{ $drivers->count() }}</span>
+                <span class="info-box-number">{{ $driverRanking->count() }}</span>
             </div>
         </div>
     </div>
@@ -41,7 +42,7 @@
             <span class="info-box-icon bg-success"><i class="fas fa-check"></i></span>
             <div class="info-box-content">
                 <span class="info-box-text">Active Drivers</span>
-                <span class="info-box-number">{{ $drivers->where('available',1)->count() }}</span>
+                <span class="info-box-number">{{ $driverRanking->where('available',1)->count() }}</span>
             </div>
         </div>
     </div>
@@ -50,7 +51,7 @@
             <span class="info-box-icon bg-info"><i class="fas fa-route"></i></span>
             <div class="info-box-content">
                 <span class="info-box-text">Total Jobs Done</span>
-                <span class="info-box-number">{{ number_format($drivers->sum(fn($d)=>$d->rides+$d->deliveries)) }}</span>
+                <span class="info-box-number">{{ number_format($driverRanking->sum(fn($d)=>$d->rides+$d->deliveries)) }}</span>
             </div>
         </div>
     </div>
@@ -59,14 +60,14 @@
             <span class="info-box-icon bg-danger"><i class="fas fa-coins"></i></span>
             <div class="info-box-content">
                 <span class="info-box-text">Total Gross Revenue</span>
-                <span class="info-box-number">{{ number_format($drivers->sum(fn($d)=>$d->ride_revenue+$d->delivery_revenue)) }} ៛</span>
+                <span class="info-box-number">{{ number_format($driverRanking->sum(fn($d)=>$d->ride_revenue+$d->delivery_revenue)) }} ៛</span>
             </div>
         </div>
     </div>
 </div>
 
 {{-- Top 3 Podium --}}
-@php $top3 = $drivers->take(3); @endphp
+@php $top3 = $driverRanking->take(3); @endphp
 @if($top3->count() >= 1)
 <div class="row justify-content-center mb-4">
     {{-- 2nd place --}}
@@ -127,7 +128,7 @@
                 </tr>
             </thead>
             <tbody>
-                @forelse($drivers as $i => $d)
+                @forelse($driverRanking as $i => $d)
                 @php $totalJobs = $d->rides + $d->deliveries; $totalRev = $d->ride_revenue + $d->delivery_revenue; @endphp
                 <tr class="{{ $i<3?'table-'.['warning','light','light'][$i]:'' }}">
                     <td>

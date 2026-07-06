@@ -56,7 +56,7 @@ class SettlementController extends Controller
 
     public function create()
     {
-        $drivers  = User::where('role', 'driver')->orderBy('name')->get(['id', 'name', 'phone', 'bank_name', 'bank_account', 'wallet_balance']);
+        $drivers  = User::where('role', 'driver')->orderBy('name')->get(['id', 'name', 'phone', 'wallet_balance']);
         $partners = User::where('role', 'partner')->orderBy('name')->get(['id', 'name', 'phone', 'wallet_balance']);
 
         return view('admin.settlements.create', compact('drivers', 'partners'));
@@ -77,10 +77,8 @@ class SettlementController extends Controller
             : $this->calcPartner($request->user_id, $request->period_start, $request->period_end);
 
         return response()->json(array_merge($data, [
-            'user_name'    => $user->name,
-            'user_phone'   => $user->phone,
-            'bank_name'    => $user->bank_name ?? '',
-            'bank_account' => $user->bank_account ?? '',
+            'user_name'      => $user->name,
+            'user_phone'     => $user->phone,
             'wallet_balance' => $user->wallet_balance,
         ]));
     }
