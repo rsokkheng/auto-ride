@@ -1,82 +1,117 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Partner Login | AutoRide</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+    <title>Partner Login — AutoRide</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <style>
-        body { background: linear-gradient(135deg, #1c1c2e 0%, #2d1b3d 100%); min-height: 100vh; display: flex; align-items: center; }
-        .login-card { border: none; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 420px; width: 100%; }
-        .login-header { background: linear-gradient(135deg, #e63946, #c1121f); border-radius: 16px 16px 0 0; padding: 32px; text-align: center; color: #fff; }
-        .login-header h2 { font-weight: 800; margin: 0; letter-spacing: -0.5px; }
-        .login-body { padding: 32px; }
-        .btn-login { background: linear-gradient(135deg, #e63946, #c1121f); border: none; color: #fff; font-weight: 700; padding: 12px; border-radius: 8px; font-size: 1rem; }
-        .btn-login:hover { background: linear-gradient(135deg, #c1121f, #a00f19); color: #fff; }
-        .form-control:focus { border-color: #e63946; box-shadow: 0 0 0 0.2rem rgba(230,57,70,0.15); }
-    </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    @vite(['resources/css/app.css'])
 </head>
-<body>
-<div class="container">
-    <div class="row justify-content-center">
-        <div class="col-md-5">
-            <div class="login-card card">
-                <div class="login-header">
-                    <div style="font-size:2.5rem; margin-bottom:8px;"><i class="fas fa-handshake"></i></div>
-                    <h2>Partner Portal</h2>
-                    <p class="mb-0 mt-1 opacity-75" style="opacity:.75; font-size:.9rem;">AutoRide Delivery Management</p>
-                </div>
-                <div class="login-body">
-                    @if($errors->any())
-                        <div class="alert alert-danger py-2">{{ $errors->first() }}</div>
-                    @endif
-                    @if(session('error'))
-                        <div class="alert alert-danger py-2">{{ session('error') }}</div>
-                    @endif
+<body class="h-full flex items-center justify-center min-h-screen" style="background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%)">
 
-                    <form method="POST" action="{{ route('partner.login.post') }}">
-                        @csrf
-                        <div class="form-group">
-                            <label class="font-weight-600 small">Phone Number or Email</label>
-                            <div class="input-group">
-                                <div class="input-group-prepend">
-                                    <span class="input-group-text"><i class="fas fa-user"></i></span>
-                                </div>
-                                <input type="text" name="login" class="form-control"
-                                       placeholder="0XX XXX XXXX or email@example.com"
-                                       value="{{ old('login') }}" required autofocus>
-                            </div>
-                            @error('login')
-                                <small class="text-danger">{{ $message }}</small>
-                            @enderror
-                        </div>
-                        <div class="form-group">
-                            <label class="font-weight-600 small">Password</label>
-                            <div class="input-group">
-                                <div class="input-group-prepend">
-                                    <span class="input-group-text"><i class="fas fa-lock"></i></span>
-                                </div>
-                                <input type="password" name="password" class="form-control"
-                                       placeholder="Enter password" required>
-                            </div>
-                        </div>
-                        <div class="form-group d-flex justify-content-between align-items-center">
-                            <label class="mb-0">
-                                <input type="checkbox" name="remember"> <small>Remember me</small>
-                            </label>
-                        </div>
-                        <button type="submit" class="btn btn-login btn-block">
-                            <i class="fas fa-sign-in-alt mr-2"></i>Sign In
-                        </button>
-                    </form>
-                </div>
+<div class="w-full max-w-sm mx-4">
+
+    {{-- Card --}}
+    <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
+
+        {{-- Header --}}
+        <div class="px-8 pt-8 pb-6 text-center" style="background:linear-gradient(135deg,#e63946,#c1121f)">
+            <div class="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-handshake text-white text-2xl"></i>
             </div>
-            <p class="text-center text-white-50 mt-3 small">
-                Need an account? Contact your AutoRide account manager.
-            </p>
+            <h1 class="text-white text-2xl font-bold tracking-tight">Partner Portal</h1>
+            <p class="text-red-100 text-sm mt-1">AutoRide Delivery Management</p>
+        </div>
+
+        {{-- Body --}}
+        <div class="px-8 py-8">
+
+            @if($errors->any())
+                <div class="alert alert-danger alert-dismissible fade show py-2 mb-4 text-sm" role="alert">
+                    <i class="fas fa-exclamation-circle me-1"></i>{{ $errors->first() }}
+                    <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="alert"></button>
+                </div>
+            @endif
+            @if(session('error'))
+                <div class="alert alert-danger alert-dismissible fade show py-2 mb-4 text-sm" role="alert">
+                    <i class="fas fa-exclamation-circle me-1"></i>{{ session('error') }}
+                    <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="alert"></button>
+                </div>
+            @endif
+
+            <form method="POST" action="{{ route('partner.login.post') }}" class="space-y-5">
+                @csrf
+
+                {{-- Login --}}
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5">Phone Number or Email</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                            <i class="fas fa-user text-sm"></i>
+                        </span>
+                        <input type="text" name="login"
+                               class="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-transparent @error('login') border-red-400 @enderror"
+                               style="--tw-ring-color:#e63946"
+                               placeholder="012 345 678 or email@example.com"
+                               value="{{ old('login') }}" required autofocus>
+                    </div>
+                    @error('login')
+                        <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                {{-- Password --}}
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5">Password</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                            <i class="fas fa-lock text-sm"></i>
+                        </span>
+                        <input type="password" name="password" id="pwd"
+                               class="w-full pl-9 pr-10 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-transparent"
+                               style="--tw-ring-color:#e63946"
+                               placeholder="Enter password" required>
+                        <button type="button" onclick="togglePwd()" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600">
+                            <i class="fas fa-eye text-sm" id="pwd-icon"></i>
+                        </button>
+                    </div>
+                </div>
+
+                {{-- Remember --}}
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" name="remember" id="remember"
+                           class="w-4 h-4 rounded border-slate-300 text-red-600">
+                    <label for="remember" class="text-sm text-slate-600 cursor-pointer">Remember me</label>
+                </div>
+
+                <button type="submit"
+                        class="w-full py-3 rounded-xl text-white font-semibold text-sm transition-all active:scale-95"
+                        style="background:linear-gradient(135deg,#e63946,#c1121f)">
+                    <i class="fas fa-sign-in-alt me-2"></i>Sign In
+                </button>
+            </form>
         </div>
     </div>
+
+    <p class="text-center text-slate-400 text-xs mt-5">
+        Need an account? Contact your AutoRide account manager.
+    </p>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function togglePwd() {
+    var inp = document.getElementById('pwd');
+    var ico = document.getElementById('pwd-icon');
+    if (inp.type === 'password') {
+        inp.type = 'text';
+        ico.classList.replace('fa-eye', 'fa-eye-slash');
+    } else {
+        inp.type = 'password';
+        ico.classList.replace('fa-eye-slash', 'fa-eye');
+    }
+}
+</script>
 </body>
 </html>

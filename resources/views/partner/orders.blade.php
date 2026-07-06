@@ -4,37 +4,69 @@
 
 @section('content')
 
-{{-- Filters --}}
-<div class="card mb-3">
-    <div class="card-body py-2">
-        <form method="GET" action="{{ route('partner.orders') }}" class="form-inline flex-wrap" style="gap:6px">
-            <input type="text" name="search" class="form-control form-control-sm"
-                   placeholder="Recipient name / phone / ref / QR…" value="{{ $search ?? '' }}" style="min-width:200px">
-            <select name="status" class="form-control form-control-sm">
+{{-- ── Filter Bar ──────────────────────────────────────────────── --}}
+<div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-5">
+    <form method="GET" action="{{ route('partner.orders') }}" class="flex flex-wrap items-end gap-3">
+        <div class="flex-1 min-w-[200px]">
+            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Search</label>
+            <div class="relative">
+                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 pointer-events-none">
+                    <i class="fas fa-search text-xs"></i>
+                </span>
+                <input type="text" name="search"
+                       class="form-control form-control-sm ps-8"
+                       placeholder="Name / phone / ref / QR…"
+                       value="{{ $search ?? '' }}">
+            </div>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Status</label>
+            <select name="status" class="form-select form-select-sm">
                 <option value="">All Statuses</option>
                 @foreach(['created','assigned','accepted','picked_up','in_transit','delivered','completed','cancelled'] as $s)
-                    <option value="{{ $s }}" {{ ($status ?? '') == $s ? 'selected' : '' }}>{{ ucfirst(str_replace('_',' ',$s)) }}</option>
+                    <option value="{{ $s }}" {{ ($status ?? '') == $s ? 'selected' : '' }}>
+                        {{ ucfirst(str_replace('_',' ',$s)) }}
+                    </option>
                 @endforeach
             </select>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">From</label>
             <input type="date" name="date_from" class="form-control form-control-sm" value="{{ $from ?? '' }}">
-            <input type="date" name="date_to"   class="form-control form-control-sm" value="{{ $to ?? '' }}">
-            <button class="btn btn-sm btn-primary"><i class="fas fa-search mr-1"></i>Search</button>
-            <a href="{{ route('partner.orders') }}" class="btn btn-sm btn-secondary">Reset</a>
-            <a href="{{ route('partner.orders.create') }}" class="btn btn-sm btn-danger ml-auto">
-                <i class="fas fa-plus mr-1"></i>New Order
+        </div>
+        <div>
+            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">To</label>
+            <input type="date" name="date_to" class="form-control form-control-sm" value="{{ $to ?? '' }}">
+        </div>
+        <div class="flex gap-2 items-end">
+            <button class="btn btn-sm btn-primary">
+                <i class="fas fa-search me-1"></i>Search
+            </button>
+            <a href="{{ route('partner.orders') }}" class="btn btn-sm btn-outline-secondary">Reset</a>
+        </div>
+        <div class="ms-auto">
+            <a href="{{ route('partner.orders.create') }}"
+               class="btn btn-sm text-white"
+               style="background:linear-gradient(135deg,#e63946,#c1121f);border:none">
+                <i class="fas fa-plus me-1"></i>New Order
             </a>
-        </form>
-    </div>
+        </div>
+    </form>
 </div>
 
-<div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0"><i class="fas fa-box mr-2"></i>Orders</h5>
-        <span class="badge badge-secondary">{{ $orders->total() }} total</span>
+{{-- ── Orders Table ─────────────────────────────────────────────── --}}
+<div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+        <h2 class="font-semibold text-slate-800 flex items-center gap-2">
+            <i class="fas fa-box text-slate-400"></i> Orders
+        </h2>
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+            {{ $orders->total() }} total
+        </span>
     </div>
-    <div class="card-body p-0 table-responsive">
-        <table class="table table-hover mb-0 text-nowrap">
-            <thead class="thead-light">
+    <div class="overflow-x-auto">
+        <table class="table table-hover table-sm mb-0">
+            <thead class="table-light">
                 <tr>
                     <th>#</th><th>Ref</th><th>Recipient</th><th>Dropoff</th>
                     <th>Fee</th><th>Driver</th><th>Status</th><th>Date</th><th></th>
@@ -43,48 +75,61 @@
             <tbody>
                 @forelse($orders as $d)
                 @php
-                    $sc = ['created'=>'light','assigned'=>'warning','accepted'=>'info','picked_up'=>'primary',
-                           'in_transit'=>'secondary','delivered'=>'success','completed'=>'success','cancelled'=>'danger'];
+                $sc = ['created'=>'secondary','assigned'=>'warning','accepted'=>'info','picked_up'=>'primary',
+                       'in_transit'=>'dark','delivered'=>'success','completed'=>'success','cancelled'=>'danger'];
                 @endphp
                 <tr>
-                    <td><a href="{{ route('partner.orders.show', $d) }}" class="font-weight-bold text-primary">#{{ $d->id }}</a></td>
+                    <td>
+                        <a href="{{ route('partner.orders.show', $d) }}" class="fw-bold text-decoration-none text-primary">
+                            #{{ $d->id }}
+                        </a>
+                    </td>
                     <td><small class="text-muted">{{ $d->partner_reference ?? '—' }}</small></td>
                     <td>
-                        <div>{{ $d->recipient_name }}</div>
+                        <div class="fw-semibold">{{ $d->recipient_name }}</div>
                         <small class="text-muted">{{ $d->recipient_phone }}</small>
                     </td>
-                    <td><small>{{ Str::limit($d->dropoff_address, 28) }}</small></td>
+                    <td><small class="text-muted">{{ Str::limit($d->dropoff_address, 28) }}</small></td>
                     <td><strong>{{ number_format($d->fee) }} ៛</strong></td>
                     <td>
                         @if($d->driver)
-                            <div>{{ $d->driver->name }}</div>
+                            <div class="small fw-semibold">{{ $d->driver->name }}</div>
                             <small class="text-muted">{{ $d->driver->phone }}</small>
                         @else
                             <span class="text-muted small">Unassigned</span>
                         @endif
                     </td>
                     <td>
-                        <span class="badge badge-{{ $sc[$d->status] ?? 'secondary' }} {{ $d->status === 'created' ? 'text-dark' : '' }}">
+                        <span class="badge bg-{{ $sc[$d->status] ?? 'secondary' }}">
                             {{ ucfirst(str_replace('_',' ',$d->status)) }}
                         </span>
                     </td>
                     <td><small class="text-muted">{{ $d->created_at->format('d M H:i') }}</small></td>
                     <td>
-                        <a href="{{ route('partner.orders.show', $d) }}" class="btn btn-xs btn-outline-secondary">
+                        <a href="{{ route('partner.orders.show', $d) }}" class="btn btn-sm btn-outline-secondary py-0 px-2">
                             <i class="fas fa-eye"></i>
                         </a>
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="9" class="text-center text-muted py-5">
-                    <i class="fas fa-box-open fa-2x mb-2 d-block"></i>No orders found.
-                </td></tr>
+                <tr>
+                    <td colspan="9" class="text-center py-12">
+                        <i class="fas fa-box-open fa-2x text-slate-300 mb-3 d-block"></i>
+                        <p class="text-slate-500 mb-0">No orders found.</p>
+                        <a href="{{ route('partner.orders.create') }}" class="btn btn-sm btn-primary mt-3">
+                            Create your first order
+                        </a>
+                    </td>
+                </tr>
                 @endforelse
             </tbody>
         </table>
     </div>
     @if($orders->hasPages())
-    <div class="card-footer">{{ $orders->links() }}</div>
+    <div class="px-5 py-3 border-t border-slate-100">
+        {{ $orders->links() }}
+    </div>
     @endif
 </div>
+
 @endsection

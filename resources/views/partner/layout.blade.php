@@ -1,165 +1,234 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', 'Dashboard') | Partner Portal</title>
+    <title>@yield('title', 'Dashboard') — Partner Portal</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2.0/dist/css/adminlte.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    @vite(['resources/css/app.css'])
     <style>
-        .brand-link { background: linear-gradient(135deg, #1c1c2e, #2d1b3d) !important; }
-        .brand-text  { color: #fff !important; font-weight: 700 !important; }
-        .brand-accent { color: #e63946; }
-        .main-sidebar { background: #1c1c2e !important; }
-        .nav-sidebar .nav-link { color: #94a3b8 !important; border-radius: 8px; margin: 2px 8px; }
-        .nav-sidebar .nav-link:hover { background: rgba(255,255,255,0.07) !important; color: #fff !important; }
-        .nav-sidebar .nav-link.active { background: linear-gradient(135deg, #e63946, #c1121f) !important; color: #fff !important; }
-        .nav-sidebar .nav-icon { color: inherit !important; }
-        .content-wrapper { background: #f8fafc; }
-        .card { border: none; border-radius: 12px; box-shadow: 0 1px 8px rgba(0,0,0,0.06); }
-        .card-header { background: #fff; border-bottom: 1px solid #f1f5f9; border-radius: 12px 12px 0 0 !important; }
-        .stat-card { border-radius: 12px; padding: 20px; color: #fff; }
-        .nav-label { font-size: .65rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #475569; padding: 12px 16px 4px; }
+        /* Tailwind preflight resets certain Bootstrap styles — restore table borders */
+        .table { --bs-table-bg: transparent; }
+        .form-control:focus, .form-select:focus { border-color: #e63946; box-shadow: 0 0 0 .2rem rgba(230,57,70,.2); }
+        .btn-brand { background: linear-gradient(135deg,#e63946,#c1121f); color:#fff; border:none; }
+        .btn-brand:hover { background: linear-gradient(135deg,#c1121f,#a00f19); color:#fff; }
+        /* Sidebar nav active */
+        #sidebar .nav-active { background: linear-gradient(135deg,#e63946,#c1121f); color: #fff !important; }
+        #sidebar .nav-active i { color: #fff !important; }
+        /* Sidebar transition */
+        #sidebar { transition: transform .25s ease; }
         @stack('styles-inline')
     </style>
     @stack('styles')
 </head>
-<body class="hold-transition sidebar-mini layout-fixed">
-<div class="wrapper">
+<body class="h-full bg-slate-50">
 
-{{-- Navbar --}}
-<nav class="main-header navbar navbar-expand navbar-white navbar-light">
-    <ul class="navbar-nav">
-        <li class="nav-item">
-            <a class="nav-link" data-widget="pushmenu" href="#"><i class="fas fa-bars"></i></a>
-        </li>
-        <li class="nav-item d-none d-sm-inline-block">
-            <span class="nav-link font-weight-bold text-muted">@yield('page-title', 'Dashboard')</span>
-        </li>
-    </ul>
-    <ul class="navbar-nav ml-auto">
-        <li class="nav-item">
-            <span class="nav-link">
-                <i class="fas fa-wallet mr-1 text-success"></i>
-                <strong>{{ number_format(Auth::guard('partner')->user()->wallet_balance) }} ៛</strong>
-            </span>
-        </li>
-        <li class="nav-item dropdown">
-            <a class="nav-link" data-toggle="dropdown" href="#">
-                <i class="fas fa-user-circle mr-1"></i>
-                {{ Auth::guard('partner')->user()->name }}
-            </a>
-            <div class="dropdown-menu dropdown-menu-right">
-                <form method="POST" action="{{ route('partner.logout') }}">
-                    @csrf
-                    <button class="dropdown-item text-danger"><i class="fas fa-sign-out-alt mr-2"></i>Logout</button>
-                </form>
+{{-- Mobile overlay --}}
+<div id="overlay" class="fixed inset-0 bg-black/50 z-40 hidden lg:hidden" onclick="closeSidebar()"></div>
+
+{{-- ── Sidebar ──────────────────────────────────────────────────── --}}
+<aside id="sidebar"
+       class="fixed inset-y-0 left-0 z-50 w-64 flex flex-col"
+       style="background:#0f172a; transform:translateX(-100%)"
+       aria-label="Sidebar">
+
+    {{-- Brand --}}
+    <div class="flex items-center gap-3 px-5 py-5 border-b border-white/10">
+        <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+             style="background:linear-gradient(135deg,#e63946,#c1121f)">
+            <i class="fas fa-truck text-white text-sm"></i>
+        </div>
+        <div>
+            <div class="text-white font-bold text-base leading-tight">
+                <span style="color:#e63946">Auto</span>Ride
             </div>
-        </li>
-    </ul>
-</nav>
+            <div class="text-slate-400 text-xs">Partner Portal</div>
+        </div>
+        <button onclick="closeSidebar()" class="ml-auto text-slate-400 hover:text-white lg:hidden">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
 
-{{-- Sidebar --}}
-<aside class="main-sidebar sidebar-dark-primary elevation-4">
-    <a href="{{ route('partner.dashboard') }}" class="brand-link px-3">
-        <span class="brand-text font-weight-bold">
-            <span class="brand-accent">Auto</span>Ride
-            <small class="d-block" style="font-size:.65rem; font-weight:400; opacity:.6; letter-spacing:.05em;">Partner Portal</small>
-        </span>
-    </a>
-    <div class="sidebar">
-        <div class="user-panel mt-3 pb-3 mb-3 d-flex">
-            <div class="info">
-                <a href="#" class="d-block">{{ Auth::guard('partner')->user()->name }}</a>
-                <small style="color:#64748b; font-size:.75rem;">{{ Auth::guard('partner')->user()->phone }}</small>
+    {{-- User chip --}}
+    <div class="px-4 py-4 border-b border-white/10">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-user text-slate-300 text-sm"></i>
+            </div>
+            <div class="min-w-0">
+                <div class="text-white text-sm font-semibold truncate">{{ Auth::guard('partner')->user()->name }}</div>
+                <div class="text-slate-400 text-xs truncate">{{ Auth::guard('partner')->user()->phone }}</div>
             </div>
         </div>
-        <nav class="mt-2">
-            <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu">
-                <li class="nav-label">Main</li>
-                <li class="nav-item">
-                    <a href="{{ route('partner.dashboard') }}"
-                       class="nav-link {{ request()->routeIs('partner.dashboard') ? 'active' : '' }}">
-                        <i class="nav-icon fas fa-tachometer-alt"></i><p>Dashboard</p>
-                    </a>
-                </li>
+    </div>
 
-                <li class="nav-label mt-2">Orders</li>
-                <li class="nav-item">
-                    <a href="{{ route('partner.orders') }}"
-                       class="nav-link {{ request()->routeIs('partner.orders*') ? 'active' : '' }}">
-                        <i class="nav-icon fas fa-box"></i><p>All Orders</p>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="{{ route('partner.orders.create') }}"
-                       class="nav-link {{ request()->routeIs('partner.orders.create') ? 'active' : '' }}">
-                        <i class="nav-icon fas fa-plus-circle"></i><p>New Order</p>
-                    </a>
-                </li>
+    {{-- Nav --}}
+    <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+        <p class="px-3 text-xs font-semibold uppercase tracking-widest text-slate-500 mb-1">Main</p>
+        <a href="{{ route('partner.dashboard') }}"
+           class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors
+                  {{ request()->routeIs('partner.dashboard') ? 'nav-active' : 'text-slate-400 hover:bg-white/5 hover:text-white' }}">
+            <i class="fas fa-tachometer-alt w-4 text-center"></i><span>Dashboard</span>
+        </a>
 
-                <li class="nav-label mt-2">Finance</li>
-                <li class="nav-item">
-                    <a href="{{ route('partner.wallet') }}"
-                       class="nav-link {{ request()->routeIs('partner.wallet') ? 'active' : '' }}">
-                        <i class="nav-icon fas fa-wallet"></i><p>Wallet & COD</p>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="{{ route('partner.reports') }}"
-                       class="nav-link {{ request()->routeIs('partner.reports') ? 'active' : '' }}">
-                        <i class="nav-icon fas fa-chart-bar"></i><p>Reports</p>
-                    </a>
-                </li>
+        <p class="px-3 text-xs font-semibold uppercase tracking-widest text-slate-500 mb-1 mt-4">Orders</p>
+        <a href="{{ route('partner.orders') }}"
+           class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors
+                  {{ request()->routeIs('partner.orders') ? 'nav-active' : 'text-slate-400 hover:bg-white/5 hover:text-white' }}">
+            <i class="fas fa-box w-4 text-center"></i><span>All Orders</span>
+        </a>
+        <a href="{{ route('partner.orders.create') }}"
+           class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors
+                  {{ request()->routeIs('partner.orders.create') ? 'nav-active' : 'text-slate-400 hover:bg-white/5 hover:text-white' }}">
+            <i class="fas fa-plus-circle w-4 text-center"></i><span>New Order</span>
+        </a>
 
-                <li class="nav-label mt-2">Support</li>
-                <li class="nav-item">
-                    <a href="{{ route('partner.issues') }}"
-                       class="nav-link {{ request()->routeIs('partner.issues') ? 'active' : '' }}">
-                        <i class="nav-icon fas fa-exclamation-triangle"></i><p>Issues</p>
-                    </a>
-                </li>
-            </ul>
-        </nav>
+        <p class="px-3 text-xs font-semibold uppercase tracking-widest text-slate-500 mb-1 mt-4">Finance</p>
+        <a href="{{ route('partner.wallet') }}"
+           class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors
+                  {{ request()->routeIs('partner.wallet') ? 'nav-active' : 'text-slate-400 hover:bg-white/5 hover:text-white' }}">
+            <i class="fas fa-wallet w-4 text-center"></i><span>Wallet &amp; COD</span>
+        </a>
+        <a href="{{ route('partner.reports') }}"
+           class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors
+                  {{ request()->routeIs('partner.reports') ? 'nav-active' : 'text-slate-400 hover:bg-white/5 hover:text-white' }}">
+            <i class="fas fa-chart-bar w-4 text-center"></i><span>Reports</span>
+        </a>
+
+        <p class="px-3 text-xs font-semibold uppercase tracking-widest text-slate-500 mb-1 mt-4">Support</p>
+        <a href="{{ route('partner.issues') }}"
+           class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors
+                  {{ request()->routeIs('partner.issues') ? 'nav-active' : 'text-slate-400 hover:bg-white/5 hover:text-white' }}">
+            <i class="fas fa-exclamation-triangle w-4 text-center"></i><span>Issues</span>
+        </a>
+    </nav>
+
+    {{-- Logout --}}
+    <div class="px-4 py-4 border-t border-white/10">
+        <form method="POST" action="{{ route('partner.logout') }}">
+            @csrf
+            <button type="submit"
+                    class="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors">
+                <i class="fas fa-sign-out-alt w-4 text-center"></i><span>Logout</span>
+            </button>
+        </form>
     </div>
 </aside>
 
-{{-- Content --}}
-<div class="content-wrapper">
-    <div class="content-header">
-        <div class="container-fluid">
-            <h1 class="m-0">@yield('page-title')</h1>
-        </div>
-    </div>
-    <section class="content">
-        <div class="container-fluid">
-            @if(session('success'))
-                <div class="alert alert-success alert-dismissible fade show">
-                    <i class="fas fa-check-circle mr-2"></i>{{ session('success') }}
-                    <button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>
+{{-- ── Main wrapper (shifts right on lg) ──────────────────────────── --}}
+<div id="main-wrap" class="flex flex-col min-h-full transition-all duration-250">
+
+    {{-- ── Topbar ─────────────────────────────────────────────────── --}}
+    <header class="sticky top-0 z-30 bg-white border-b border-slate-200 h-16 flex items-center px-4 sm:px-6 gap-4">
+        {{-- Hamburger --}}
+        <button onclick="openSidebar()" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors" aria-label="Open menu">
+            <i class="fas fa-bars"></i>
+        </button>
+
+        {{-- Page title --}}
+        <h1 class="text-slate-700 font-semibold text-base truncate hidden sm:block">@yield('page-title', 'Dashboard')</h1>
+
+        <div class="ml-auto flex items-center gap-3">
+            {{-- Wallet balance --}}
+            <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-lg border border-emerald-200">
+                <i class="fas fa-wallet text-emerald-600 text-sm"></i>
+                <span class="text-emerald-700 font-semibold text-sm">{{ number_format(Auth::guard('partner')->user()->wallet_balance) }} ៛</span>
+            </div>
+
+            {{-- User dropdown --}}
+            <div class="relative" id="user-menu-wrap">
+                <button onclick="toggleUserMenu()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors text-sm text-slate-700">
+                    <div class="w-7 h-7 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center">
+                        <i class="fas fa-user text-white" style="font-size:.6rem"></i>
+                    </div>
+                    <span class="hidden sm:inline font-medium">{{ Auth::guard('partner')->user()->name }}</span>
+                    <i class="fas fa-chevron-down text-xs text-slate-400"></i>
+                </button>
+                <div id="user-menu" class="hidden absolute right-0 mt-1 w-44 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50">
+                    <div class="px-4 py-2 border-b border-slate-100">
+                        <p class="text-xs text-slate-500">Signed in as</p>
+                        <p class="text-sm font-semibold text-slate-700 truncate">{{ Auth::guard('partner')->user()->name }}</p>
+                    </div>
+                    <form method="POST" action="{{ route('partner.logout') }}" class="px-2 py-1">
+                        @csrf
+                        <button class="w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50 transition-colors">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </button>
+                    </form>
                 </div>
-            @endif
-            @if(session('error'))
-                <div class="alert alert-danger alert-dismissible fade show">
-                    <i class="fas fa-exclamation-circle mr-2"></i>{{ session('error') }}
-                    <button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>
-                </div>
-            @endif
-            @yield('content')
+            </div>
         </div>
-    </section>
+    </header>
+
+    {{-- ── Content ─────────────────────────────────────────────────── --}}
+    <main class="flex-1 px-4 py-6 sm:px-6">
+        @if(session('success'))
+            <div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
+                <i class="fas fa-check-circle me-2"></i>{{ session('success') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        @endif
+        @if(session('error'))
+            <div class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+                <i class="fas fa-exclamation-circle me-2"></i>{{ session('error') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        @endif
+
+        @yield('content')
+    </main>
+
+    <footer class="text-center py-4 text-xs text-slate-400 border-t border-slate-200 bg-white">
+        AutoRide Partner Portal &copy; {{ date('Y') }}
+    </footer>
 </div>
 
-<footer class="main-footer text-center text-muted py-2">
-    <small>AutoRide Partner Portal &copy; {{ date('Y') }}</small>
-</footer>
-</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+var sidebarOpen = false;
 
-<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2.0/dist/js/adminlte.min.js"></script>
+function openSidebar() {
+    sidebarOpen = true;
+    document.getElementById('sidebar').style.transform = 'translateX(0)';
+    document.getElementById('overlay').classList.remove('hidden');
+    document.getElementById('main-wrap').style.paddingLeft = '';
+}
+function closeSidebar() {
+    sidebarOpen = false;
+    var w = window.innerWidth;
+    if (w < 1024) {
+        document.getElementById('sidebar').style.transform = 'translateX(-100%)';
+        document.getElementById('overlay').classList.add('hidden');
+    }
+}
+function toggleUserMenu() {
+    document.getElementById('user-menu').classList.toggle('hidden');
+}
+document.addEventListener('click', function(e) {
+    var wrap = document.getElementById('user-menu-wrap');
+    if (wrap && !wrap.contains(e.target)) {
+        document.getElementById('user-menu').classList.add('hidden');
+    }
+});
+
+// On desktop: sidebar always visible
+function handleResize() {
+    var sidebar = document.getElementById('sidebar');
+    var wrap    = document.getElementById('main-wrap');
+    if (window.innerWidth >= 1024) {
+        sidebar.style.transform = 'translateX(0)';
+        wrap.style.paddingLeft  = '256px';
+        document.getElementById('overlay').classList.add('hidden');
+    } else {
+        if (!sidebarOpen) sidebar.style.transform = 'translateX(-100%)';
+        wrap.style.paddingLeft = '';
+    }
+}
+window.addEventListener('resize', handleResize);
+handleResize();
+</script>
 @stack('scripts')
 </body>
 </html>

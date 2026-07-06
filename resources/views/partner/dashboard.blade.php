@@ -2,116 +2,89 @@
 @section('title', 'Dashboard')
 @section('page-title', 'Dashboard')
 
-@push('styles')
-<style>
-.stat-card { border-radius: 12px; padding: 20px 24px; color: #fff; position: relative; overflow: hidden; }
-.stat-card .stat-icon { position: absolute; right: 16px; top: 16px; font-size: 2.5rem; opacity: .15; }
-.stat-card .stat-value { font-size: 2rem; font-weight: 800; line-height: 1; }
-.stat-card .stat-label { font-size: .8rem; opacity: .85; margin-top: 4px; }
-.status-badge { font-size: .7rem; padding: 3px 8px; border-radius: 20px; font-weight: 600; }
-</style>
-@endpush
-
 @section('content')
 
-{{-- Stats Row --}}
-<div class="row">
-    <div class="col-6 col-md-3 mb-3">
-        <div class="stat-card" style="background: linear-gradient(135deg,#3b82f6,#1d4ed8)">
-            <i class="fas fa-box stat-icon"></i>
-            <div class="stat-value">{{ $stats['today'] }}</div>
-            <div class="stat-label">Orders Today</div>
-        </div>
+{{-- ── Stat Cards ─────────────────────────────────────────────── --}}
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    @php
+    $statCards = [
+        ['Orders Today',       $stats['today'],                   'fas fa-box',         'from-blue-500 to-blue-700'],
+        ['Pending / Assigned', $stats['created']+$stats['assigned'], 'fas fa-clock',    'from-amber-400 to-amber-600'],
+        ['In Transit',         $stats['in_transit'],              'fas fa-truck',       'from-violet-500 to-violet-700'],
+        ['Delivered',          $stats['delivered'],               'fas fa-check-circle','from-emerald-500 to-emerald-700'],
+    ];
+    @endphp
+    @foreach($statCards as [$label, $value, $icon, $grad])
+    <div class="rounded-2xl p-5 text-white relative overflow-hidden bg-gradient-to-br {{ $grad }}">
+        <i class="{{ $icon }} absolute right-4 top-4 text-3xl opacity-20"></i>
+        <div class="text-3xl font-extrabold leading-none">{{ $value }}</div>
+        <div class="text-sm mt-1 opacity-85">{{ $label }}</div>
     </div>
-    <div class="col-6 col-md-3 mb-3">
-        <div class="stat-card" style="background: linear-gradient(135deg,#f59e0b,#d97706)">
-            <i class="fas fa-clock stat-icon"></i>
-            <div class="stat-value">{{ $stats['created'] + $stats['assigned'] }}</div>
-            <div class="stat-label">Pending / Assigned</div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3 mb-3">
-        <div class="stat-card" style="background: linear-gradient(135deg,#8b5cf6,#6d28d9)">
-            <i class="fas fa-truck stat-icon"></i>
-            <div class="stat-value">{{ $stats['in_transit'] }}</div>
-            <div class="stat-label">In Transit</div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3 mb-3">
-        <div class="stat-card" style="background: linear-gradient(135deg,#10b981,#059669)">
-            <i class="fas fa-check-circle stat-icon"></i>
-            <div class="stat-value">{{ $stats['delivered'] }}</div>
-            <div class="stat-label">Delivered</div>
-        </div>
-    </div>
+    @endforeach
 </div>
 
-<div class="row">
-    <div class="col-md-3 mb-3">
-        <div class="card text-center p-3">
-            <div class="text-muted small">This Week</div>
-            <div class="font-weight-bold h4 mb-0">{{ $stats['week'] }}</div>
-        </div>
+{{-- ── Secondary stats ─────────────────────────────────────────── --}}
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    @php
+    $secondaryCards = [
+        ['This Week',    $stats['week'],      null,        'text-slate-800'],
+        ['This Month',   $stats['month'],     null,        'text-slate-800'],
+        ['Cancelled',    $stats['cancelled'], null,        'text-red-600'],
+        ['Success Rate', $successRate.'%',   null,        'text-emerald-600'],
+    ];
+    @endphp
+    @foreach($secondaryCards as [$label, $val, $_, $color])
+    <div class="bg-white rounded-2xl p-4 text-center shadow-sm border border-slate-100">
+        <p class="text-xs text-slate-400 font-medium uppercase tracking-wide mb-1">{{ $label }}</p>
+        <p class="text-2xl font-bold {{ $color }}">{{ $val }}</p>
     </div>
-    <div class="col-md-3 mb-3">
-        <div class="card text-center p-3">
-            <div class="text-muted small">This Month</div>
-            <div class="font-weight-bold h4 mb-0">{{ $stats['month'] }}</div>
-        </div>
-    </div>
-    <div class="col-md-3 mb-3">
-        <div class="card text-center p-3">
-            <div class="text-muted small">Cancelled</div>
-            <div class="font-weight-bold h4 mb-0 text-danger">{{ $stats['cancelled'] }}</div>
-        </div>
-    </div>
-    <div class="col-md-3 mb-3">
-        <div class="card text-center p-3">
-            <div class="text-muted small">Success Rate</div>
-            <div class="font-weight-bold h4 mb-0 text-success">{{ $successRate }}%</div>
-        </div>
-    </div>
+    @endforeach
 </div>
 
-<div class="row">
-    {{-- Active Deliveries --}}
-    <div class="col-md-8 mb-3">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="fas fa-truck text-primary mr-2"></i>Live Active Deliveries</h5>
-                <a href="{{ route('partner.orders', ['status' => 'in_transit']) }}" class="btn btn-xs btn-outline-primary">View All</a>
+<div class="grid lg:grid-cols-3 gap-6">
+
+    {{-- ── Active Deliveries ───────────────────────────────────── --}}
+    <div class="lg:col-span-2">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                <h2 class="font-semibold text-slate-800 flex items-center gap-2">
+                    <i class="fas fa-truck text-blue-500"></i> Live Active Deliveries
+                </h2>
+                <a href="{{ route('partner.orders', ['status' => 'in_transit']) }}"
+                   class="text-xs text-blue-600 hover:text-blue-800 font-medium">View all →</a>
             </div>
-            <div class="card-body p-0">
-                <table class="table table-hover mb-0">
-                    <thead class="thead-light">
-                        <tr>
-                            <th>#</th><th>Recipient</th><th>Status</th><th>Driver</th><th>Action</th>
-                        </tr>
+            <div class="overflow-x-auto">
+                <table class="table table-hover table-sm mb-0">
+                    <thead class="table-light">
+                        <tr><th>#</th><th>Recipient</th><th>Status</th><th>Driver</th><th></th></tr>
                     </thead>
                     <tbody>
                         @forelse($active as $d)
+                        @php
+                        $sc = ['assigned'=>'warning','accepted'=>'info','picked_up'=>'primary','in_transit'=>'secondary'];
+                        @endphp
                         <tr>
                             <td class="text-muted small">{{ $d->id }}</td>
                             <td>
-                                <div class="font-weight-bold">{{ $d->recipient_name }}</div>
+                                <div class="fw-semibold">{{ $d->recipient_name }}</div>
                                 <small class="text-muted">{{ $d->recipient_phone }}</small>
                             </td>
                             <td>
-                                @php $sc = ['assigned'=>'warning','accepted'=>'info','picked_up'=>'primary','in_transit'=>'purple']; @endphp
-                                <span class="badge badge-{{ $sc[$d->status] ?? 'secondary' }}">
-                                    {{ ucfirst(str_replace('_', ' ', $d->status)) }}
+                                <span class="badge bg-{{ $sc[$d->status] ?? 'secondary' }}">
+                                    {{ ucfirst(str_replace('_',' ',$d->status)) }}
                                 </span>
                             </td>
                             <td>
                                 @if($d->driver)
-                                    <div>{{ $d->driver->name }}</div>
+                                    <div class="small fw-semibold">{{ $d->driver->name }}</div>
                                     <small class="text-muted">{{ $d->driver->phone }}</small>
                                 @else
-                                    <span class="text-muted">—</span>
+                                    <span class="text-muted small">—</span>
                                 @endif
                             </td>
                             <td>
-                                <a href="{{ route('partner.orders.show', $d) }}" class="btn btn-xs btn-outline-secondary">
+                                <a href="{{ route('partner.orders.show', $d) }}"
+                                   class="btn btn-sm btn-outline-secondary btn-sm py-0 px-2">
                                     <i class="fas fa-eye"></i>
                                 </a>
                             </td>
@@ -125,67 +98,82 @@
         </div>
     </div>
 
-    {{-- Quick Actions + Wallet --}}
-    <div class="col-md-4 mb-3">
-        <div class="card mb-3">
-            <div class="card-header"><h5 class="mb-0"><i class="fas fa-wallet text-success mr-2"></i>Wallet</h5></div>
-            <div class="card-body text-center">
-                <div class="h3 font-weight-bold text-success mb-0">{{ number_format($partner->wallet_balance) }} ៛</div>
-                <small class="text-muted">≈ ${{ number_format($partner->wallet_balance / 4000, 2) }}</small>
-                <div class="mt-3">
-                    <a href="{{ route('partner.wallet') }}" class="btn btn-sm btn-outline-success btn-block">
-                        <i class="fas fa-history mr-1"></i>View Wallet
-                    </a>
+    {{-- ── Right column: Wallet + Quick Actions ────────────────── --}}
+    <div class="space-y-4">
+
+        {{-- Wallet --}}
+        <div class="rounded-2xl p-5 text-white bg-gradient-to-br from-emerald-500 to-emerald-700 shadow-sm">
+            <div class="flex items-center gap-3 mb-3">
+                <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                    <i class="fas fa-wallet text-lg"></i>
                 </div>
+                <span class="text-sm font-medium opacity-90">Wallet Balance</span>
             </div>
+            <div class="text-3xl font-extrabold leading-none">{{ number_format($partner->wallet_balance) }} ៛</div>
+            <div class="text-emerald-100 text-xs mt-1">≈ ${{ number_format($partner->wallet_balance / 4000, 2) }}</div>
+            <a href="{{ route('partner.wallet') }}"
+               class="mt-4 flex items-center justify-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl text-sm font-medium transition-colors">
+                <i class="fas fa-history"></i> View Wallet
+            </a>
         </div>
-        <div class="card">
-            <div class="card-header"><h5 class="mb-0"><i class="fas fa-bolt text-warning mr-2"></i>Quick Actions</h5></div>
-            <div class="card-body p-2">
-                <a href="{{ route('partner.orders.create') }}" class="btn btn-danger btn-block mb-2">
-                    <i class="fas fa-plus mr-1"></i>New Delivery Order
+
+        {{-- Quick Actions --}}
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+            <h3 class="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                <i class="fas fa-bolt text-amber-500"></i> Quick Actions
+            </h3>
+            <div class="space-y-2">
+                <a href="{{ route('partner.orders.create') }}"
+                   class="flex items-center gap-2 w-full px-4 py-2.5 rounded-xl text-sm font-medium text-white transition-all active:scale-95"
+                   style="background:linear-gradient(135deg,#e63946,#c1121f)">
+                    <i class="fas fa-plus"></i> New Delivery Order
                 </a>
-                <a href="{{ route('partner.orders') }}" class="btn btn-outline-primary btn-block mb-2">
-                    <i class="fas fa-list mr-1"></i>All Orders
+                <a href="{{ route('partner.orders') }}"
+                   class="flex items-center gap-2 w-full px-4 py-2.5 rounded-xl text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors">
+                    <i class="fas fa-list"></i> All Orders
                 </a>
-                <a href="{{ route('partner.reports') }}" class="btn btn-outline-secondary btn-block">
-                    <i class="fas fa-chart-bar mr-1"></i>View Reports
+                <a href="{{ route('partner.reports') }}"
+                   class="flex items-center gap-2 w-full px-4 py-2.5 rounded-xl text-sm font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 transition-colors">
+                    <i class="fas fa-chart-bar"></i> View Reports
                 </a>
             </div>
         </div>
     </div>
 </div>
 
-{{-- Recent Orders --}}
-<div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0"><i class="fas fa-history mr-2"></i>Recent Orders</h5>
-        <a href="{{ route('partner.orders') }}" class="btn btn-xs btn-outline-secondary">View All</a>
+{{-- ── Recent Orders ────────────────────────────────────────────── --}}
+<div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mt-6">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+        <h2 class="font-semibold text-slate-800 flex items-center gap-2">
+            <i class="fas fa-history text-slate-400"></i> Recent Orders
+        </h2>
+        <a href="{{ route('partner.orders') }}" class="text-xs text-blue-600 hover:text-blue-800 font-medium">View all →</a>
     </div>
-    <div class="card-body p-0">
-        <table class="table table-hover mb-0">
-            <thead class="thead-light">
+    <div class="overflow-x-auto">
+        <table class="table table-hover table-sm mb-0">
+            <thead class="table-light">
                 <tr><th>#</th><th>Ref</th><th>Recipient</th><th>Dropoff</th><th>Fee</th><th>Status</th><th>Date</th></tr>
             </thead>
             <tbody>
                 @forelse($recent as $d)
                 @php
-                    $sc = ['created'=>'light','assigned'=>'warning','accepted'=>'info','picked_up'=>'primary','in_transit'=>'secondary','delivered'=>'success','completed'=>'success','cancelled'=>'danger'];
+                $sc = ['created'=>'secondary','assigned'=>'warning','accepted'=>'info','picked_up'=>'primary',
+                       'in_transit'=>'dark','delivered'=>'success','completed'=>'success','cancelled'=>'danger'];
                 @endphp
                 <tr>
-                    <td><a href="{{ route('partner.orders.show', $d) }}" class="font-weight-bold">#{{ $d->id }}</a></td>
+                    <td><a href="{{ route('partner.orders.show', $d) }}" class="fw-bold text-decoration-none">#{{ $d->id }}</a></td>
                     <td><small class="text-muted">{{ $d->partner_reference ?? '—' }}</small></td>
                     <td>
-                        <div>{{ $d->recipient_name }}</div>
+                        <div class="fw-semibold">{{ $d->recipient_name }}</div>
                         <small class="text-muted">{{ $d->recipient_phone }}</small>
                     </td>
                     <td><small class="text-muted">{{ Str::limit($d->dropoff_address, 30) }}</small></td>
-                    <td>{{ number_format($d->fee) }} ៛</td>
-                    <td><span class="badge badge-{{ $sc[$d->status] ?? 'secondary' }} text-{{ in_array($d->status,['created']) ? 'dark' : '' }}">{{ ucfirst(str_replace('_',' ',$d->status)) }}</span></td>
-                    <td><small>{{ $d->created_at->format('d M H:i') }}</small></td>
+                    <td class="fw-semibold">{{ number_format($d->fee) }} ៛</td>
+                    <td><span class="badge bg-{{ $sc[$d->status] ?? 'secondary' }}">{{ ucfirst(str_replace('_',' ',$d->status)) }}</span></td>
+                    <td><small class="text-muted">{{ $d->created_at->format('d M H:i') }}</small></td>
                 </tr>
                 @empty
-                <tr><td colspan="7" class="text-center text-muted py-3">No orders yet.</td></tr>
+                <tr><td colspan="7" class="text-center text-muted py-4">No orders yet.</td></tr>
                 @endforelse
             </tbody>
         </table>

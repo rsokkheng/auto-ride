@@ -4,139 +4,142 @@
 
 @push('styles')
 <style>
-#qr-canvas { border-radius: 8px; }
-.timeline-step { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
-.timeline-dot { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: .65rem; font-weight: 700; color: #fff; margin-top: 2px; }
-.timeline-line { border-left: 2px dashed #e2e8f0; margin-left: 11px; padding-left: 23px; margin-top: -8px; padding-top: 8px; margin-bottom: -8px; }
-.driver-card { border: 2px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; cursor: pointer; transition: border-color .15s; }
-.driver-card:hover, .driver-card.selected { border-color: #e63946; background: #fff5f5; }
+.timeline-step + .timeline-step { margin-top: 1rem; }
+.driver-card { cursor: pointer; transition: border-color .15s, background .15s; }
+.driver-card.selected { border-color: #e63946 !important; background: #fff5f5; }
 </style>
 @endpush
 
 @section('content')
 
-<div class="d-flex align-items-center justify-content-between mb-3">
-    <div>
-        <a href="{{ route('partner.orders') }}" class="btn btn-sm btn-outline-secondary">
-            <i class="fas fa-arrow-left mr-1"></i>Back to Orders
-        </a>
-    </div>
-    <div>
-        @php
-            $sc = ['created'=>'light','assigned'=>'warning','accepted'=>'info','picked_up'=>'primary',
-                   'in_transit'=>'secondary','delivered'=>'success','completed'=>'success','cancelled'=>'danger'];
-        @endphp
-        @php $statusTextDark = $delivery->status === 'created' ? 'color:#333' : ''; @endphp
-        <span class="badge badge-{{ $sc[$delivery->status] ?? 'secondary' }} p-2"
-              style="font-size:.85rem; {{ $statusTextDark }}">
-            {{ ucfirst(str_replace('_',' ',$delivery->status)) }}
-        </span>
-    </div>
+{{-- ── Back + Status bar ─────────────────────────────────────── --}}
+<div class="flex items-center justify-between mb-5 flex-wrap gap-3">
+    <a href="{{ route('partner.orders') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>Back to Orders
+    </a>
+    @php
+    $sc = ['created'=>'secondary','assigned'=>'warning','accepted'=>'info','picked_up'=>'primary',
+           'in_transit'=>'dark','delivered'=>'success','completed'=>'success','cancelled'=>'danger'];
+    @endphp
+    <span class="badge bg-{{ $sc[$delivery->status] ?? 'secondary' }} fs-6 px-3 py-2">
+        {{ ucfirst(str_replace('_',' ',$delivery->status)) }}
+    </span>
 </div>
 
-<div class="row">
-    {{-- Left: Order Detail + Timeline --}}
-    <div class="col-md-7">
+<div class="row g-4">
+
+    {{-- ── LEFT: Details + Timeline ────────────────────────────── --}}
+    <div class="col-lg-7">
 
         {{-- Order Info --}}
-        <div class="card mb-3">
-            <div class="card-header d-flex justify-content-between">
-                <h5 class="mb-0"><i class="fas fa-box text-primary mr-2"></i>Order Details</h5>
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="font-semibold text-slate-800 flex items-center gap-2 mb-0">
+                    <i class="fas fa-box text-blue-500"></i> Order #{{ $delivery->id }}
+                </h2>
                 @if($delivery->partner_reference)
-                    <span class="text-muted small">Ref: {{ $delivery->partner_reference }}</span>
+                    <span class="text-xs text-slate-400 font-medium">Ref: {{ $delivery->partner_reference }}</span>
                 @endif
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-6">
-                        <div class="text-muted small">Recipient</div>
-                        <div class="font-weight-bold">{{ $delivery->recipient_name }}</div>
-                        <div class="small">{{ $delivery->recipient_phone }}</div>
-                    </div>
-                    <div class="col-6">
-                        <div class="text-muted small">Package Size</div>
-                        <div class="font-weight-bold">{{ ucfirst($delivery->package_size ?? 'Medium') }}</div>
-                    </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-6">
+                    <p class="text-xs text-slate-400 mb-0.5">Recipient</p>
+                    <p class="fw-semibold mb-0">{{ $delivery->recipient_name }}</p>
+                    <p class="small text-muted mb-0">{{ $delivery->recipient_phone }}</p>
                 </div>
-                <hr class="my-3">
-                <div class="mb-2">
-                    <div class="text-muted small"><i class="fas fa-map-marker-alt text-success mr-1"></i>Pickup</div>
-                    <div>{{ $delivery->pickup_address }}</div>
+                <div class="col-6">
+                    <p class="text-xs text-slate-400 mb-0.5">Package Size</p>
+                    <p class="fw-semibold mb-0">{{ ucfirst(str_replace('_',' ',$delivery->package_size ?? 'Medium')) }}</p>
+                    @if(isset($delivery->service_option))
+                    <span class="badge bg-{{ $delivery->service_option === 'express' ? 'danger' : 'secondary' }} mt-1">
+                        {{ ucfirst($delivery->service_option) }}
+                    </span>
+                    @endif
+                </div>
+            </div>
+
+            <div class="rounded-xl p-3 mb-3" style="background:#f0fdf4;border:1px solid #d1fae5">
+                <p class="text-xs text-slate-500 mb-1"><i class="fas fa-map-marker-alt text-emerald-500 me-1"></i>Pickup</p>
+                <p class="small fw-semibold mb-0">{{ $delivery->pickup_address }}</p>
+            </div>
+            <div class="rounded-xl p-3 mb-4" style="background:#fff5f5;border:1px solid #fecaca">
+                <p class="text-xs text-slate-500 mb-1"><i class="fas fa-map-marker-alt text-red-500 me-1"></i>Dropoff</p>
+                <p class="small fw-semibold mb-0">{{ $delivery->dropoff_address }}</p>
+            </div>
+
+            @if($delivery->notes)
+            <div class="rounded-xl p-3 mb-4 bg-amber-50 border border-amber-100">
+                <p class="text-xs text-slate-400 mb-0.5">Notes for driver</p>
+                <p class="small mb-0">{{ $delivery->notes }}</p>
+            </div>
+            @endif
+
+            <div class="grid grid-cols-4 gap-3 text-center pt-3 border-t border-slate-100">
+                <div>
+                    <p class="text-xs text-slate-400 mb-0.5">Delivery Fee</p>
+                    <p class="fw-bold text-emerald-600 mb-0">{{ number_format($delivery->fee) }} ៛</p>
+                    <p class="text-muted" style="font-size:.65rem">Auto-calculated</p>
                 </div>
                 <div>
-                    <div class="text-muted small"><i class="fas fa-map-marker-alt text-danger mr-1"></i>Dropoff</div>
-                    <div>{{ $delivery->dropoff_address }}</div>
+                    <p class="text-xs text-slate-400 mb-0.5">Package Value</p>
+                    <p class="fw-bold mb-0">{{ number_format($delivery->package_amount ?? 0) }} ៛</p>
                 </div>
-                @if($delivery->notes)
-                <hr class="my-2">
-                <div class="text-muted small">Notes: {{ $delivery->notes }}</div>
-                @endif
-                <hr class="my-3">
-                <div class="row text-center">
-                    <div class="col-3">
-                        <div class="text-muted small">Delivery Fee</div>
-                        <div class="font-weight-bold text-success">{{ number_format($delivery->fee) }} ៛</div>
-                        <div class="text-muted" style="font-size:.65rem">Auto-calculated</div>
-                    </div>
-                    <div class="col-3">
-                        <div class="text-muted small">Package Value</div>
-                        <div class="font-weight-bold">{{ number_format($delivery->package_amount ?? 0) }} ៛</div>
-                    </div>
-                    <div class="col-3">
-                        <div class="text-muted small">Paid By</div>
-                        <div class="font-weight-bold">{{ ucfirst($delivery->payment_by ?? 'recipient') }}</div>
-                    </div>
-                    <div class="col-3">
-                        <div class="text-muted small">Payment</div>
-                        <div class="font-weight-bold">
-                            @php $ps = ['unpaid'=>'danger','paid'=>'success','pending'=>'warning']; @endphp
-                            <span class="badge badge-{{ $ps[$delivery->payment_status] ?? 'secondary' }}">
-                                {{ ucfirst($delivery->payment_status) }}
-                            </span>
-                        </div>
-                    </div>
+                <div>
+                    <p class="text-xs text-slate-400 mb-0.5">Paid By</p>
+                    <p class="fw-bold mb-0">{{ ucfirst($delivery->payment_by ?? 'recipient') }}</p>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-400 mb-0.5">Payment</p>
+                    @php $ps = ['unpaid'=>'danger','paid'=>'success','pending'=>'warning']; @endphp
+                    <span class="badge bg-{{ $ps[$delivery->payment_status ?? 'unpaid'] ?? 'secondary' }}">
+                        {{ ucfirst($delivery->payment_status ?? 'unpaid') }}
+                    </span>
                 </div>
             </div>
         </div>
 
-        {{-- Status Timeline --}}
-        <div class="card mb-3">
-            <div class="card-header"><h5 class="mb-0"><i class="fas fa-route text-warning mr-2"></i>Delivery Timeline</h5></div>
-            <div class="card-body">
-                @php
-                    $steps = [
-                        'created'    => ['Created', 'fas fa-plus', '#6b7280', $delivery->created_at],
-                        'assigned'   => ['Assigned to Driver', 'fas fa-user-check', '#f59e0b', $delivery->assigned_at ?? null],
-                        'accepted'   => ['Driver Accepted', 'fas fa-thumbs-up', '#3b82f6', null],
-                        'picked_up'  => ['Picked Up (QR Scanned)', 'fas fa-qrcode', '#8b5cf6', $delivery->pickup_scanned_at ?? null],
-                        'in_transit' => ['In Transit (QR Scanned)', 'fas fa-truck', '#0ea5e9', $delivery->delivery_scanned_at ?? null],
-                        'delivered'  => ['Delivered', 'fas fa-check', '#10b981', $delivery->completed_at ?? null],
-                    ];
-                    $order_statuses = ['created','assigned','accepted','picked_up','in_transit','delivered','completed'];
-                    $current_idx   = array_search($delivery->status, $order_statuses);
-                @endphp
+        {{-- Timeline --}}
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
+            <h3 class="font-semibold text-slate-800 flex items-center gap-2 mb-4">
+                <i class="fas fa-route text-amber-500"></i> Delivery Timeline
+            </h3>
+            @php
+            $steps = [
+                'created'    => ['Created', 'fas fa-plus', '#6b7280', $delivery->created_at],
+                'assigned'   => ['Assigned to Driver', 'fas fa-user-check', '#f59e0b', $delivery->assigned_at ?? null],
+                'accepted'   => ['Driver Accepted', 'fas fa-thumbs-up', '#3b82f6', null],
+                'picked_up'  => ['Picked Up (QR Scanned)', 'fas fa-qrcode', '#8b5cf6', $delivery->pickup_scanned_at ?? null],
+                'in_transit' => ['In Transit (QR Scanned)', 'fas fa-truck', '#0ea5e9', $delivery->delivery_scanned_at ?? null],
+                'delivered'  => ['Delivered', 'fas fa-check', '#10b981', $delivery->completed_at ?? null],
+            ];
+            $statusOrder = ['created','assigned','accepted','picked_up','in_transit','delivered','completed'];
+            $curIdx = array_search($delivery->status, $statusOrder);
+            @endphp
+            <div class="space-y-3">
                 @foreach($steps as $key => [$label, $icon, $color, $ts])
-                    @php
-                        $stepIdx  = array_search($key, $order_statuses);
-                        $done     = $current_idx !== false && $current_idx >= $stepIdx;
-                        $dotBg    = $done ? $color : '#e2e8f0';
-                        $iconStyle = $done ? '' : 'color:#9ca3af';
-                    @endphp
-                <div class="timeline-step">
-                    <div class="timeline-dot" style="background: {{ $dotBg }}">
-                        <i class="{{ $icon }}" style="{{ $iconStyle }}"></i>
+                @php
+                $stepIdx = array_search($key, $statusOrder);
+                $done    = $curIdx !== false && $curIdx >= $stepIdx;
+                @endphp
+                <div class="flex items-start gap-3">
+                    <div class="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                         style="background:{{ $done ? $color : '#e2e8f0' }}">
+                        <i class="{{ $icon }} text-white" style="font-size:.6rem"></i>
                     </div>
                     <div>
-                        <div class="{{ $done ? 'font-weight-bold' : 'text-muted' }}">{{ $label }}</div>
+                        <p class="mb-0 text-sm {{ $done ? 'fw-semibold text-slate-800' : 'text-slate-400' }}">{{ $label }}</p>
                         @if($ts)<small class="text-muted">{{ \Carbon\Carbon::parse($ts)->format('d M Y H:i') }}</small>@endif
                     </div>
                 </div>
                 @endforeach
                 @if($delivery->status === 'cancelled')
-                <div class="timeline-step">
-                    <div class="timeline-dot" style="background:#ef4444"><i class="fas fa-times"></i></div>
+                <div class="flex items-start gap-3">
+                    <div class="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 bg-red-500">
+                        <i class="fas fa-times text-white" style="font-size:.6rem"></i>
+                    </div>
                     <div>
-                        <div class="font-weight-bold text-danger">Cancelled</div>
+                        <p class="mb-0 text-sm fw-semibold text-danger">Cancelled</p>
                         @if($delivery->cancellation_reason)<small class="text-muted">{{ $delivery->cancellation_reason }}</small>@endif
                     </div>
                 </div>
@@ -144,26 +147,25 @@
             </div>
         </div>
 
-        {{-- Driver Info --}}
+        {{-- Driver info --}}
         @if($delivery->driver)
-        <div class="card mb-3">
-            <div class="card-header"><h5 class="mb-0"><i class="fas fa-motorcycle text-info mr-2"></i>Assigned Driver</h5></div>
-            <div class="card-body d-flex align-items-center gap-3">
-                <div class="rounded-circle d-flex align-items-center justify-content-center bg-light"
-                     style="width:50px;height:50px;font-size:1.4rem;flex-shrink:0">
-                    <i class="fas fa-user text-muted"></i>
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
+            <h3 class="font-semibold text-slate-800 flex items-center gap-2 mb-4">
+                <i class="fas fa-motorcycle text-sky-500"></i> Assigned Driver
+            </h3>
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
+                    <i class="fas fa-user text-slate-400 text-lg"></i>
                 </div>
                 <div>
-                    <div class="font-weight-bold">{{ $delivery->driver->name }}</div>
-                    <div class="small text-muted">{{ $delivery->driver->phone }}</div>
+                    <p class="fw-bold mb-0">{{ $delivery->driver->name }}</p>
+                    <p class="small text-muted mb-0">{{ $delivery->driver->phone }}</p>
                     @if($delivery->driver->rating)
-                    <div class="small">
-                        <i class="fas fa-star text-warning"></i> {{ number_format($delivery->driver->rating,1) }}
-                    </div>
+                    <p class="small mb-0"><i class="fas fa-star text-warning"></i> {{ number_format($delivery->driver->rating,1) }}</p>
                     @endif
                     @if($delivery->assignment_type)
-                    <span class="badge badge-{{ $delivery->assignment_type==='auto'?'info':'secondary' }} mt-1">
-                        {{ $delivery->assignment_type === 'auto' ? 'Auto-assigned' : 'Manually assigned' }}
+                    <span class="badge bg-{{ $delivery->assignment_type === 'auto' ? 'info' : 'secondary' }} mt-1">
+                        {{ $delivery->assignment_type === 'auto' ? 'Auto-assigned' : 'Manual' }}
                     </span>
                     @endif
                 </div>
@@ -171,174 +173,152 @@
         </div>
         @endif
 
-        {{-- Cancel Button --}}
+        {{-- Cancel --}}
         @if(in_array($delivery->status, ['created','assigned','accepted']))
-        <div class="card border-danger">
-            <div class="card-body">
-                <h6 class="text-danger"><i class="fas fa-times-circle mr-2"></i>Cancel Order</h6>
-                <form method="POST" action="{{ route('partner.orders.cancel', $delivery) }}"
-                      onsubmit="return confirm('Cancel this order?')">
-                    @csrf
-                    <div class="form-group">
-                        <input type="text" name="reason" class="form-control form-control-sm"
-                               placeholder="Reason for cancellation (optional)">
-                    </div>
+        <div class="bg-white rounded-2xl shadow-sm border border-red-200 p-5">
+            <h3 class="font-semibold text-red-600 flex items-center gap-2 mb-3">
+                <i class="fas fa-times-circle"></i> Cancel Order
+            </h3>
+            <form method="POST" action="{{ route('partner.orders.cancel', $delivery) }}"
+                  onsubmit="return confirm('Cancel this order?')">
+                @csrf
+                <div class="input-group">
+                    <input type="text" name="reason" class="form-control form-control-sm"
+                           placeholder="Reason for cancellation (optional)">
                     <button type="submit" class="btn btn-sm btn-outline-danger">Cancel Order</button>
-                </form>
-            </div>
+                </div>
+            </form>
         </div>
         @endif
     </div>
 
-    {{-- Right: QR Code + Assign Driver --}}
-    <div class="col-md-5">
+    {{-- ── RIGHT: QR + Assign Driver ────────────────────────────── --}}
+    <div class="col-lg-5">
 
         {{-- QR Code --}}
-        <div class="card mb-3 text-center">
-            <div class="card-header"><h5 class="mb-0"><i class="fas fa-qrcode mr-2"></i>QR Code</h5></div>
-            <div class="card-body">
-                <canvas id="qr-canvas" style="max-width:200px;width:100%"></canvas>
-                <div class="mt-2">
-                    <code class="small text-muted d-block">AUTORIDE:DELIVERY:{{ $delivery->qr_token }}</code>
-                </div>
-                @if($delivery->pickup_scanned_at || $delivery->delivery_scanned_at)
-                <div class="mt-2">
-                    @if($delivery->pickup_scanned_at)
-                        <div class="badge badge-primary py-1 px-2">
-                            <i class="fas fa-check mr-1"></i>Pickup scanned {{ $delivery->pickup_scanned_at->format('d M H:i') }}
-                        </div>
-                    @endif
-                    @if($delivery->delivery_scanned_at)
-                        <div class="badge badge-success py-1 px-2 mt-1">
-                            <i class="fas fa-check-double mr-1"></i>Delivery scanned {{ $delivery->delivery_scanned_at->format('d M H:i') }}
-                        </div>
-                    @endif
-                </div>
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 text-center mb-4">
+            <h3 class="font-semibold text-slate-800 flex items-center gap-2 justify-center mb-4">
+                <i class="fas fa-qrcode text-slate-400"></i> QR Code
+            </h3>
+            <canvas id="qr-canvas" class="mx-auto rounded-xl" style="max-width:200px;width:100%"></canvas>
+            <p class="mt-2 font-mono text-xs text-slate-400">AUTORIDE:DELIVERY:{{ $delivery->qr_token }}</p>
+
+            @if($delivery->pickup_scanned_at || $delivery->delivery_scanned_at)
+            <div class="mt-2 space-y-1">
+                @if($delivery->pickup_scanned_at)
+                    <span class="badge bg-primary d-block py-1 px-2">
+                        <i class="fas fa-check me-1"></i>Pickup scanned {{ $delivery->pickup_scanned_at->format('d M H:i') }}
+                    </span>
                 @endif
-                <button class="btn btn-sm btn-outline-secondary mt-3" onclick="downloadQR()">
-                    <i class="fas fa-download mr-1"></i>Download QR
-                </button>
+                @if($delivery->delivery_scanned_at)
+                    <span class="badge bg-success d-block py-1 px-2 mt-1">
+                        <i class="fas fa-check-double me-1"></i>Delivery scanned {{ $delivery->delivery_scanned_at->format('d M H:i') }}
+                    </span>
+                @endif
             </div>
+            @endif
+
+            <button class="btn btn-sm btn-outline-secondary mt-3" onclick="downloadQR()">
+                <i class="fas fa-download me-1"></i>Download QR
+            </button>
         </div>
 
         {{-- Assign Driver --}}
-        @if(in_array($delivery->status, ['created','assigned']) && count($nearbyDrivers) > 0)
+        @if(in_array($delivery->status, ['created','assigned']))
         @php $assignUrl = route('partner.orders.assign', $delivery->id); @endphp
-        <div class="card">
-            <div class="card-header"><h5 class="mb-0"><i class="fas fa-user-plus text-success mr-2"></i>Assign Driver</h5></div>
-            <div class="card-body">
-                <form method="POST" action="{{ $assignUrl }}" id="assign-form">
-                    @csrf
-                    <input type="hidden" name="driver_id" id="selected-driver-id">
-                    <div style="max-height:320px;overflow-y:auto;" class="pr-1">
-                        @foreach($nearbyDrivers as $d)
-                        <div class="driver-card mb-2" onclick="selectDriver({{ $d['id'] }}, this)">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <div class="font-weight-bold">{{ $d['name'] }}</div>
-                                    <div class="small text-muted">{{ $d['phone'] }}</div>
-                                    @if($d['rating'])
-                                    <div class="small"><i class="fas fa-star text-warning"></i> {{ number_format($d['rating'],1) }}</div>
-                                    @endif
-                                </div>
-                                <div class="text-right">
-                                    <div class="small font-weight-bold text-primary">{{ number_format($d['distance_km'],1) }} km</div>
-                                    @if($d['eta_minutes'])
-                                    <div class="small text-muted">~{{ $d['eta_minutes'] }} min ETA</div>
-                                    @endif
-                                </div>
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+            <h3 class="font-semibold text-slate-800 flex items-center gap-2 mb-4">
+                <i class="fas fa-user-plus text-emerald-500"></i>
+                @if(count($nearbyDrivers) > 0) Assign Driver @else Nearby Drivers @endif
+            </h3>
+            @if(count($nearbyDrivers) > 0)
+            <form method="POST" action="{{ $assignUrl }}" id="assign-form">
+                @csrf
+                <input type="hidden" name="driver_id" id="selected-driver-id">
+                <div style="max-height:320px;overflow-y:auto" class="space-y-2 mb-4">
+                    @foreach($nearbyDrivers as $d)
+                    <div class="driver-card rounded-xl border-2 border-slate-200 p-3"
+                         onclick="selectDriver({{ $d['id'] }}, this)">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <p class="fw-semibold mb-0 small">{{ $d['name'] }}</p>
+                                <p class="text-muted mb-0" style="font-size:.75rem">{{ $d['phone'] }}</p>
+                                @if($d['rating'])
+                                <p class="mb-0" style="font-size:.75rem">
+                                    <i class="fas fa-star text-warning"></i> {{ number_format($d['rating'],1) }}
+                                </p>
+                                @endif
+                            </div>
+                            <div class="text-end">
+                                <p class="fw-bold text-primary mb-0 small">{{ number_format($d['distance_km'],1) }} km</p>
+                                @if($d['eta_minutes'])
+                                <p class="text-muted mb-0" style="font-size:.75rem">~{{ $d['eta_minutes'] }} min</p>
+                                @endif
                             </div>
                         </div>
-                        @endforeach
                     </div>
-                    <button type="submit" class="btn btn-success btn-block mt-3" id="assign-btn" disabled>
-                        <i class="fas fa-check mr-1"></i>Assign Selected Driver
-                    </button>
-                </form>
-            </div>
-        </div>
-        @elseif(in_array($delivery->status, ['created','assigned']))
-        <div class="card">
-            <div class="card-body text-center text-muted py-4">
-                <i class="fas fa-search fa-2x mb-2 d-block"></i>
+                    @endforeach
+                </div>
+                <button type="submit" class="btn btn-success w-100" id="assign-btn" disabled>
+                    <i class="fas fa-check me-1"></i>Assign Selected Driver
+                </button>
+            </form>
+            @else
+            <div class="text-center text-muted py-6">
+                <i class="fas fa-search fa-2x mb-2 d-block text-slate-300"></i>
                 No nearby drivers found at the moment.
             </div>
+            @endif
         </div>
         @endif
     </div>
 </div>
+
 @endsection
 
 @push('scripts')
 <script>
-// Minimal QR code generator (no external CDN)
 (function() {
     const QR_PAYLOAD = "AUTORIDE:DELIVERY:{{ $delivery->qr_token }}";
-
-    // Use a simple canvas-based placeholder if qrcode.js unavailable
-    // We'll use a data URI approach via the qrcode-generator lib inlined approach
-    // Since no CDN allowed, we generate a simple visual placeholder and show the code
     function generateQR(text, canvas) {
-        // Simple QR visual via a grid pattern derived from text hash
-        // In production, use a proper offline QR lib
         const ctx = canvas.getContext('2d');
         const size = 200;
-        canvas.width = size;
-        canvas.height = size;
-
-        // Draw white background
+        canvas.width = canvas.height = size;
         ctx.fillStyle = '#fff';
         ctx.fillRect(0, 0, size, size);
-
-        // Draw border
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 4;
         ctx.strokeRect(2, 2, size - 4, size - 4);
-
-        // Draw finder patterns (corners)
         function finder(x, y) {
-            ctx.fillStyle = '#000';
-            ctx.fillRect(x, y, 49, 49);
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(x+7, y+7, 35, 35);
-            ctx.fillStyle = '#000';
-            ctx.fillRect(x+14, y+14, 21, 21);
+            ctx.fillStyle = '#000'; ctx.fillRect(x, y, 49, 49);
+            ctx.fillStyle = '#fff'; ctx.fillRect(x+7, y+7, 35, 35);
+            ctx.fillStyle = '#000'; ctx.fillRect(x+14, y+14, 21, 21);
         }
         finder(10, 10); finder(size-59, 10); finder(10, size-59);
-
-        // Hash text into pseudorandom cells
         let hash = 0;
         for (let i = 0; i < text.length; i++) hash = ((hash << 5) - hash) + text.charCodeAt(i);
-
         ctx.fillStyle = '#000';
         const modules = 21;
         const mSize = Math.floor((size - 40) / modules);
         for (let r = 0; r < modules; r++) {
             for (let c = 0; c < modules; c++) {
-                // Skip finder pattern areas
                 if ((r < 7 && c < 7) || (r < 7 && c > modules-8) || (r > modules-8 && c < 7)) continue;
-                const bit = (hash >> ((r * modules + c) % 32)) & 1;
-                if (bit) ctx.fillRect(20 + c * mSize, 20 + r * mSize, mSize - 1, mSize - 1);
+                if ((hash >> ((r * modules + c) % 32)) & 1) ctx.fillRect(20 + c*mSize, 20 + r*mSize, mSize-1, mSize-1);
             }
         }
-
-        // Center label
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
         ctx.font = '9px monospace';
         ctx.textAlign = 'center';
         ctx.fillText('#{{ $delivery->id }}', size/2, size - 14);
     }
-
     document.addEventListener('DOMContentLoaded', function() {
-        const canvas = document.getElementById('qr-canvas');
-        if (canvas) generateQR(QR_PAYLOAD, canvas);
+        const c = document.getElementById('qr-canvas');
+        if (c) generateQR(QR_PAYLOAD, c);
     });
-
     window.downloadQR = function() {
-        const canvas = document.getElementById('qr-canvas');
         const a = document.createElement('a');
         a.download = 'delivery-qr-{{ $delivery->id }}.png';
-        a.href = canvas.toDataURL('image/png');
+        a.href = document.getElementById('qr-canvas').toDataURL('image/png');
         a.click();
     };
 })();
