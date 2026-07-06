@@ -27,6 +27,7 @@ use App\Models\AirportZone;
 use App\Models\Banner;
 use App\Models\BusinessAccount;
 use App\Models\MembershipTier;
+use App\Models\PartnerContract;
 use App\Models\SubscriptionPlan;
 use App\Models\UserSubscription;
 use App\Services\PaymentService;
@@ -2080,5 +2081,81 @@ class AdminController extends Controller
         );
 
         return view('admin.subscription-subscribers', compact('plan', 'subscribers'));
+    }
+
+    // ── Partner Contracts ─────────────────────────────────────────────────────
+
+    public function partnerContracts()
+    {
+        $contracts = PartnerContract::with('partner:id,name,phone,email')
+            ->orderByDesc('id')
+            ->paginate(20);
+
+        $partners = User::where('role', 'partner')->orderBy('name')->get(['id', 'name', 'phone', 'email']);
+
+        $defaults = [
+            'base_fee'        => (int) config('delivery.fee_base', 3000),
+            'per_km_rate'     => (int) config('delivery.fee_per_km', 1200),
+            'surcharge_small' => (int) config('delivery.fee_surcharge_small', 0),
+            'surcharge_medium'=> (int) config('delivery.fee_surcharge_medium', 2000),
+            'surcharge_large' => (int) config('delivery.fee_surcharge_large', 5000),
+            'min_fee'         => 3000,
+        ];
+
+        return view('admin.partner-contracts', compact('contracts', 'partners', 'defaults'));
+    }
+
+    public function storePartnerContract(Request $request)
+    {
+        $data = $request->validate([
+            'partner_id'       => 'required|exists:users,id',
+            'base_fee'         => 'required|integer|min:0',
+            'per_km_rate'      => 'required|integer|min:0',
+            'surcharge_small'  => 'required|integer|min:0',
+            'surcharge_medium' => 'required|integer|min:0',
+            'surcharge_large'  => 'required|integer|min:0',
+            'min_fee'          => 'required|integer|min:0',
+            'is_active'        => 'nullable|boolean',
+            'notes'            => 'nullable|string|max:500',
+        ]);
+
+        $data['is_active'] = $request->boolean('is_active', true);
+
+        // Deactivate any existing active contract for this partner
+        PartnerContract::where('partner_id', $data['partner_id'])
+            ->where('is_active', true)
+            ->update(['is_active' => false]);
+
+        PartnerContract::create($data);
+
+        return redirect()->route('admin.partner-contracts')
+            ->with('success', 'Contract created successfully.');
+    }
+
+    public function updatePartnerContract(Request $request, PartnerContract $contract)
+    {
+        $data = $request->validate([
+            'base_fee'         => 'required|integer|min:0',
+            'per_km_rate'      => 'required|integer|min:0',
+            'surcharge_small'  => 'required|integer|min:0',
+            'surcharge_medium' => 'required|integer|min:0',
+            'surcharge_large'  => 'required|integer|min:0',
+            'min_fee'          => 'required|integer|min:0',
+            'is_active'        => 'nullable|boolean',
+            'notes'            => 'nullable|string|max:500',
+        ]);
+
+        $data['is_active'] = $request->boolean('is_active', true);
+
+        $contract->update($data);
+
+        return redirect()->route('admin.partner-contracts')
+            ->with('success', 'Contract updated.');
+    }
+
+    public function destroyPartnerContract(PartnerContract $contract)
+    {
+        $contract->delete();
+        return redirect()->route('admin.partner-contracts')->with('success', 'Contract deleted.');
     }
 }

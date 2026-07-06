@@ -329,6 +329,12 @@
                                 </a>
                             </li>
                             <li class="nav-item">
+                                <a href="{{ route('admin.partner-contracts') }}" class="nav-link {{ request()->routeIs('admin.partner-contracts*') ? 'active' : '' }}">
+                                    <i class="nav-icon fas fa-file-contract"></i>
+                                    <p>Partner Contracts</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
                                 <a href="{{ route('admin.banners') }}" class="nav-link {{ request()->routeIs('admin.banners') ? 'active' : '' }}">
                                     <i class="nav-icon fas fa-images"></i>
                                     <p>Promo Banners</p>

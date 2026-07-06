@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Partner;
 
 use App\Http\Controllers\Controller;
 use App\Models\Delivery;
+use App\Models\PartnerContract;
 use App\Models\TopUpRequest;
 use App\Models\User;
 use App\Models\WithdrawalRequest;
@@ -155,7 +156,7 @@ class PartnerController extends Controller
             'partner_reference' => 'nullable|string|max:100',
         ]);
 
-        // Auto-calculate fee from system pricing
+        // Auto-calculate fee: use partner contract if active, else system default pricing
         $fare    = app(FareService::class);
         $route   = $fare->getRoute(
             (float) ($data['pickup_lat']  ?? 11.5564),
@@ -163,8 +164,18 @@ class PartnerController extends Controller
             (float) ($data['dropoff_lat'] ?? 11.5564),
             (float) ($data['dropoff_lng'] ?? 104.9282),
         );
-        $result  = $fare->calculateDeliveryFare($data['package_size'] ?? 'small', $route);
-        $fee     = (int) $result['total'];
+
+        $contract = PartnerContract::where('partner_id', $partner->id)
+            ->where('is_active', true)
+            ->latest()
+            ->first();
+
+        if ($contract) {
+            $fee = $contract->calculateFee((float) $route['distance_km'], $data['package_size'] ?? 'small');
+        } else {
+            $result = $fare->calculateDeliveryFare($data['package_size'] ?? 'small', $route);
+            $fee    = (int) $result['total'];
+        }
 
         $delivery = Delivery::create([
             'partner_id'        => $partner->id,
