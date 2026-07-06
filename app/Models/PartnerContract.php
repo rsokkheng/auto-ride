@@ -9,12 +9,10 @@ class PartnerContract extends Model
 {
     protected $fillable = [
         'partner_id',
-        'base_fee',
-        'per_km_rate',
-        'surcharge_small',
-        'surcharge_medium',
+        'normal_fee',
+        'express_fee',
         'surcharge_large',
-        'min_fee',
+        'surcharge_extra_large',
         'is_active',
         'notes',
     ];
@@ -28,15 +26,20 @@ class PartnerContract extends Model
         return $this->belongsTo(User::class, 'partner_id');
     }
 
-    /** Calculate delivery fee for a given distance and package size. */
-    public function calculateFee(float $distanceKm, string $packageSize = 'small'): int
+    /**
+     * Flat-rate fee: normal/express base + size surcharge.
+     * Normal 5000, Express 10000, Large +5000, Extra Large +5000.
+     */
+    public function calculateFee(string $serviceOption = 'normal', string $packageSize = 'small'): int
     {
-        $surchargeKey = 'surcharge_' . $packageSize;
-        $surcharge    = $this->{$surchargeKey} ?? 0;
+        $base = $serviceOption === 'express' ? (int) $this->express_fee : (int) $this->normal_fee;
 
-        $raw = $this->base_fee + (int) ceil($distanceKm * $this->per_km_rate) + $surcharge;
-        $fee = (int) (ceil($raw / 100) * 100);
+        $surcharge = match ($packageSize) {
+            'large'       => (int) $this->surcharge_large,
+            'extra_large' => (int) $this->surcharge_extra_large,
+            default       => 0,
+        };
 
-        return max($fee, (int) $this->min_fee);
+        return $base + $surcharge;
     }
 }
