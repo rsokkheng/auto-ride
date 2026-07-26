@@ -191,11 +191,11 @@ class RideController extends ApiController
 
         $data = $request->validate([
             'pickup_address'  => 'required|string|max:255',
-            'dropoff_address' => 'required|string|max:255',
+            'dropoff_address' => 'nullable|string|max:255',
             'pickup_lat'      => 'required|numeric|between:-90,90',
             'pickup_lng'      => 'required|numeric|between:-180,180',
-            'dropoff_lat'     => 'required|numeric|between:-90,90',
-            'dropoff_lng'     => 'required|numeric|between:-180,180',
+            'dropoff_lat'     => 'nullable|numeric|between:-90,90',
+            'dropoff_lng'     => 'nullable|numeric|between:-180,180',
             'service_type'    => 'required|in:motorcycle,tuk_tuk,standard,premium,shared,van',
             'payment_method'  => 'nullable|in:cash,wallet,aba,acleda,wing',
             'surge_accepted'  => 'nullable|boolean',
@@ -214,34 +214,45 @@ class RideController extends ApiController
             $data['driver_id'] = $vehicle?->user_id;
         }
 
-        $route      = $this->fare->getRoute(
-            (float) $data['pickup_lat'],  (float) $data['pickup_lng'],
-            (float) $data['dropoff_lat'], (float) $data['dropoff_lng'],
-        );
-        $fareResult = $this->fare->calculateRideFare(
-            $data['service_type'], $route,
-            (float) $data['pickup_lat'], (float) $data['pickup_lng'],
-        );
+        $hasDropoff = ! empty($data['dropoff_lat']) && ! empty($data['dropoff_lng']);
 
-        // Require explicit surge confirmation when multiplier > 1.0.
-        if ($fareResult['surge_multiplier'] > 1.0 && empty($data['surge_accepted'])) {
-            return response()->json([
-                'data' => null,
-                'message'          => 'Surge pricing is active. Set surge_accepted: true to confirm.',
-                'surge_active'     => true,
-                'surge_multiplier' => $fareResult['surge_multiplier'],
-                'surge_zone'       => $fareResult['surge_zone'],
-                'total_fare'       => $fareResult['total'],
-                'currency'         => 'KHR',
-            ], 422);
+        // When no destination: fare is metered (calculated at completion by driver)
+        if ($hasDropoff) {
+            $route = $this->fare->getRoute(
+                (float) $data['pickup_lat'],  (float) $data['pickup_lng'],
+                (float) $data['dropoff_lat'], (float) $data['dropoff_lng'],
+            );
+            $fareResult = $this->fare->calculateRideFare(
+                $data['service_type'], $route,
+                (float) $data['pickup_lat'], (float) $data['pickup_lng'],
+            );
+
+            // Require explicit surge confirmation when multiplier > 1.0.
+            if ($fareResult['surge_multiplier'] > 1.0 && empty($data['surge_accepted'])) {
+                return response()->json([
+                    'data' => null,
+                    'message'          => 'Surge pricing is active. Set surge_accepted: true to confirm.',
+                    'surge_active'     => true,
+                    'surge_multiplier' => $fareResult['surge_multiplier'],
+                    'surge_zone'       => $fareResult['surge_zone'],
+                    'total_fare'       => $fareResult['total'],
+                    'currency'         => 'KHR',
+                ], 422);
+            }
+        } else {
+            $fareResult = [
+                'total'            => 0,
+                'surge_multiplier' => 1.0,
+                'surge_zone'       => null,
+            ];
         }
 
-        // Apply promo code if provided
-        $promoCodeId     = null;
-        $discountAmount  = 0;
-        $finalFare       = $fareResult['total'];
+        // Apply promo code if provided (only when fare is known upfront)
+        $promoCodeId    = null;
+        $discountAmount = 0;
+        $finalFare      = $fareResult['total'];
 
-        if (! empty($data['promo_code'])) {
+        if ($hasDropoff && ! empty($data['promo_code'])) {
             $promo = PromoCode::where('code', strtoupper(trim($data['promo_code'])))->first();
             if ($promo && $promo->isValid('rides', $fareResult['total'], $user->id)) {
                 $discountAmount = $promo->calculateDiscount($fareResult['total']);
@@ -255,11 +266,11 @@ class RideController extends ApiController
             'driver_id'       => $data['driver_id'] ?? null,
             'vehicle_id'      => $data['vehicle_id'] ?? null,
             'pickup_address'  => $data['pickup_address'],
-            'dropoff_address' => $data['dropoff_address'],
+            'dropoff_address' => $data['dropoff_address'] ?? null,
             'pickup_lat'      => (float) $data['pickup_lat'],
             'pickup_lng'      => (float) $data['pickup_lng'],
-            'dropoff_lat'     => (float) $data['dropoff_lat'],
-            'dropoff_lng'     => (float) $data['dropoff_lng'],
+            'dropoff_lat'     => $hasDropoff ? (float) $data['dropoff_lat'] : null,
+            'dropoff_lng'     => $hasDropoff ? (float) $data['dropoff_lng'] : null,
             'service_type'    => $data['service_type'],
             'payment_method'  => $data['payment_method'] ?? 'cash',
             'payment_status'  => 'unpaid',
@@ -290,6 +301,7 @@ class RideController extends ApiController
         $ride->load('driver', 'vehicle');
         $this->firestore->syncRide($ride);
 
+        $dropoffLabel = $data['dropoff_address'] ?? 'Destination TBD';
         try {
             $nearbyDrivers = User::where('role', 'driver')
                 ->where('available', true)
@@ -298,7 +310,7 @@ class RideController extends ApiController
             $this->fcm->sendToUsers(
                 $nearbyDrivers->all(),
                 '🚗 New Ride Request',
-                "{$data['pickup_address']} → {$data['dropoff_address']}",
+                "{$data['pickup_address']} → {$dropoffLabel}",
                 ['type' => 'ride_requested', 'ride_id' => (string) $ride->id]
             );
         } catch (\Throwable $e) {
@@ -306,8 +318,9 @@ class RideController extends ApiController
         }
 
         return $this->success([
-            'ride' => $ride,
-            'fare' => $fareResult,
+            'ride'         => $ride,
+            'fare'         => $fareResult,
+            'metered_ride' => ! $hasDropoff,
         ], 201);
     }
 
@@ -483,11 +496,45 @@ class RideController extends ApiController
             ], 422);
         }
 
-        $ride->update([
+        $completionData = $request->validate([
+            'dropoff_address' => 'nullable|string|max:255',
+            'dropoff_lat'     => 'nullable|numeric|between:-90,90',
+            'dropoff_lng'     => 'nullable|numeric|between:-180,180',
+            'final_fare'      => 'nullable|integer|min:0',
+        ]);
+
+        $updates = [
             'status'       => Ride::STATUS_COMPLETED,
             'completed_at' => now(),
             'share_active' => false,
-        ]);
+        ];
+
+        // For metered rides: driver sets the final dropoff and fare at completion
+        if (is_null($ride->dropoff_address)) {
+            if (! empty($completionData['dropoff_address'])) {
+                $updates['dropoff_address'] = $completionData['dropoff_address'];
+            }
+            if (! empty($completionData['dropoff_lat'])) {
+                $updates['dropoff_lat'] = (float) $completionData['dropoff_lat'];
+                $updates['dropoff_lng'] = (float) $completionData['dropoff_lng'];
+            }
+            if (isset($completionData['final_fare'])) {
+                $updates['fare'] = (int) $completionData['final_fare'];
+            } elseif (! empty($completionData['dropoff_lat']) && ! empty($completionData['dropoff_lng'])) {
+                // Auto-calculate fare from actual route if driver provides final coords but not fare
+                $route = $this->fare->getRoute(
+                    (float) $ride->pickup_lat, (float) $ride->pickup_lng,
+                    (float) $completionData['dropoff_lat'], (float) $completionData['dropoff_lng'],
+                );
+                $fareResult = $this->fare->calculateRideFare(
+                    $ride->service_type, $route,
+                    (float) $ride->pickup_lat, (float) $ride->pickup_lng,
+                );
+                $updates['fare'] = $fareResult['total'];
+            }
+        }
+
+        $ride->update($updates);
 
         $transaction = null;
         if ($ride->fare > 0) {
