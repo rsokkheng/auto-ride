@@ -442,9 +442,10 @@ class AdminController extends Controller
     public function rides()
     {
         return view('admin.rides', [
-            'rides'      => Ride::with(['passenger', 'driver'])->withCount('stops')->orderByDesc('created_at')->paginate(15),
-            'passengers' => User::where('role', 'passenger')->orderBy('name')->get(),
-            'drivers'    => User::where('role', 'driver')->orderBy('name')->get(),
+            'rides'         => Ride::with(['passenger', 'driver', 'stops'])->orderByDesc('created_at')->paginate(15),
+            'passengers'    => User::where('role', 'passenger')->orderBy('name')->get(),
+            'drivers'       => User::where('role', 'driver')->orderBy('name')->get(),
+            'commissionPct' => (float) \App\Models\PricingSetting::get('driver_commission_pct', 20),
         ]);
     }
 
