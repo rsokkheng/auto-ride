@@ -103,7 +103,7 @@ function rideDistanceKm($r): ?float {
                         @if($stops->count() > 0)
                         <span class="dropoff-trigger text-primary"
                               style="cursor:pointer;text-decoration:underline dotted;"
-                              data-route='@json($routeData)'
+                              data-route="{{ json_encode($routeData) }}"
                               title="Click to see all stops">
                             {{ \Illuminate\Support\Str::limit($r->dropoff_address ?? 'TBD', 20) }}
                             <span class="badge badge-warning ml-1">{{ $stops->count() + 1 }} stops</span>
@@ -305,8 +305,12 @@ const updateBase = '/admin/rides/';
 /* ── Stop route popup ── */
 document.querySelectorAll('.dropoff-trigger').forEach(function(el) {
     el.addEventListener('click', function() {
-        var route = JSON.parse(this.getAttribute('data-route'));
-        showStopsModal(route);
+        try {
+            var route = JSON.parse(this.getAttribute('data-route'));
+            showStopsModal(route);
+        } catch(e) {
+            console.error('Stops data parse error:', e, this.getAttribute('data-route'));
+        }
     });
 });
 
