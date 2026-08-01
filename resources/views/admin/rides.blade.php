@@ -98,21 +98,21 @@ function rideDistanceKm($r): ?float {
                         <span title="{{ $r->pickup_address }}">{{ \Illuminate\Support\Str::limit($r->pickup_address, 20) }}</span>
                     </td>
 
-                    {{-- Dropoff — clickable when stops exist --}}
+                    {{-- Dropoff — always clickable to show route popup --}}
                     <td>
-                        @if($stops->count() > 0)
                         <span class="dropoff-trigger text-primary"
                               style="cursor:pointer;text-decoration:underline dotted;"
                               data-route="{{ json_encode($routeData) }}"
-                              title="Click to see all stops">
-                            {{ \Illuminate\Support\Str::limit($r->dropoff_address ?? 'TBD', 20) }}
-                            <span class="badge badge-warning ml-1">{{ $stops->count() + 1 }} stops</span>
+                              title="Click to see route">
+                            @if($r->dropoff_address)
+                                {{ \Illuminate\Support\Str::limit($r->dropoff_address, 20) }}
+                            @else
+                                <em class="text-muted">TBD</em>
+                            @endif
+                            @if($stops->count() > 0)
+                                <span class="badge badge-warning ml-1">{{ $stops->count() + 1 }} stops</span>
+                            @endif
                         </span>
-                        @elseif($r->dropoff_address)
-                        <span title="{{ $r->dropoff_address }}">{{ \Illuminate\Support\Str::limit($r->dropoff_address, 20) }}</span>
-                        @else
-                        <span class="text-muted">TBD</span>
-                        @endif
                     </td>
 
                     <td>
