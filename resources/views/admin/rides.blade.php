@@ -104,6 +104,7 @@ function rideDistanceKm($r): ?float {
                               style="cursor:pointer;text-decoration:underline dotted;"
                               data-route="{{ json_encode($routeData) }}"
                               title="Click to see route">
+                            <i class="fas fa-map-marked-alt mr-1"></i>
                             @if($r->dropoff_address)
                                 {{ \Illuminate\Support\Str::limit($r->dropoff_address, 20) }}
                             @else
