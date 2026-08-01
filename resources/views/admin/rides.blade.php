@@ -91,7 +91,9 @@ function rideDistanceKm($r): ?float {
                         <small class="text-muted">for {{ $r->passenger_name }}</small>
                         @endif
                     </td>
-                    <td>{{ $r->driver?->name ?? '<span class="text-muted">Unassigned</span>' }}</td>
+                    <td>
+                        @if($r->driver){{ $r->driver->name }}@else<span class="text-muted">Unassigned</span>@endif
+                    </td>
                     <td>
                         <span title="{{ $r->pickup_address }}">{{ \Illuminate\Support\Str::limit($r->pickup_address, 20) }}</span>
                     </td>
@@ -106,8 +108,10 @@ function rideDistanceKm($r): ?float {
                             {{ \Illuminate\Support\Str::limit($r->dropoff_address ?? 'TBD', 20) }}
                             <span class="badge badge-warning ml-1">{{ $stops->count() + 1 }} stops</span>
                         </span>
+                        @elseif($r->dropoff_address)
+                        <span title="{{ $r->dropoff_address }}">{{ \Illuminate\Support\Str::limit($r->dropoff_address, 20) }}</span>
                         @else
-                        <span title="{{ $r->dropoff_address }}">{{ \Illuminate\Support\Str::limit($r->dropoff_address ?? '<span class="text-muted">TBD</span>', 20) }}</span>
+                        <span class="text-muted">TBD</span>
                         @endif
                     </td>
 
