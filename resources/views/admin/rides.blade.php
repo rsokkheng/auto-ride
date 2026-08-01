@@ -3,8 +3,9 @@
 @section('page-title', 'Rides')
 
 @php
-// Haversine distance helper (km)
+// Returns stored distance if available, falls back to haversine across all points
 function rideDistanceKm($r): ?float {
+    if ($r->distance_km) return (float) $r->distance_km;
     if (!$r->pickup_lat || !$r->dropoff_lat) return null;
     $stops = $r->stops ?? collect();
     $points = collect([['lat'=>$r->pickup_lat,'lng'=>$r->pickup_lng]])
@@ -18,7 +19,7 @@ function rideDistanceKm($r): ?float {
         $h = sin($dLat/2)**2 + cos(deg2rad($a['lat']))*cos(deg2rad($b['lat']))*sin($dLng/2)**2;
         $total += 6371 * 2 * atan2(sqrt($h), sqrt(1-$h));
     }
-    return round($total * 1.35, 1); // road factor
+    return round($total * 1.35, 1);
 }
 @endphp
 

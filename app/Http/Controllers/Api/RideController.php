@@ -146,12 +146,41 @@ class RideController extends ApiController
             'dropoff_lat'  => 'required|numeric|between:-90,90',
             'dropoff_lng'  => 'required|numeric|between:-180,180',
             'service_type' => 'nullable|in:motorcycle,tuk_tuk,standard,premium,shared,van',
+            // Multi-stop support so estimate matches the actual booking fare
+            'stops'           => 'nullable|array|max:5',
+            'stops.*.lat'     => 'required|numeric|between:-90,90',
+            'stops.*.lng'     => 'required|numeric|between:-180,180',
         ]);
 
-        $route = $this->fare->getRoute(
-            (float) $data['pickup_lat'],  (float) $data['pickup_lng'],
-            (float) $data['dropoff_lat'], (float) $data['dropoff_lng'],
+        $stops = $data['stops'] ?? [];
+
+        // Build waypoint chain: pickup → [intermediate stops] → dropoff
+        $allPoints = array_merge(
+            [['lat' => (float) $data['pickup_lat'], 'lng' => (float) $data['pickup_lng']]],
+            array_map(fn($s) => ['lat' => (float) $s['lat'], 'lng' => (float) $s['lng']], $stops),
+            [['lat' => (float) $data['dropoff_lat'], 'lng' => (float) $data['dropoff_lng']]],
         );
+
+        // Sum route across all consecutive segments
+        $totalDistanceKm  = 0.0;
+        $totalDurationMin = 0;
+        for ($i = 0; $i < count($allPoints) - 1; $i++) {
+            $seg = $this->fare->getRoute(
+                $allPoints[$i]['lat'],     $allPoints[$i]['lng'],
+                $allPoints[$i + 1]['lat'], $allPoints[$i + 1]['lng'],
+            );
+            $totalDistanceKm  += $seg['distance_km'];
+            $totalDurationMin += $seg['duration_min'];
+        }
+
+        $route = [
+            'distance_km'   => round($totalDistanceKm, 2),
+            'duration_min'  => $totalDurationMin,
+            'distance_text' => round($totalDistanceKm, 1) . ' km',
+            'duration_text' => $totalDurationMin . ' mins',
+            'source'        => count($stops) > 0 ? 'multi_stop' : ($seg['source'] ?? 'haversine'),
+            'stop_count'    => count($allPoints) - 1,
+        ];
 
         $fares = ! empty($data['service_type'])
             ? $this->fare->calculateRideFare(
@@ -165,13 +194,7 @@ class RideController extends ApiController
             );
 
         return $this->success([
-            'route' => [
-                'distance_km'   => $route['distance_km'],
-                'duration_min'  => $route['duration_min'],
-                'distance_text' => $route['distance_text'],
-                'duration_text' => $route['duration_text'],
-                'source'        => $route['source'],
-            ],
+            'route'    => $route,
             'fares'    => $fares,
             'currency' => 'KHR',
         ]);
@@ -328,6 +351,8 @@ class RideController extends ApiController
             'notes'           => $data['notes'] ?? null,
             'status'          => Ride::STATUS_REQUESTED,
             'fare'            => $finalFare,
+            'distance_km'     => $hasDropoff ? ($route['distance_km'] ?? null) : null,
+            'duration_min'    => $hasDropoff ? ($route['duration_min'] ?? null) : null,
             'surge_multiplier'=> $fareResult['surge_multiplier'],
             'surge_zone_id'   => $fareResult['surge_zone']['id'] ?? null,
             'surge_accepted'  => ! empty($data['surge_accepted']),
@@ -591,17 +616,27 @@ class RideController extends ApiController
             }
             if (isset($completionData['final_fare'])) {
                 $updates['fare'] = (int) $completionData['final_fare'];
+                if (! empty($completionData['dropoff_lat']) && ! empty($completionData['dropoff_lng'])) {
+                    $mRoute = $this->fare->getRoute(
+                        (float) $ride->pickup_lat, (float) $ride->pickup_lng,
+                        (float) $completionData['dropoff_lat'], (float) $completionData['dropoff_lng'],
+                    );
+                    $updates['distance_km']  = $mRoute['distance_km'];
+                    $updates['duration_min'] = $mRoute['duration_min'];
+                }
             } elseif (! empty($completionData['dropoff_lat']) && ! empty($completionData['dropoff_lng'])) {
                 // Auto-calculate fare from actual route if driver provides final coords but not fare
-                $route = $this->fare->getRoute(
+                $mRoute = $this->fare->getRoute(
                     (float) $ride->pickup_lat, (float) $ride->pickup_lng,
                     (float) $completionData['dropoff_lat'], (float) $completionData['dropoff_lng'],
                 );
                 $fareResult = $this->fare->calculateRideFare(
-                    $ride->service_type, $route,
+                    $ride->service_type, $mRoute,
                     (float) $ride->pickup_lat, (float) $ride->pickup_lng,
                 );
-                $updates['fare'] = $fareResult['total'];
+                $updates['fare']         = $fareResult['total'];
+                $updates['distance_km']  = $mRoute['distance_km'];
+                $updates['duration_min'] = $mRoute['duration_min'];
             }
         }
 

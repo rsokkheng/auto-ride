@@ -43,6 +43,8 @@ class Ride extends Model
         'scheduled_at',
         'status',
         'fare',
+        'distance_km',
+        'duration_min',
         'waiting_fee',
         'surge_multiplier',
         'surge_zone_id',
