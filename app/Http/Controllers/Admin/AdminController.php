@@ -442,10 +442,16 @@ class AdminController extends Controller
     public function rides()
     {
         return view('admin.rides', [
-            'rides'      => Ride::with(['passenger', 'driver'])->orderBy('created_at')->paginate(10),
+            'rides'      => Ride::with(['passenger', 'driver'])->withCount('stops')->orderByDesc('created_at')->paginate(15),
             'passengers' => User::where('role', 'passenger')->orderBy('name')->get(),
             'drivers'    => User::where('role', 'driver')->orderBy('name')->get(),
         ]);
+    }
+
+    public function showRide(\App\Models\Ride $ride)
+    {
+        $ride->load(['passenger', 'driver', 'vehicle', 'stops']);
+        return view('admin.ride-detail', compact('ride'));
     }
 
     public function storeRide(Request $request)

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Ride;
+use App\Models\RideStop;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\PromoCode;
@@ -74,7 +75,7 @@ class RideController extends ApiController
             return $this->unauthorized();
         }
 
-        return $this->success(['ride' => $ride->load('passenger', 'driver', 'vehicle')]);
+        return $this->success(['ride' => $ride->load('passenger', 'driver', 'vehicle', 'stops')]);
     }
 
     // ── Active ride ───────────────────────────────────────────────────────────
@@ -96,12 +97,12 @@ class RideController extends ApiController
         ];
 
         $ride = $user->role === 'driver'
-            ? Ride::with(['passenger', 'vehicle'])
+            ? Ride::with(['passenger', 'vehicle', 'stops'])
                 ->where('driver_id', $user->id)
                 ->whereIn('status', $activeStatuses)
                 ->latest('updated_at')
                 ->first()
-            : Ride::with(['driver', 'vehicle'])
+            : Ride::with(['driver', 'vehicle', 'stops'])
                 ->where('passenger_id', $user->id)
                 ->whereIn('status', $activeStatuses)
                 ->latest('updated_at')
@@ -207,6 +208,11 @@ class RideController extends ApiController
             'passenger_phone' => 'nullable|string|max:24',
             // Promo code
             'promo_code'      => 'nullable|string|max:32',
+            // Multi-stop
+            'stops'           => 'nullable|array|max:5',
+            'stops.*.address' => 'required|string|max:255',
+            'stops.*.lat'     => 'required|numeric|between:-90,90',
+            'stops.*.lng'     => 'required|numeric|between:-180,180',
         ]);
 
         if (! empty($data['vehicle_id'])) {
@@ -214,14 +220,58 @@ class RideController extends ApiController
             $data['driver_id'] = $vehicle?->user_id;
         }
 
+        $stops = $data['stops'] ?? [];
+
+        // If stops provided but no explicit dropoff, treat last stop as the final destination
+        if (! empty($stops) && empty($data['dropoff_address'])) {
+            $last = end($stops);
+            $data['dropoff_address'] = $last['address'];
+            $data['dropoff_lat']     = $last['lat'];
+            $data['dropoff_lng']     = $last['lng'];
+        }
+
         $hasDropoff = ! empty($data['dropoff_lat']) && ! empty($data['dropoff_lng']);
 
         // When no destination: fare is metered (calculated at completion by driver)
         if ($hasDropoff) {
-            $route = $this->fare->getRoute(
-                (float) $data['pickup_lat'],  (float) $data['pickup_lng'],
-                (float) $data['dropoff_lat'], (float) $data['dropoff_lng'],
+            // Build waypoint chain: pickup → [intermediate stops] → dropoff
+            $allPoints = array_merge(
+                [['lat' => (float) $data['pickup_lat'], 'lng' => (float) $data['pickup_lng']]],
+                array_map(fn($s) => ['lat' => (float) $s['lat'], 'lng' => (float) $s['lng']], $stops),
+                [['lat' => (float) $data['dropoff_lat'], 'lng' => (float) $data['dropoff_lng']]],
             );
+
+            // Remove duplicate final stop if last stop == dropoff
+            if (count($stops) > 0) {
+                $lastStop = end($stops);
+                if ((float) $lastStop['lat'] === (float) $data['dropoff_lat']
+                    && (float) $lastStop['lng'] === (float) $data['dropoff_lng']) {
+                    // Last stop is already the dropoff — don't double-count it
+                    array_pop($allPoints);
+                }
+            }
+
+            // Sum route across all consecutive segments
+            $totalDistanceKm  = 0.0;
+            $totalDurationMin = 0;
+            for ($i = 0; $i < count($allPoints) - 1; $i++) {
+                $seg = $this->fare->getRoute(
+                    $allPoints[$i]['lat'],     $allPoints[$i]['lng'],
+                    $allPoints[$i + 1]['lat'], $allPoints[$i + 1]['lng'],
+                );
+                $totalDistanceKm  += $seg['distance_km'];
+                $totalDurationMin += $seg['duration_min'];
+            }
+
+            $route = [
+                'distance_km'   => round($totalDistanceKm, 2),
+                'duration_min'  => $totalDurationMin,
+                'distance_text' => round($totalDistanceKm, 1) . ' km',
+                'duration_text' => $totalDurationMin . ' mins',
+                'source'        => 'multi_stop',
+                'stop_count'    => count($allPoints) - 1,
+            ];
+
             $fareResult = $this->fare->calculateRideFare(
                 $data['service_type'], $route,
                 (float) $data['pickup_lat'], (float) $data['pickup_lng'],
@@ -287,6 +337,27 @@ class RideController extends ApiController
             'discount_amount' => $discountAmount,
         ]);
 
+        // Save intermediate stops (excluding the last stop when it equals the dropoff)
+        if (! empty($stops)) {
+            $stopsToSave = $stops;
+            // If last stop duplicates the dropoff, it's already on the ride — skip it
+            $lastStop = end($stops);
+            if (count($stops) > 0
+                && (float) $lastStop['lat'] === (float) ($data['dropoff_lat'] ?? 0)
+                && (float) $lastStop['lng'] === (float) ($data['dropoff_lng'] ?? 0)) {
+                array_pop($stopsToSave);
+            }
+            foreach ($stopsToSave as $i => $stop) {
+                RideStop::create([
+                    'ride_id'    => $ride->id,
+                    'address'    => $stop['address'],
+                    'lat'        => (float) $stop['lat'],
+                    'lng'        => (float) $stop['lng'],
+                    'sort_order' => $i,
+                ]);
+            }
+        }
+
         if ($promoCodeId) {
             PromoCodeUsage::create([
                 'promo_code_id'   => $promoCodeId,
@@ -298,7 +369,7 @@ class RideController extends ApiController
             PromoCode::where('id', $promoCodeId)->increment('used_count');
         }
 
-        $ride->load('driver', 'vehicle');
+        $ride->load('driver', 'vehicle', 'stops');
         $this->firestore->syncRide($ride);
 
         $dropoffLabel = $data['dropoff_address'] ?? 'Destination TBD';
@@ -360,7 +431,7 @@ class RideController extends ApiController
             'accepted_at' => now(),
         ]);
 
-        $fresh = $ride->fresh()->load('passenger', 'driver', 'vehicle');
+        $fresh = $ride->fresh()->load('passenger', 'driver', 'vehicle', 'stops');
         $this->firestore->syncRide($fresh);
 
         // Notify passenger: driver is on the way

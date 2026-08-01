@@ -32,7 +32,14 @@
                     <td>{{ $r->passenger?->name ?? '—' }}</td>
                     <td>{{ $r->driver?->name ?? 'Unassigned' }}</td>
                     <td>{{ \Illuminate\Support\Str::limit($r->pickup_address, 22) }}</td>
-                    <td>{{ \Illuminate\Support\Str::limit($r->dropoff_address, 22) }}</td>
+                    <td>
+                        {{ \Illuminate\Support\Str::limit($r->dropoff_address ?? 'TBD', 22) }}
+                        @if($r->stops_count > 0)
+                        <span class="badge badge-warning ml-1" title="{{ $r->stops_count }} intermediate stop(s)">
+                            +{{ $r->stops_count }} stop{{ $r->stops_count > 1 ? 's' : '' }}
+                        </span>
+                        @endif
+                    </td>
                     <td>
                         @php $sc = ['requested'=>'secondary','pending'=>'warning','accepted'=>'info','in_progress'=>'primary','completed'=>'success','cancelled'=>'danger']; @endphp
                         <span class="badge badge-{{ $sc[$r->status] ?? 'secondary' }}">{{ ucfirst(str_replace('_',' ',$r->status)) }}</span>
@@ -40,6 +47,7 @@
                     <td>{{ $r->fare ? number_format($r->fare, 0).' ៛' : '—' }}</td>
                     <td>{{ $r->created_at->format('Y-m-d') }}</td>
                     <td>
+                        <a href="{{ route('admin.rides.show', $r->id) }}" class="btn btn-xs btn-primary mr-1" title="View Detail"><i class="fas fa-eye"></i></a>
                         <button class="btn btn-xs btn-info mr-1" onclick="openEdit({
                             id: {{ $r->id }},
                             passenger_id: {{ $r->passenger_id }},

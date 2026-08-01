@@ -219,7 +219,7 @@ class DeliveryController extends ApiController
             'recipient_phone'   => [Rule::requiredIf($serviceType === 'delivery'), 'string', 'max:24'],
             'package_size'      => 'nullable|in:small,medium,large',
             'pickup_address'    => 'required|string|max:255',
-            'dropoff_address'   => 'required|string|max:255',
+            'dropoff_address'   => 'nullable|string|max:255',
             'pickup_lat'        => 'nullable|numeric|between:-90,90',
             'pickup_lng'        => 'nullable|numeric|between:-180,180',
             'dropoff_lat'       => 'nullable|numeric|between:-90,90',
@@ -258,26 +258,41 @@ class DeliveryController extends ApiController
             $driverId = $best?->id;
         }
 
-        // Calculate fee based on service type.
+        $hasDropoff = ! empty($data['dropoff_lat']) && ! empty($data['dropoff_lng']);
+
+        // Calculate fee based on service type — only when dropoff coords are known.
         $fee        = (int) ($data['fee'] ?? 0);
         $helperFee  = null;
         $floorFee   = null;
 
-        if ($fee === 0 && $serviceType === 'moving'
-            && ! empty($data['pickup_lat']) && ! empty($data['dropoff_lat'])
-        ) {
-            $fareResult = $this->movingFare->estimate(
-                (float) $data['pickup_lat'],  (float) $data['pickup_lng'],
-                (float) $data['dropoff_lat'], (float) $data['dropoff_lng'],
-                (int) ($data['floor_pickup']     ?? 0),
-                (int) ($data['floor_dropoff']    ?? 0),
-                (bool) ($data['has_elevator']    ?? false),
-                (int) ($data['requires_helpers'] ?? 0),
-                $data['helper_type'] ?? 'normal_carry',
-            );
-            $fee       = $fareResult['total'];
-            $helperFee = $fareResult['helper_fee'];
-            $floorFee  = $fareResult['floor_fee'];
+        if ($fee === 0 && $hasDropoff) {
+            if ($serviceType === 'moving' && ! empty($data['pickup_lat'])) {
+                $fareResult = $this->movingFare->estimate(
+                    (float) $data['pickup_lat'],  (float) $data['pickup_lng'],
+                    (float) $data['dropoff_lat'], (float) $data['dropoff_lng'],
+                    (int) ($data['floor_pickup']     ?? 0),
+                    (int) ($data['floor_dropoff']    ?? 0),
+                    (bool) ($data['has_elevator']    ?? false),
+                    (int) ($data['requires_helpers'] ?? 0),
+                    $data['helper_type'] ?? 'normal_carry',
+                );
+                $fee       = $fareResult['total'];
+                $helperFee = $fareResult['helper_fee'];
+                $floorFee  = $fareResult['floor_fee'];
+            } elseif ($serviceType === 'delivery' && ! empty($data['pickup_lat'])) {
+                $route = $this->fare->getRoute(
+                    (float) $data['pickup_lat'],  (float) $data['pickup_lng'],
+                    (float) $data['dropoff_lat'], (float) $data['dropoff_lng'],
+                );
+                $fareResult = $this->fare->calculateDeliveryFare(
+                    $data['package_size'] ?? 'small',
+                    $route,
+                    (float) $data['pickup_lat'],
+                    (float) $data['pickup_lng'],
+                    'delivery',
+                );
+                $fee = $fareResult['total'];
+            }
         }
 
         // Apply express multiplier if requested.
@@ -306,11 +321,11 @@ class DeliveryController extends ApiController
             'recipient_phone'   => $data['recipient_phone'] ?? null,
             'package_size'      => $data['package_size'] ?? null,
             'pickup_address'    => $data['pickup_address'],
-            'dropoff_address'   => $data['dropoff_address'],
+            'dropoff_address'   => $data['dropoff_address'] ?? null,
             'pickup_lat'        => $data['pickup_lat'] ?? null,
             'pickup_lng'        => $data['pickup_lng'] ?? null,
-            'dropoff_lat'       => $data['dropoff_lat'] ?? null,
-            'dropoff_lng'       => $data['dropoff_lng'] ?? null,
+            'dropoff_lat'       => $hasDropoff ? (float) $data['dropoff_lat'] : null,
+            'dropoff_lng'       => $hasDropoff ? (float) $data['dropoff_lng'] : null,
             'scheduled_at'      => $data['scheduled_at'] ?? null,
             'package_details'   => $data['package_details'] ?? '',
             'notes'             => $data['notes'] ?? null,
@@ -347,10 +362,11 @@ class DeliveryController extends ApiController
                 ->where('available', true)
                 ->whereNotNull('fcm_token')
                 ->get();
+            $dropoffLabel = $delivery->dropoff_address ?? 'Destination TBD';
             $this->fcm->sendToUsers(
                 $nearbyDrivers->all(),
                 '📦 New Delivery Request',
-                "{$delivery->pickup_address} → {$delivery->dropoff_address}",
+                "{$delivery->pickup_address} → {$dropoffLabel}",
                 ['type' => 'delivery_requested', 'delivery_id' => (string) $delivery->id]
             );
         } catch (\Throwable $e) {
@@ -805,7 +821,55 @@ class DeliveryController extends ApiController
             return response()->json(['data' => null, 'message' => 'Cannot complete a cancelled job.'], 422);
         }
 
-        $delivery->update(['status' => 'completed', 'completed_at' => now()]);
+        $completionData = $request->validate([
+            'dropoff_address' => 'nullable|string|max:255',
+            'dropoff_lat'     => 'nullable|numeric|between:-90,90',
+            'dropoff_lng'     => 'nullable|numeric|between:-180,180',
+            'final_fee'       => 'nullable|integer|min:0',
+        ]);
+
+        $updates = ['status' => 'completed', 'completed_at' => now()];
+
+        // For bookings without a pre-set destination: driver provides final dropoff
+        if (is_null($delivery->dropoff_address)) {
+            if (! empty($completionData['dropoff_address'])) {
+                $updates['dropoff_address'] = $completionData['dropoff_address'];
+            }
+            if (! empty($completionData['dropoff_lat'])) {
+                $updates['dropoff_lat'] = (float) $completionData['dropoff_lat'];
+                $updates['dropoff_lng'] = (float) $completionData['dropoff_lng'];
+            }
+            if (isset($completionData['final_fee'])) {
+                $updates['fee'] = (int) $completionData['final_fee'];
+            } elseif (! empty($completionData['dropoff_lat']) && ! empty($delivery->pickup_lat)) {
+                // Auto-calculate fee from actual route if no explicit fee given
+                if ($delivery->service_type === 'moving') {
+                    $fareResult = $this->movingFare->estimate(
+                        (float) $delivery->pickup_lat, (float) $delivery->pickup_lng,
+                        (float) $completionData['dropoff_lat'], (float) $completionData['dropoff_lng'],
+                        (int) ($delivery->floor_pickup  ?? 0),
+                        (int) ($delivery->floor_dropoff ?? 0),
+                        (bool) ($delivery->has_elevator ?? false),
+                        (int) ($delivery->requires_helpers ?? 0),
+                        $delivery->helper_type ?? 'normal_carry',
+                    );
+                    $updates['fee'] = $fareResult['total'];
+                } else {
+                    $route = $this->fare->getRoute(
+                        (float) $delivery->pickup_lat, (float) $delivery->pickup_lng,
+                        (float) $completionData['dropoff_lat'], (float) $completionData['dropoff_lng'],
+                    );
+                    $fareResult = $this->fare->calculateDeliveryFare(
+                        $delivery->package_size ?? 'small', $route,
+                        (float) $delivery->pickup_lat, (float) $delivery->pickup_lng,
+                        'delivery',
+                    );
+                    $updates['fee'] = $fareResult['total'];
+                }
+            }
+        }
+
+        $delivery->update($updates);
 
         $fresh = $delivery->fresh()->load('sender', 'driver', 'vehicle');
 

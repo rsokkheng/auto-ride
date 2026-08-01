@@ -43,6 +43,7 @@ Route::prefix('admin')->group(function () {
 
     // Rides
     Route::get('rides', [AdminController::class, 'rides'])->name('admin.rides');
+    Route::get('rides/{ride}', [AdminController::class, 'showRide'])->name('admin.rides.show');
     Route::post('rides', [AdminController::class, 'storeRide'])->name('admin.rides.store');
     Route::put('rides/{ride}', [AdminController::class, 'updateRide'])->name('admin.rides.update');
     Route::delete('rides/{ride}', [AdminController::class, 'destroyRide'])->name('admin.rides.destroy');
