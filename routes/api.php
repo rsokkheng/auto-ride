@@ -57,8 +57,9 @@ Route::prefix('v1')->group(function () {
     Route::get('auth/me', [AuthController::class, 'me']);
     Route::get('auth/avatar', [AuthController::class, 'getAvatar']);
     Route::put('auth/profile', [AuthController::class, 'updateProfile']);
-    Route::post('auth/otp/send', [AuthController::class, 'sendOTP']);
-    Route::post('auth/otp/verify', [AuthController::class, 'verifyOTP']);
+    Route::post('auth/otp/send',    [AuthController::class, 'sendOTP']);
+    Route::post('auth/otp/verify',  [AuthController::class, 'verifyOTP']);
+    Route::post('auth/phone/verify',[AuthController::class, 'verifyPhone']);
     Route::post('auth/fcm-token', [AuthController::class, 'saveFcmToken']);
 
     Route::get('vehicles', [VehicleController::class, 'index']);

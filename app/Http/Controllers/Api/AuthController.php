@@ -8,6 +8,9 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Kreait\Firebase\Contract\Auth as FirebaseAuth;
+use Kreait\Firebase\Exception\Auth\FailedToVerifyToken;
+use Kreait\Firebase\Exception\Auth\RevokedIdToken;
 
 class AuthController extends ApiController
 {
@@ -188,6 +191,64 @@ class AuthController extends ApiController
         $user->update($data);
 
         return $this->success(['user' => $user]);
+    }
+
+    /**
+     * POST /v1/auth/phone/verify
+     *
+     * Flutter gets a Firebase ID token after the user passes Firebase Phone Auth
+     * (real SMS OTP handled entirely by Firebase SDK on device).
+     * This endpoint verifies that token server-side, marks the phone verified,
+     * and returns a full API session.
+     *
+     * Body: { "firebase_id_token": "eyJhbGci..." }
+     */
+    public function verifyPhone(Request $request)
+    {
+        $data = $request->validate([
+            'firebase_id_token' => 'required|string',
+        ]);
+
+        try {
+            $auth      = app(FirebaseAuth::class);
+            $verified  = $auth->verifyIdToken($data['firebase_id_token']);
+            $claims    = $verified->claims();
+            $phone     = $claims->get('phone_number');
+            $firebaseUid = $claims->get('sub');
+        } catch (RevokedIdToken $e) {
+            return response()->json(['data' => null, 'message' => 'Firebase token has been revoked. Please re-authenticate.'], 401);
+        } catch (FailedToVerifyToken $e) {
+            return response()->json(['data' => null, 'message' => 'Invalid Firebase token: ' . $e->getMessage()], 401);
+        } catch (\Throwable $e) {
+            return response()->json(['data' => null, 'message' => 'Token verification failed.'], 401);
+        }
+
+        if (empty($phone)) {
+            return response()->json(['data' => null, 'message' => 'Firebase token does not contain a phone number.'], 422);
+        }
+
+        // Find existing user by phone or create a new passenger account
+        $user = User::where('phone', $phone)->first();
+
+        if (! $user) {
+            $user = User::create([
+                'name'              => 'User ' . substr($phone, -4),
+                'phone'             => $phone,
+                'password'          => Str::random(40),
+                'role'              => 'passenger',
+                'wallet_balance'    => 0,
+                'phone_verified_at' => now(),
+            ]);
+        } else {
+            $user->update(['phone_verified_at' => now()]);
+        }
+
+        $this->issueTokens($user);
+
+        return $this->success(array_merge($this->tokenResponse($user), [
+            'phone_verified' => true,
+            'phone'          => $phone,
+        ]));
     }
 
     public function sendOTP(Request $request)
