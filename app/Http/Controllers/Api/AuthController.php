@@ -284,7 +284,27 @@ class AuthController extends ApiController
 
         Cache::forget($cacheKey);
 
-        return $this->success(['message' => 'OTP verified successfully']);
+        $user = User::where('phone', $data['phone'])->first();
+
+        if (! $user) {
+            $user = User::create([
+                'name'              => 'User ' . substr($data['phone'], -4),
+                'phone'             => $data['phone'],
+                'password'          => Str::random(40),
+                'role'              => 'passenger',
+                'wallet_balance'    => 0,
+                'phone_verified_at' => now(),
+            ]);
+        } else {
+            $user->update(['phone_verified_at' => now()]);
+        }
+
+        $this->issueTokens($user);
+
+        return $this->success(array_merge($this->tokenResponse($user), [
+            'phone_verified' => true,
+            'phone'          => $data['phone'],
+        ]));
     }
 
     protected function issueTokens(User $user): void
