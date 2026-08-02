@@ -14,6 +14,9 @@ class ChatMessage extends Model
         'conversation_id',
         'sender_id',
         'message',
+        'type',
+        'attachment_url',
+        'attachment_name',
         'read_at',
     ];
 
