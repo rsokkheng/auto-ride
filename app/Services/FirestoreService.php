@@ -220,6 +220,18 @@ class FirestoreService
         $passenger = $conversation->passenger;
         $driver    = $conversation->driver;
 
+        $lastPreview = null;
+        if ($lastMessage) {
+            $lastPreview = [
+                'text'            => $lastMessage->message,
+                'type'            => $lastMessage->type ?? 'text',
+                'attachment_url'  => $lastMessage->attachment_url,
+                'attachment_name' => $lastMessage->attachment_name,
+                'sender_id'       => $lastMessage->sender_id,
+                'time'            => $lastMessage->created_at->toIso8601String(),
+            ];
+        }
+
         $this->set(self::C_CHATS, (string) $conversation->id, [
             'id'           => $conversation->id,
             'passenger_id' => $conversation->passenger_id,
@@ -228,11 +240,7 @@ class FirestoreService
             'status'       => $conversation->status,
             'passenger'    => $passenger ? ['id' => $passenger->id, 'name' => $passenger->name, 'avatar_url' => $passenger->avatar_url] : null,
             'driver'       => $driver    ? ['id' => $driver->id,    'name' => $driver->name,    'avatar_url' => $driver->avatar_url]    : null,
-            'last_message' => $lastMessage ? [
-                'text'      => $lastMessage->message,
-                'sender_id' => $lastMessage->sender_id,
-                'time'      => $lastMessage->created_at->toIso8601String(),
-            ] : null,
+            'last_message' => $lastPreview,
             'updated_at'   => now()->toIso8601String(),
         ]);
     }
@@ -259,6 +267,9 @@ class FirestoreService
             'sender_name'     => $sender?->name,
             'sender_avatar'   => $sender?->avatar_url,
             'message'         => $message->message,
+            'type'            => $message->type ?? 'text',
+            'attachment_url'  => $message->attachment_url,
+            'attachment_name' => $message->attachment_name,
             'read_at'         => $message->read_at?->toIso8601String(),
             'created_at'      => $message->created_at->toIso8601String(),
         ]);
