@@ -605,49 +605,54 @@ class RideController extends ApiController
             'share_active' => false,
         ];
 
-        // For metered rides: driver sets the final dropoff and fare at completion
+        // Always persist the driver's confirmed fare — applies to ALL ride types
+        if (isset($completionData['final_fare'])) {
+            $updates['fare'] = (int) $completionData['final_fare'];
+        }
+
+        // Metered rides: resolve final dropoff from request or driver's current GPS
         if (is_null($ride->dropoff_address)) {
+            // Prefer explicit coords from request; fall back to driver's live location
+            $dropoffLat = ! empty($completionData['dropoff_lat'])
+                ? (float) $completionData['dropoff_lat']
+                : ((float) $user->current_latitude ?: null);
+            $dropoffLng = ! empty($completionData['dropoff_lng'])
+                ? (float) $completionData['dropoff_lng']
+                : ((float) $user->current_longitude ?: null);
+
             if (! empty($completionData['dropoff_address'])) {
                 $updates['dropoff_address'] = $completionData['dropoff_address'];
             }
-            if (! empty($completionData['dropoff_lat'])) {
-                $updates['dropoff_lat'] = (float) $completionData['dropoff_lat'];
-                $updates['dropoff_lng'] = (float) $completionData['dropoff_lng'];
-            }
-            if (isset($completionData['final_fare'])) {
-                $updates['fare'] = (int) $completionData['final_fare'];
-                if (! empty($completionData['dropoff_lat']) && ! empty($completionData['dropoff_lng'])) {
+
+            if ($dropoffLat && $dropoffLng) {
+                $updates['dropoff_lat'] = $dropoffLat;
+                $updates['dropoff_lng'] = $dropoffLng;
+
+                // Auto-calculate fare from actual driven route when no explicit fare was given
+                if (! isset($completionData['final_fare'])) {
                     $mRoute = $this->fare->getRoute(
                         (float) $ride->pickup_lat, (float) $ride->pickup_lng,
-                        (float) $completionData['dropoff_lat'], (float) $completionData['dropoff_lng'],
+                        $dropoffLat, $dropoffLng,
                     );
+                    $fareResult = $this->fare->calculateRideFare(
+                        $ride->service_type, $mRoute,
+                        (float) $ride->pickup_lat, (float) $ride->pickup_lng,
+                    );
+                    $updates['fare']         = $fareResult['total'];
                     $updates['distance_km']  = $mRoute['distance_km'];
                     $updates['duration_min'] = $mRoute['duration_min'];
                 }
-            } elseif (! empty($completionData['dropoff_lat']) && ! empty($completionData['dropoff_lng'])) {
-                // Auto-calculate fare from actual route if driver provides final coords but not fare
-                $mRoute = $this->fare->getRoute(
-                    (float) $ride->pickup_lat, (float) $ride->pickup_lng,
-                    (float) $completionData['dropoff_lat'], (float) $completionData['dropoff_lng'],
-                );
-                $fareResult = $this->fare->calculateRideFare(
-                    $ride->service_type, $mRoute,
-                    (float) $ride->pickup_lat, (float) $ride->pickup_lng,
-                );
-                $updates['fare']         = $fareResult['total'];
-                $updates['distance_km']  = $mRoute['distance_km'];
-                $updates['duration_min'] = $mRoute['duration_min'];
             }
         }
 
         $ride->update($updates);
 
-        $transaction = null;
-        if ($ride->fare > 0) {
-            $transaction = app(PaymentService::class)->processRide($ride->fresh());
-        }
-
         $fresh = $ride->fresh()->load('passenger', 'driver', 'vehicle');
+
+        $transaction = null;
+        if ($fresh->fare > 0) {
+            $transaction = app(PaymentService::class)->processRide($fresh);
+        }
         $this->firestore->syncRide($fresh);
 
         // Notify passenger: trip completed with fare
