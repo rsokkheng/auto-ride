@@ -2,27 +2,24 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class SafetyIncident extends Model
+class PaymentMethod extends Model
 {
-    use HasFactory;
-
     protected $fillable = [
         'user_id',
-        'ride_id',
-        'delivery_id',
-        'incident_type',
-        'description',
-        'reported_at',
-        'status',
-        'resolution',
+        'type',
+        'label',
+        'account_number',
+        'account_name',
+        'bank_name',
+        'token',
+        'is_default',
     ];
 
     protected $casts = [
-        'reported_at' => 'datetime',
+        'is_default' => 'boolean',
     ];
 
     public function user(): BelongsTo

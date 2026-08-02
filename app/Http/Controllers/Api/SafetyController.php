@@ -46,6 +46,29 @@ class SafetyController extends ApiController
         return $this->success(['incident' => $incident], 201);
     }
 
+    /**
+     * PATCH /v1/safety-incidents/{incident}
+     * User or admin can update the status of an incident.
+     */
+    public function update(Request $request, SafetyIncident $incident)
+    {
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
+        if ($user->id !== $incident->user_id && $user->role !== 'admin') {
+            return $this->unauthorized();
+        }
+
+        $data = $request->validate([
+            'status'      => 'required|in:pending,under_review,resolved,dismissed',
+            'resolution'  => 'nullable|string|max:1000',
+        ]);
+
+        $incident->update($data);
+
+        return $this->success(['incident' => $incident->fresh()]);
+    }
+
     public function sos(Request $request)
     {
         $user = $this->authUser($request);

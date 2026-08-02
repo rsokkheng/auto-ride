@@ -11,10 +11,10 @@ use Illuminate\Support\Str;
 
 class AuthController extends ApiController
 {
-    // Access token TTL: 30 minutes
-    protected const ACCESS_TTL  = 30;
-    // Refresh token TTL: 1 hour
-    protected const REFRESH_TTL = 60;
+    // Access token TTL: 24 hours
+    protected const ACCESS_TTL  = 1440;
+    // Refresh token TTL: 30 days
+    protected const REFRESH_TTL = 43200;
 
     public function register(Request $request)
     {
@@ -285,7 +285,7 @@ class AuthController extends ApiController
                 'role'            => 'passenger',
                 'social_provider' => $data['provider'],
                 'social_id'       => $socialId,
-                'avatar'          => null,
+                'avatar'          => $avatar,
                 'api_token'       => bin2hex(random_bytes(40)),
                 'refresh_token'   => bin2hex(random_bytes(40)),
                 'token_expires_at'=> now()->addMinutes(self::ACCESS_TTL),

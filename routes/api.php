@@ -37,6 +37,7 @@ use App\Http\Controllers\Api\OnboardingController;
 use App\Http\Controllers\Api\QrPaymentController;
 use App\Http\Controllers\Api\VoucherController;
 use App\Http\Controllers\Api\WithdrawalController;
+use App\Http\Controllers\Api\PaymentMethodController;
 use App\Http\Controllers\Api\AirportTripController;
 use App\Http\Controllers\Api\BusinessController;
 use App\Http\Controllers\Api\FamilyController;
@@ -100,7 +101,8 @@ Route::prefix('v1')->group(function () {
     Route::get('rides', [RideController::class, 'index']);
     Route::get('rides/available', [RideController::class, 'available']);
     Route::get('rides/active', [RideController::class, 'active']);
-    Route::get('rides/scheduled', [RideFeaturesController::class, 'scheduled']);
+    Route::get('rides/scheduled',           [RideFeaturesController::class, 'scheduled']);
+    Route::patch('rides/{ride}/schedule',   [RideFeaturesController::class, 'modifyScheduled']);
     Route::get('rides/reorder-last', [RideFeaturesController::class, 'reorderLast']);
     Route::post('rides/estimate', [RideController::class, 'estimate']);
     Route::post('rides', [RideController::class, 'store']);
@@ -153,7 +155,10 @@ Route::prefix('v1')->group(function () {
     Route::post('movings/{delivery}/complete', [DeliveryController::class, 'complete']);
     Route::post('movings/{delivery}/rate', [DeliveryController::class, 'rate']);
 
-    Route::get('charging-stations', [ChargingStationController::class, 'index']);
+    Route::get('charging-stations',                              [ChargingStationController::class, 'index']);
+    Route::get('charging-stations/favorites',                    [ChargingStationController::class, 'favorites']);
+    Route::post('charging-stations/{station}/favorite',          [ChargingStationController::class, 'addFavorite']);
+    Route::delete('charging-stations/{station}/favorite',        [ChargingStationController::class, 'removeFavorite']);
 
     Route::get('tracking/rides/{ride}', [RideTrackingController::class, 'show']);
     Route::post('tracking/rides/{ride}', [RideTrackingController::class, 'update']);
@@ -172,12 +177,19 @@ Route::prefix('v1')->group(function () {
     Route::post('notifications/read-all', [NotificationController::class, 'markAllRead']);
     Route::post('notifications/{notification}/read', [NotificationController::class, 'markRead']);
 
-    Route::get('payments', [PaymentController::class, 'index']);
+    Route::get('payments',  [PaymentController::class, 'index']);
     Route::post('payments', [PaymentController::class, 'store']);
 
-    Route::get('safety-incidents', [SafetyController::class, 'index']);
-    Route::post('safety-incidents', [SafetyController::class, 'store']);
-    Route::post('sos/alert', [SafetyController::class, 'sos']);
+    Route::get('payment-methods',                             [PaymentMethodController::class, 'index']);
+    Route::post('payment-methods',                            [PaymentMethodController::class, 'store']);
+    Route::put('payment-methods/{method}',                    [PaymentMethodController::class, 'update']);
+    Route::delete('payment-methods/{method}',                 [PaymentMethodController::class, 'destroy']);
+    Route::post('payment-methods/{method}/set-default',       [PaymentMethodController::class, 'setDefault']);
+
+    Route::get('safety-incidents',              [SafetyController::class, 'index']);
+    Route::post('safety-incidents',             [SafetyController::class, 'store']);
+    Route::patch('safety-incidents/{incident}', [SafetyController::class, 'update']);
+    Route::post('sos/alert',                    [SafetyController::class, 'sos']);
 
     // Surge Zones
     Route::get('surge/zones', [SurgeZoneController::class, 'index']);
@@ -434,8 +446,9 @@ Route::prefix('v1')->group(function () {
     Route::post('admin/rides/{ride}/cancel', [AdminApiController::class, 'cancelRide']);
 
     // Deliveries
-    Route::get('admin/deliveries',              [AdminApiController::class, 'deliveries']);
-    Route::get('admin/deliveries/{delivery}',   [AdminApiController::class, 'showDelivery']);
+    Route::get('admin/deliveries',                               [AdminApiController::class, 'deliveries']);
+    Route::get('admin/deliveries/{delivery}',                    [AdminApiController::class, 'showDelivery']);
+    Route::patch('admin/deliveries/{delivery}/status',           [AdminApiController::class, 'updateDeliveryStatus']);
 
     // Withdrawals
     Route::get('admin/withdrawals',                              [AdminApiController::class, 'withdrawals']);

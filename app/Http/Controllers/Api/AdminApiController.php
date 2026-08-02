@@ -437,6 +437,27 @@ class AdminApiController extends ApiController
         return $this->ok($delivery->load('sender', 'driver', 'vehicle'));
     }
 
+    /**
+     * PATCH /api/v1/admin/deliveries/{delivery}/status
+     */
+    public function updateDeliveryStatus(Request $request, Delivery $delivery): JsonResponse
+    {
+        $admin = $this->adminUser($request);
+        if (! $admin) return $this->unauthorized();
+
+        $data = $request->validate([
+            'status' => 'required|in:pending,accepted,in_transit,completed,cancelled',
+            'note'   => 'nullable|string|max:500',
+        ]);
+
+        $delivery->update(['status' => $data['status']]);
+
+        return $this->ok([
+            'delivery' => $delivery->fresh()->load('sender', 'driver'),
+            'note'     => $data['note'] ?? null,
+        ]);
+    }
+
     // ─── Withdrawals ─────────────────────────────────────────────────────────
 
     /**

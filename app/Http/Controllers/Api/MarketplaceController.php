@@ -7,6 +7,8 @@ use App\Models\MarketplaceItem;
 use App\Models\MarketplaceOrder;
 use App\Models\MarketplaceProduct;
 use App\Models\MarketplaceProductImage;
+use App\Models\PromoCode;
+use App\Models\PromoCodeUsage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -269,6 +271,7 @@ class MarketplaceController extends ApiController
             'rent_end_date'   => 'required_if:order_type,rent|nullable|date|after:rent_start_date',
             'payment_method'  => 'nullable|in:cash,wallet,aba,wing,other_online',
             'notes'           => 'nullable|string',
+            'promo_code'      => 'nullable|string|max:32',
         ]);
 
         $orderType = $data['order_type'] ?? 'purchase';
@@ -317,6 +320,18 @@ class MarketplaceController extends ApiController
             $total     = $unitPrice * $quantity;
         }
 
+        // Apply promo code if provided
+        $promoCodeId    = null;
+        $discountAmount = 0;
+        if (! empty($data['promo_code'])) {
+            $promo = PromoCode::where('code', strtoupper(trim($data['promo_code'])))->first();
+            if ($promo && $promo->isValid('marketplace', (int) $total, $user->id)) {
+                $discountAmount = $promo->calculateDiscount((int) $total);
+                $total          = max(0, $total - $discountAmount);
+                $promoCodeId    = $promo->id;
+            }
+        }
+
         $order = MarketplaceOrder::create([
             'product_id'      => $product->id,
             'buyer_id'        => $user->id,
@@ -333,6 +348,17 @@ class MarketplaceController extends ApiController
             'notes'           => $data['notes'] ?? null,
         ]);
 
+        if ($promoCodeId) {
+            PromoCodeUsage::create([
+                'promo_code_id'   => $promoCodeId,
+                'user_id'         => $user->id,
+                'bookable_type'   => MarketplaceOrder::class,
+                'bookable_id'     => $order->id,
+                'discount_amount' => $discountAmount,
+            ]);
+            PromoCode::where('id', $promoCodeId)->increment('used_count');
+        }
+
         $order->load(['product.images', 'buyer', 'seller']);
 
         return $this->success([
@@ -343,8 +369,10 @@ class MarketplaceController extends ApiController
                 'payment_status' => $order->payment_status,
                 'payment_method' => $order->payment_method,
                 'quantity'       => $order->quantity,
-                'unit_price_usd' => (float) $order->unit_price,
-                'total_price_usd'=> (float) $order->total_price,
+                'unit_price_usd'  => (float) $order->unit_price,
+                'total_price_usd' => (float) $order->total_price,
+                'discount_amount' => $discountAmount,
+                'promo_applied'   => $promoCodeId !== null,
                 'days'           => $orderType === 'rent' ? $days : null,
                 'rent_start_date'=> $order->rent_start_date?->toDateString(),
                 'rent_end_date'  => $order->rent_end_date?->toDateString(),

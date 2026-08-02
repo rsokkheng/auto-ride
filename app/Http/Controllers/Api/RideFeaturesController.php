@@ -369,6 +369,40 @@ class RideFeaturesController extends ApiController
         return $this->success(['rides' => $rides]);
     }
 
+    /**
+     * PATCH /v1/rides/{ride}/schedule
+     * Modify a scheduled ride before it is accepted.
+     */
+    public function modifyScheduled(Request $request, Ride $ride)
+    {
+        $user = $this->authUser($request);
+        if (! $user || $ride->passenger_id !== $user->id) return $this->unauthorized();
+
+        if (! $ride->scheduled_at) {
+            return response()->json(['data' => null, 'message' => 'This ride is not a scheduled ride.'], 422);
+        }
+
+        if (! in_array($ride->status, [Ride::STATUS_REQUESTED], true)) {
+            return response()->json(['data' => null, 'message' => 'Only unaccepted scheduled rides can be modified.'], 422);
+        }
+
+        $data = $request->validate([
+            'scheduled_at'    => 'sometimes|date|after:now',
+            'pickup_address'  => 'sometimes|string|max:255',
+            'pickup_lat'      => 'sometimes|numeric|between:-90,90',
+            'pickup_lng'      => 'sometimes|numeric|between:-180,180',
+            'dropoff_address' => 'nullable|string|max:255',
+            'dropoff_lat'     => 'nullable|numeric|between:-90,90',
+            'dropoff_lng'     => 'nullable|numeric|between:-180,180',
+            'service_type'    => 'sometimes|in:motorcycle,tuk_tuk,standard,premium,shared,van',
+            'notes'           => 'nullable|string|max:500',
+        ]);
+
+        $ride->update($data);
+
+        return $this->success(['ride' => $ride->fresh()->load('driver', 'vehicle', 'stops')]);
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private function haversineKm(float $lat1, float $lng1, float $lat2, float $lng2): float

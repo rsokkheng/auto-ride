@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\CarRental;
+use App\Models\PromoCode;
+use App\Models\PromoCodeUsage;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -123,6 +125,7 @@ class RentalController extends ApiController
             'end_date'               => 'required|date_format:Y-m-d|after_or_equal:start_date',
             'payment_method'         => 'nullable|in:cash,wallet,aba,wing,other_online',
             'notes'                  => 'nullable|string|max:500',
+            'promo_code'             => 'nullable|string|max:32',
         ]);
 
         // Derive vehicle_type from the linked marketplace product's vehicle
@@ -137,6 +140,19 @@ class RentalController extends ApiController
         $end       = Carbon::parse($data['end_date']);
         $totalDays = max(1, $start->diffInDays($end) + 1);
         $dailyKhr  = $this->dailyRate($vehicleType);
+        $totalKhr  = $dailyKhr * $totalDays;
+
+        // Apply promo code if provided
+        $promoCodeId    = null;
+        $discountAmount = 0;
+        if (! empty($data['promo_code'])) {
+            $promo = PromoCode::where('code', strtoupper(trim($data['promo_code'])))->first();
+            if ($promo && $promo->isValid('rentals', $totalKhr, $user->id)) {
+                $discountAmount = $promo->calculateDiscount($totalKhr);
+                $totalKhr       = max(0, $totalKhr - $discountAmount);
+                $promoCodeId    = $promo->id;
+            }
+        }
 
         $rental = CarRental::create([
             'user_id'                => $user->id,
@@ -149,11 +165,22 @@ class RentalController extends ApiController
             'end_date'               => $data['end_date'],
             'total_days'             => $totalDays,
             'daily_rate_khr'         => $dailyKhr,
-            'total_amount_khr'       => $dailyKhr * $totalDays,
+            'total_amount_khr'       => $totalKhr,
             'payment_method'         => $data['payment_method'] ?? 'cash',
             'notes'                  => $data['notes'] ?? null,
             'status'                 => 'pending',
         ]);
+
+        if ($promoCodeId) {
+            PromoCodeUsage::create([
+                'promo_code_id'   => $promoCodeId,
+                'user_id'         => $user->id,
+                'bookable_type'   => CarRental::class,
+                'bookable_id'     => $rental->id,
+                'discount_amount' => $discountAmount,
+            ]);
+            PromoCode::where('id', $promoCodeId)->increment('used_count');
+        }
 
         $rental->load(['user', 'marketplaceProduct.images']);
 

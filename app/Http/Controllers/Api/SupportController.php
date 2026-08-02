@@ -34,16 +34,22 @@ class SupportController extends ApiController
         }
 
         $data = $request->validate([
-            'subject' => 'required|string|max:255',
-            'message' => 'required|string|max:1000',
-            'priority' => 'nullable|in:low,medium,high',
+            'subject'     => 'required|string|max:255',
+            'message'     => 'required|string|max:1000',
+            'priority'    => 'nullable|in:low,medium,high',
+            'category'    => 'nullable|in:driver_late,overcharged,lost_item,safety,cancel_trip,other',
+            'ride_id'     => 'nullable|exists:rides,id',
+            'delivery_id' => 'nullable|exists:deliveries,id',
         ]);
 
         $ticket = SupportTicket::create([
-            'user_id' => $user->id,
-            'subject' => $data['subject'],
-            'status' => 'open',
-            'priority' => $data['priority'] ?? 'medium',
+            'user_id'     => $user->id,
+            'subject'     => $data['subject'],
+            'category'    => $data['category'] ?? null,
+            'ride_id'     => $data['ride_id'] ?? null,
+            'delivery_id' => $data['delivery_id'] ?? null,
+            'status'      => 'open',
+            'priority'    => $data['priority'] ?? 'medium',
         ]);
 
         SupportMessage::create([
