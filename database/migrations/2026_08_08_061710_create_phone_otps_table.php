@@ -17,7 +17,7 @@ return new class extends Migration
 
             $table->timestamp('expires_at');
 
-            $table->timestamp('verified_at')->nullable();
+            $table->timestamp('verified_at')->nullable()->default(null);
 
             $table->unsignedTinyInteger('attempts')->default(0);
 

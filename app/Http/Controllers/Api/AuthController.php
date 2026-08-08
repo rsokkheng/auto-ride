@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\PhoneOtp;
 use App\Models\User;
 use App\Services\SmsService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -233,6 +233,7 @@ class AuthController extends ApiController
         if (! $user) {
             $user = User::create([
                 'name'              => 'User ' . substr($phone, -4),
+                'email'             => 'phone_' . ltrim($phone, '+') . '@auto-ride.local',
                 'phone'             => $phone,
                 'password'          => Str::random(40),
                 'role'              => 'passenger',
@@ -257,13 +258,21 @@ class AuthController extends ApiController
             'phone' => 'required|string|max:24',
         ]);
 
-        $code     = rand(100000, 999999);
-        $cacheKey = 'otp:' . $data['phone'];
-        Cache::put($cacheKey, $code, now()->addMinutes(1));
+        $code = rand(100000, 999999);
+
+        PhoneOtp::where('phone', $data['phone'])->delete();
+
+        PhoneOtp::create([
+            'phone'        => $data['phone'],
+            'otp_hash'     => Hash::make($code),
+            'expires_at'   => now()->addMinutes(3),
+            'last_sent_at' => now(),
+            'verified_at'  => null,
+        ]);
 
         $sent = app(SmsService::class)->send(
             $data['phone'],
-            "Your ROTEH OTP is: {$code}. It will expire in 1 minute."
+            "Your ROTEH OTP is: {$code}. Valid for 3 minutes."
         );
 
         if (! $sent) {
@@ -286,23 +295,27 @@ class AuthController extends ApiController
     {
         $data = $request->validate([
             'phone' => 'required|string|max:24',
-            'code' => 'required|string|max:8',
+            'code'  => 'required|string|max:8',
         ]);
 
-        $cacheKey = 'otp:' . $data['phone'];
-        $storedCode = Cache::get($cacheKey);
+        $record = PhoneOtp::where('phone', $data['phone'])
+            ->whereNull('verified_at')
+            ->where('expires_at', '>', now())
+            ->latest()
+            ->first();
 
-        if (! $storedCode || (string) $storedCode !== $data['code']) {
+        if (! $record || ! Hash::check($data['code'], $record->otp_hash)) {
             return response()->json(['message' => 'Invalid or expired OTP'], 422);
         }
 
-        Cache::forget($cacheKey);
+        $record->update(['verified_at' => now()]);
 
         $user = User::where('phone', $data['phone'])->first();
 
         if (! $user) {
             $user = User::create([
                 'name'              => 'User ' . substr($data['phone'], -4),
+                'email'             => 'phone_' . ltrim($data['phone'], '+') . '@auto-ride.local',
                 'phone'             => $data['phone'],
                 'password'          => Str::random(40),
                 'role'              => 'passenger',
