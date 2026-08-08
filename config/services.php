@@ -58,4 +58,15 @@ return [
         'ttl'         => (int) env('AGORA_TOKEN_TTL', 3600),
     ],
 
+    'plasgate' => [
+        'private_key' => env('PLASGATE_PRIVATE_KEY'),
+        'secret' => env('PLASGATE_SECRET'),
+        'sender' => env('PLASGATE_SENDER', 'ROTEH'),
+
+        'url' => env(
+            'PLASGATE_URL',
+            'https://cloudapi.plasgate.com/rest/send'
+        ),
+    ],
+
 ];

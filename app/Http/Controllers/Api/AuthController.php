@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\User;
+use App\Services\SmsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
@@ -214,7 +215,6 @@ class AuthController extends ApiController
             $verified  = $auth->verifyIdToken($data['firebase_id_token']);
             $claims    = $verified->claims();
             $phone     = $claims->get('phone_number');
-            $firebaseUid = $claims->get('sub');
         } catch (RevokedIdToken $e) {
             return response()->json(['data' => null, 'message' => 'Firebase token has been revoked. Please re-authenticate.'], 401);
         } catch (FailedToVerifyToken $e) {
@@ -257,14 +257,22 @@ class AuthController extends ApiController
             'phone' => 'required|string|max:24',
         ]);
 
-        $code = rand(100000, 999999);
+        $code     = rand(100000, 999999);
         $cacheKey = 'otp:' . $data['phone'];
         Cache::put($cacheKey, $code, now()->addMinutes(10));
 
+        $sent = app(SmsService::class)->send(
+            $data['phone'],
+            "Your Auto-Ride OTP is: {$code}. Valid for 10 minutes."
+        );
+
+        if (! $sent) {
+            return response()->json(['message' => 'Failed to send OTP. Please try again.'], 500);
+        }
+
         return $this->success([
-            'message' => 'OTP sent',
-            'phone' => $data['phone'],
-            'code' => $code,
+            'message' => 'OTP sent successfully',
+            'phone'   => $data['phone'],
         ]);
     }
 

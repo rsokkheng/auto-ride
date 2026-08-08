@@ -12,10 +12,11 @@ class SmsService
         $driver = config('sms.driver', 'log');
 
         return match ($driver) {
-            'twilio' => $this->sendTwilio($to, $message),
-            'nexmo'  => $this->sendNexmo($to, $message),
-            'http'   => $this->sendHttp($to, $message),
-            default  => $this->sendLog($to, $message),
+            'twilio'   => $this->sendTwilio($to, $message),
+            'nexmo'    => $this->sendNexmo($to, $message),
+            'http'     => $this->sendHttp($to, $message),
+            'plasgate' => $this->sendPlasgate($to, $message),
+            default    => $this->sendLog($to, $message),
         };
     }
 
@@ -65,5 +66,30 @@ class SmsService
             ]);
 
         return $res->successful();
+    }
+
+    private function sendPlasgate(string $to, string $message): bool
+    {
+        $privateKey = config('services.plasgate.private_key');
+        $sender     = config('services.plasgate.sender', 'ROTEH');
+        $url        = config('services.plasgate.url', 'https://cloudapi.plasgate.com/rest/send');
+
+        $res = Http::withToken($privateKey)
+            ->post($url, [
+                'sender'  => $sender,
+                'to'      => $to,
+                'content' => $message,
+            ]);
+
+        if (! $res->successful()) {
+            Log::error('[Plasgate] SMS failed', [
+                'to'     => $to,
+                'status' => $res->status(),
+                'body'   => $res->body(),
+            ]);
+            return false;
+        }
+
+        return true;
     }
 }
