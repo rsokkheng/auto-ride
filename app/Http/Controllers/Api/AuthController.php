@@ -258,12 +258,13 @@ class AuthController extends ApiController
             'phone' => 'required|string|max:24',
         ]);
 
-        $code = rand(100000, 999999);
+        $phone = $this->normalizePhone($data['phone']);
+        $code  = rand(100000, 999999);
 
-        PhoneOtp::where('phone', $data['phone'])->delete();
+        PhoneOtp::where('phone', $phone)->delete();
 
         PhoneOtp::create([
-            'phone'        => $data['phone'],
+            'phone'        => $phone,
             'otp_hash'     => Hash::make($code),
             'expires_at'   => now()->addMinutes(3),
             'last_sent_at' => now(),
@@ -271,7 +272,7 @@ class AuthController extends ApiController
         ]);
 
         $sent = app(SmsService::class)->send(
-            $data['phone'],
+            $phone,
             "Your ROTEH OTP is: {$code}. Valid for 3 minutes."
         );
 
@@ -281,7 +282,7 @@ class AuthController extends ApiController
 
         $response = [
             'message' => 'OTP sent successfully',
-            'phone'   => $data['phone'],
+            'phone'   => $phone,
         ];
 
         if (config('app.debug')) {
@@ -298,7 +299,9 @@ class AuthController extends ApiController
             'code'  => 'required|string|max:8',
         ]);
 
-        $record = PhoneOtp::where('phone', $data['phone'])
+        $phone = $this->normalizePhone($data['phone']);
+
+        $record = PhoneOtp::where('phone', $phone)
             ->whereNull('verified_at')
             ->where('expires_at', '>', now())
             ->latest()
@@ -310,13 +313,13 @@ class AuthController extends ApiController
 
         $record->update(['verified_at' => now()]);
 
-        $user = User::where('phone', $data['phone'])->first();
+        $user = User::where('phone', $phone)->first();
 
         if (! $user) {
             $user = User::create([
-                'name'              => 'User ' . substr($data['phone'], -4),
-                'email'             => 'phone_' . ltrim($data['phone'], '+') . '@auto-ride.local',
-                'phone'             => $data['phone'],
+                'name'              => 'User ' . substr($phone, -4),
+                'email'             => 'phone_' . $phone . '@auto-ride.local',
+                'phone'             => $phone,
                 'password'          => Str::random(40),
                 'role'              => 'passenger',
                 'wallet_balance'    => 0,
@@ -330,8 +333,26 @@ class AuthController extends ApiController
 
         return $this->success(array_merge($this->tokenResponse($user), [
             'phone_verified' => true,
-            'phone'          => $data['phone'],
+            'phone'          => $phone,
         ]));
+    }
+
+    private function normalizePhone(string $phone): string
+    {
+        // Strip leading + or spaces
+        $phone = ltrim(trim($phone), '+');
+
+        // Strip Cambodia country code 855
+        if (str_starts_with($phone, '855')) {
+            $phone = substr($phone, 3);
+        }
+
+        // Ensure local format starts with 0
+        if (! str_starts_with($phone, '0')) {
+            $phone = '0' . $phone;
+        }
+
+        return $phone;
     }
 
     protected function issueTokens(User $user): void
