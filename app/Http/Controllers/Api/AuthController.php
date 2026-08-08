@@ -77,11 +77,12 @@ class AuthController extends ApiController
     public function login(Request $request)
     {
         $data = $request->validate([
-            'login'    => 'required|string',
+            'login'    => 'required_without:email|nullable|string',
+            'email'    => 'required_without:login|nullable|string',
             'password' => 'required|string',
         ]);
 
-        $login = $data['login'];
+        $login = $data['login'] ?? $data['email'];
 
         // Resolve user by email, username, or normalized phone
         if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
