@@ -259,11 +259,11 @@ class AuthController extends ApiController
 
         $code     = rand(100000, 999999);
         $cacheKey = 'otp:' . $data['phone'];
-        Cache::put($cacheKey, $code, now()->addMinutes(10));
+        Cache::put($cacheKey, $code, now()->addMinutes(1));
 
         $sent = app(SmsService::class)->send(
             $data['phone'],
-            "Your Auto-Ride OTP is: {$code}. Valid for 10 minutes."
+            "Your ROTEH OTP is: {$code}. It will expire in 1 minute."
         );
 
         if (! $sent) {
