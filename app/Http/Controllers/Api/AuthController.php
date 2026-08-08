@@ -24,6 +24,7 @@ class AuthController extends ApiController
     {
         $data = $request->validate([
             'name'         => 'required|string|max:255',
+            'username'     => 'nullable|string|max:64|unique:users,username|alpha_dash',
             'email'        => 'required|email|unique:users,email',
             'password'     => 'required|string|min:8',
             'phone'        => 'nullable|string|max:24',
@@ -75,14 +76,24 @@ class AuthController extends ApiController
 
     public function login(Request $request)
     {
-        $credentials = $request->validate([
-            'email'    => 'required|email',
+        $data = $request->validate([
+            'login'    => 'required|string',
             'password' => 'required|string',
         ]);
 
-        $user = User::where('email', $credentials['email'])->first();
+        $login = $data['login'];
 
-        if (! $user || ! Hash::check($credentials['password'], $user->password)) {
+        // Resolve user by email, username, or normalized phone
+        if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
+            $user = User::where('email', $login)->first();
+        } else {
+            $phone = $this->normalizePhone($login);
+            $user  = User::where(function ($q) use ($login, $phone) {
+                $q->where('username', $login)->orWhere('phone', $phone);
+            })->latest()->first();
+        }
+
+        if (! $user || ! Hash::check($data['password'], $user->password)) {
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
@@ -177,6 +188,7 @@ class AuthController extends ApiController
 
         $data = $request->validate([
             'name'         => 'sometimes|string|max:255',
+            'username'     => 'sometimes|nullable|string|max:64|unique:users,username,' . $user->id . '|alpha_dash',
             'email'        => 'sometimes|email|unique:users,email,' . $user->id,
             'phone'        => 'sometimes|string|max:24',
             'status_note'  => 'sometimes|nullable|string|max:255',
@@ -233,7 +245,7 @@ class AuthController extends ApiController
         if (! $user) {
             $user = User::create([
                 'name'              => 'User ' . substr($phone, -4),
-                'email'             => 'phone_' . ltrim($phone, '+') . '@auto-ride.local',
+                'email'             =>  ltrim($phone, '+') . '@gmail.com',
                 'phone'             => $phone,
                 'password'          => Str::random(40),
                 'role'              => 'passenger',
@@ -318,7 +330,7 @@ class AuthController extends ApiController
         if (! $user) {
             $user = User::create([
                 'name'              => 'User ' . substr($phone, -4),
-                'email'             => 'phone_' . $phone . '@auto-ride.local',
+                'email'             =>  $phone . '@gmail.com',
                 'phone'             => $phone,
                 'password'          => Str::random(40),
                 'role'              => 'passenger',
@@ -409,7 +421,7 @@ class AuthController extends ApiController
         if (! $user) {
             $user = User::create([
                 'name'            => $name ?? 'User',
-                'email'           => $email ?? $data['provider'] . '_' . $socialId . '@auto-ride.local',
+                'email'           => $email ?? $data['provider'] . '_' . $socialId . '@gmail.com',
                 'password'        => Str::random(40),
                 'role'            => 'passenger',
                 'social_provider' => $data['provider'],
