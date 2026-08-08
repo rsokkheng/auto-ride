@@ -71,18 +71,22 @@ class SmsService
     private function sendPlasgate(string $to, string $message): bool
     {
         $privateKey = config('services.plasgate.private_key');
-        $sender     = config('services.plasgate.sender', 'ROTEH');
-        $url        = config('services.plasgate.url', 'https://cloudapi.plasgate.com/rest/send');
+        $secret     = config('services.plasgate.secret');
+        $sender     = config('services.plasgate.sender', 'AutoRide');
+        $baseUrl    = config('services.plasgate.url', 'https://cloudapi.plasgate.com/rest/send');
 
-        // Strip leading + — Plasgate expects numbers without the plus sign
+        // Plasgate expects number without leading +
         $phone = ltrim($to, '+');
 
-        $res = Http::get($url, [
-            'private_key' => $privateKey,
-            'sender'      => $sender,
-            'to'          => $phone,
-            'content'     => $message,
-        ]);
+        $res = Http::withHeaders([
+                'X-Secret'     => $secret,
+                'Content-Type' => 'application/json',
+            ])
+            ->post("{$baseUrl}?private_key={$privateKey}", [
+                'sender'  => $sender,
+                'to'      => $phone,
+                'content' => $message,
+            ]);
 
         if (! $res->successful()) {
             Log::error('[Plasgate] SMS failed', [
@@ -90,12 +94,6 @@ class SmsService
                 'status' => $res->status(),
                 'body'   => $res->body(),
             ]);
-
-            // Fallback: log-only in debug mode so development isn't blocked
-            if (config('app.debug')) {
-                Log::info("[Plasgate FALLBACK] SMS to {$to}: {$message}");
-                return true;
-            }
 
             return false;
         }
