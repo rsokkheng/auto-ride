@@ -61,7 +61,7 @@ return [
     'plasgate' => [
         'private_key' => env('PLASGATE_PRIVATE_KEY'),
         'secret'      => env('PLASGATE_SECRET'),
-        'sender'      => env('PLASGATE_SENDER', 'ROTEH'),
+        'sender'      => env('PLASGATE_SENDER', 'PlasGateUAT'),
         'url'         => env('PLASGATE_URL', 'https://cloudapi.plasgate.com/rest/send'),
     ],
 

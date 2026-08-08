@@ -72,7 +72,7 @@ class SmsService
     {
         $privateKey = config('services.plasgate.private_key');
         $secret     = config('services.plasgate.secret');
-        $sender     = config('services.plasgate.sender', 'AutoRide');
+        $sender     = config('services.plasgate.sender', 'PlasGateUAT');
         $baseUrl    = config('services.plasgate.url', 'https://cloudapi.plasgate.com/rest/send');
 
         // Plasgate expects number without leading +
