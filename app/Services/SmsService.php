@@ -74,19 +74,29 @@ class SmsService
         $sender     = config('services.plasgate.sender', 'ROTEH');
         $url        = config('services.plasgate.url', 'https://cloudapi.plasgate.com/rest/send');
 
-        $res = Http::withToken($privateKey)
-            ->post($url, [
-                'sender'  => $sender,
-                'to'      => $to,
-                'content' => $message,
-            ]);
+        // Strip leading + — Plasgate expects numbers without the plus sign
+        $phone = ltrim($to, '+');
+
+        $res = Http::get($url, [
+            'private_key' => $privateKey,
+            'sender'      => $sender,
+            'to'          => $phone,
+            'content'     => $message,
+        ]);
 
         if (! $res->successful()) {
             Log::error('[Plasgate] SMS failed', [
-                'to'     => $to,
+                'to'     => $phone,
                 'status' => $res->status(),
                 'body'   => $res->body(),
             ]);
+
+            // Fallback: log-only in debug mode so development isn't blocked
+            if (config('app.debug')) {
+                Log::info("[Plasgate FALLBACK] SMS to {$to}: {$message}");
+                return true;
+            }
+
             return false;
         }
 
