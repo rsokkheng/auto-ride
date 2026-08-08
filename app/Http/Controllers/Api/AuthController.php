@@ -270,10 +270,16 @@ class AuthController extends ApiController
             return response()->json(['message' => 'Failed to send OTP. Please try again.'], 500);
         }
 
-        return $this->success([
+        $response = [
             'message' => 'OTP sent successfully',
             'phone'   => $data['phone'],
-        ]);
+        ];
+
+        if (config('app.debug')) {
+            $response['code'] = $code;
+        }
+
+        return $this->success($response);
     }
 
     public function verifyOTP(Request $request)
