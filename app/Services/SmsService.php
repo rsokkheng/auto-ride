@@ -78,26 +78,36 @@ class SmsService
         // Plasgate expects number without leading +
         $phone = ltrim($to, '+');
 
-        $res = Http::withHeaders([
-                'X-Secret'     => $secret,
-                'Content-Type' => 'application/json',
-            ])
-            ->post("{$baseUrl}?private_key={$privateKey}", [
-                'sender'  => $sender,
-                'to'      => $phone,
-                'content' => $message,
-            ]);
+        try {
+            $res = Http::timeout(10)
+                ->withHeaders([
+                    'X-Secret'     => $secret,
+                    'Content-Type' => 'application/json',
+                ])
+                ->post("{$baseUrl}?private_key={$privateKey}", [
+                    'sender'  => $sender,
+                    'to'      => $phone,
+                    'content' => $message,
+                ]);
 
-        if (! $res->successful()) {
-            Log::error('[Plasgate] SMS failed', [
-                'to'     => $phone,
-                'status' => $res->status(),
-                'body'   => $res->body(),
-            ]);
+            if (! $res->successful()) {
+                Log::error('[Plasgate] SMS failed', [
+                    'to'     => $phone,
+                    'status' => $res->status(),
+                    'body'   => $res->body(),
+                ]);
 
+                return false;
+            }
+
+            return true;
+
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            Log::error('[Plasgate] Connection timeout', ['to' => $phone, 'error' => $e->getMessage()]);
+            return false;
+        } catch (\Throwable $e) {
+            Log::error('[Plasgate] Unexpected error', ['to' => $phone, 'error' => $e->getMessage()]);
             return false;
         }
-
-        return true;
     }
 }

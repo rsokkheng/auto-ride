@@ -8,6 +8,7 @@ use App\Services\SmsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Kreait\Firebase\Contract\Auth as FirebaseAuth;
 use Kreait\Firebase\Exception\Auth\FailedToVerifyToken;
@@ -271,38 +272,49 @@ class AuthController extends ApiController
             'phone' => 'required|string|max:24',
         ]);
 
-        $phone = $this->normalizePhone($data['phone']);
-        $code  = rand(100000, 999999);
+        try {
+            $phone = $this->normalizePhone($data['phone']);
+            $code  = rand(100000, 999999);
 
-        PhoneOtp::where('phone', $phone)->delete();
+            PhoneOtp::where('phone', $phone)->delete();
 
-        PhoneOtp::create([
-            'phone'        => $phone,
-            'otp_hash'     => Hash::make($code),
-            'expires_at'   => now()->addMinutes(3),
-            'last_sent_at' => now(),
-            'verified_at'  => null,
-        ]);
+            PhoneOtp::create([
+                'phone'        => $phone,
+                'otp_hash'     => Hash::make($code),
+                'expires_at'   => now()->addMinutes(3),
+                'last_sent_at' => now(),
+                'verified_at'  => null,
+            ]);
 
-        $sent = app(SmsService::class)->send(
-            $phone,
-            "Your ROTEH OTP is: {$code}. Valid for 3 minutes."
-        );
+            $sent = app(SmsService::class)->send(
+                $phone,
+                "Your ROTEH OTP is: {$code}. Valid for 3 minutes."
+            );
 
-        if (! $sent) {
-            return response()->json(['message' => 'Failed to send OTP. Please try again.'], 500);
+            if (! $sent) {
+                return response()->json(['message' => 'Failed to send OTP. Please try again.'], 500);
+            }
+
+            $response = [
+                'message' => 'OTP sent successfully',
+                'phone'   => $phone,
+            ];
+
+            if (config('app.debug')) {
+                $response['code'] = $code;
+            }
+
+            return $this->success($response);
+
+        } catch (\Throwable $e) {
+            Log::error('[sendOTP] ' . $e->getMessage(), [
+                'phone' => $data['phone'],
+                'file'  => $e->getFile() . ':' . $e->getLine(),
+            ]);
+
+            $message = config('app.debug') ? $e->getMessage() : 'Server error. Please try again.';
+            return response()->json(['message' => $message], 500);
         }
-
-        $response = [
-            'message' => 'OTP sent successfully',
-            'phone'   => $phone,
-        ];
-
-        if (config('app.debug')) {
-            $response['code'] = $code;
-        }
-
-        return $this->success($response);
     }
 
     public function verifyOTP(Request $request)
