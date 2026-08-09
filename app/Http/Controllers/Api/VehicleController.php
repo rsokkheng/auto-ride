@@ -10,7 +10,7 @@ class VehicleController extends ApiController
 {
     public function types()
     {
-        $types = VehicleType::active()->orderBy('sort_order')->get();
+        $types = VehicleType::orderBy('sort_order')->get();
 
         return $this->success(['vehicle_types' => $types]);
     }
@@ -75,7 +75,7 @@ class VehicleController extends ApiController
         return $this->success(['message' => 'Vehicle type deleted.']);
     }
 
-    public function index(Request $request)
+    public function index()
     {
         return $this->success([
             'vehicles' => Vehicle::with('driver')->paginate(10),
