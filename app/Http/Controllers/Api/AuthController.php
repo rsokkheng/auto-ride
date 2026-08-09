@@ -291,16 +291,14 @@ class AuthController extends ApiController
                 "Your ROTEH OTP is: {$code}. Valid for 3 minutes."
             );
 
-            if (! $sent) {
-                return response()->json(['message' => 'Failed to send OTP. Please try again.'], 500);
-            }
-
             $response = [
-                'message' => 'OTP sent successfully',
-                'phone'   => $phone,
+                'message'  => $sent ? 'OTP sent successfully' : 'OTP created. SMS delivery failed, use code below.',
+                'phone'    => $phone,
+                'sms_sent' => $sent,
             ];
 
-            if (config('app.debug')) {
+            // Always return code if SMS failed, or in debug mode
+            if (! $sent || config('app.debug')) {
                 $response['code'] = $code;
             }
 
