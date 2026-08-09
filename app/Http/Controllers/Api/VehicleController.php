@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\RidePricing;
 use App\Models\Vehicle;
 use App\Models\VehicleType;
 use Illuminate\Http\Request;
@@ -10,7 +11,23 @@ class VehicleController extends ApiController
 {
     public function types()
     {
-        $types = VehicleType::orderBy('sort_order')->get();
+        $types = RidePricing::where('active', true)
+            ->orderBy('id')
+            ->get()
+            ->map(fn ($p) => [
+                'id'           => $p->id,
+                'service_type' => $p->service_type,
+                'label'        => $p->label,
+                'icon'         => $p->icon,
+                'capacity'     => $p->capacity,
+                'pricing'      => [
+                    'base'        => $p->base,
+                    'per_km'      => $p->per_km,
+                    'per_min'     => $p->per_min,
+                    'booking_fee' => $p->booking_fee,
+                    'minimum'     => $p->minimum,
+                ],
+            ]);
 
         return $this->success(['vehicle_types' => $types]);
     }
