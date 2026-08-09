@@ -62,6 +62,10 @@ Route::prefix('v1')->group(function () {
     Route::post('auth/phone/verify',[AuthController::class, 'verifyPhone']);
     Route::post('auth/fcm-token', [AuthController::class, 'saveFcmToken']);
 
+    Route::get('vehicle-types',                    [VehicleController::class, 'types']);
+    Route::post('vehicle-types',                   [VehicleController::class, 'storeType']);
+    Route::put('vehicle-types/{vehicleType}',      [VehicleController::class, 'updateType']);
+    Route::delete('vehicle-types/{vehicleType}',   [VehicleController::class, 'destroyType']);
     Route::get('vehicles', [VehicleController::class, 'index']);
     Route::get('vehicles/{vehicle}', [VehicleController::class, 'show']);
     Route::post('vehicles', [VehicleController::class, 'store']);
