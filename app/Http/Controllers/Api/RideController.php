@@ -433,9 +433,11 @@ class RideController extends ApiController
 
         // This driver already accepted — idempotent retry
         if ($ride->driver_id === $user->id && $ride->status === Ride::STATUS_ACCEPTED) {
+            $loaded = $ride->load('passenger', 'driver', 'vehicle');
             return $this->success([
-                'ride'    => $ride->load('passenger', 'driver', 'vehicle'),
-                'message' => 'Ride already accepted.',
+                'ride'        => $loaded,
+                'driver_info' => $this->buildDriverInfo($loaded->driver),
+                'message'     => 'Ride already accepted.',
             ]);
         }
 
@@ -465,8 +467,9 @@ class RideController extends ApiController
         }
 
         return $this->success([
-            'ride'    => $fresh,
-            'message' => 'Ride accepted. Head to pickup location.',
+            'ride'        => $fresh,
+            'driver_info' => $this->buildDriverInfo($fresh->driver),
+            'message'     => 'Ride accepted. Head to pickup location.',
         ]);
     }
 
@@ -941,5 +944,27 @@ class RideController extends ApiController
         $user = $this->authUser($request);
         if (! $user) abort(401, 'Unauthorized');
         return $user;
+    }
+
+    private function buildDriverInfo(?User $driver): ?array
+    {
+        if (! $driver) return null;
+
+        $vehicle = $driver->vehicles()->where('status', 'active')->latest()->first();
+
+        return [
+            'name'       => $driver->name,
+            'phone'      => $driver->phone,
+            'avatar_url' => $driver->avatar_url,
+            'rating'     => (float) ($driver->rating ?? 0),
+            'vehicle'    => $vehicle ? [
+                'plate' => $vehicle->license_plate,
+                'make'  => $vehicle->make,
+                'model' => $vehicle->model,
+                'type'  => $vehicle->type,
+                'year'  => $vehicle->year,
+                'color' => $vehicle->details,
+            ] : null,
+        ];
     }
 }
