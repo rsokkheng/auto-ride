@@ -966,12 +966,13 @@ class RideController extends ApiController
             'avatar_url' => $driver->avatar_url,
             'rating'     => (float) ($driver->rating ?? 0),
             'vehicle'    => $vehicle ? [
-                'plate' => $vehicle->license_plate,
-                'make'  => $vehicle->make,
-                'model' => $vehicle->model,
-                'type'  => $vehicle->type,
-                'year'  => $vehicle->year,
-                'color' => $vehicle->details,
+                'plate'       => $vehicle->license_plate,
+                'make'        => $vehicle->make,
+                'model'       => $vehicle->model,
+                'type'        => $vehicle->type,
+                'year'        => $vehicle->year,
+                'color'       => $vehicle->details,
+                'vehicle_url' => $vehicle->primary_image_url,
             ] : null,
         ];
     }
