@@ -75,7 +75,12 @@ class RideController extends ApiController
             return $this->unauthorized();
         }
 
-        return $this->success(['ride' => $ride->load('passenger', 'driver', 'vehicle', 'stops')]);
+        $ride->load('passenger', 'driver', 'vehicle', 'stops');
+
+        return $this->success([
+            'ride'        => $ride,
+            'driver_info' => $this->buildDriverInfo($ride->driver),
+        ]);
     }
 
     // ── Active ride ───────────────────────────────────────────────────────────
@@ -452,8 +457,11 @@ class RideController extends ApiController
             return response()->json(['data' => null, 'message' => 'Ride already claimed by another driver.'], 422);
         }
 
+        $vehicle = $user->vehicles()->where('status', 'active')->latest()->first();
+
         $ride->update([
             'driver_id'   => $user->id,
+            'vehicle_id'  => $vehicle?->id,
             'status'      => Ride::STATUS_ACCEPTED,
             'accepted_at' => now(),
         ]);
