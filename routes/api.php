@@ -103,6 +103,9 @@ Route::prefix('v1')->group(function () {
     Route::get('trips', [TripHistoryController::class, 'index']);
     Route::get('trips/months', [TripHistoryController::class, 'months']);
 
+    // Driver history
+    Route::get('driver/rides', [RideController::class, 'driverHistory']);
+
     // Static ride routes — must come before {ride} wildcard.
     Route::get('rides', [RideController::class, 'index']);
     Route::get('rides/available', [RideController::class, 'available']);

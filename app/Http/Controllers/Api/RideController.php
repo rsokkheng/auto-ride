@@ -28,6 +28,104 @@ class RideController extends ApiController
 
     // ── List / History ────────────────────────────────────────────────────────
 
+    /**
+     * GET /v1/driver/rides
+     * Full ride history for the authenticated driver with earnings summary.
+     *
+     * Query params:
+     *   status    — completed|cancelled|accepted|... (default: all)
+     *   from      — date Y-m-d
+     *   to        — date Y-m-d
+     *   per_page  — 1–100 (default 15)
+     */
+    public function driverHistory(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user || $user->role !== 'driver') return $this->unauthorized();
+
+        $perPage = min(max((int) $request->query('per_page', 15), 1), 100);
+
+        $query = Ride::with(['passenger:id,name,phone,avatar', 'vehicle:id,license_plate,make,model,type'])
+            ->where('driver_id', $user->id)
+            ->orderByDesc('id');
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->query('status'));
+        }
+
+        if ($request->filled('from')) {
+            $query->whereDate('created_at', '>=', $request->query('from'));
+        }
+
+        if ($request->filled('to')) {
+            $query->whereDate('created_at', '<=', $request->query('to'));
+        }
+
+        $rides = $query->paginate($perPage)->appends($request->query());
+
+        // Earnings summary scoped to same filters
+        $summaryQuery = Ride::where('driver_id', $user->id)
+            ->where('status', Ride::STATUS_COMPLETED);
+
+        if ($request->filled('from')) {
+            $summaryQuery->whereDate('created_at', '>=', $request->query('from'));
+        }
+        if ($request->filled('to')) {
+            $summaryQuery->whereDate('created_at', '<=', $request->query('to'));
+        }
+
+        $summary = $summaryQuery->selectRaw('
+            COUNT(*)            as total_completed,
+            COALESCE(SUM(fare), 0)          as total_earned,
+            COALESCE(SUM(distance_km), 0)   as total_km,
+            COALESCE(SUM(duration_min), 0)  as total_minutes,
+            COALESCE(AVG(fare), 0)          as avg_fare
+        ')->first();
+
+        return $this->success([
+            'summary' => [
+                'total_completed' => (int) $summary->total_completed,
+                'total_earned'    => (int) $summary->total_earned,
+                'total_km'        => round((float) $summary->total_km, 2),
+                'total_minutes'   => (int) $summary->total_minutes,
+                'avg_fare'        => (int) $summary->avg_fare,
+            ],
+            'rides' => collect($rides->items())->map(fn ($ride) => [
+                'id'             => $ride->id,
+                'status'         => $ride->status,
+                'pickup_address' => $ride->pickup_address,
+                'dropoff_address'=> $ride->dropoff_address,
+                'service_type'   => $ride->service_type,
+                'fare'           => $ride->fare,
+                'distance_km'    => $ride->distance_km,
+                'duration_min'   => $ride->duration_min,
+                'payment_method' => $ride->payment_method,
+                'payment_status' => $ride->payment_status,
+                'accepted_at'    => $ride->accepted_at,
+                'completed_at'   => $ride->completed_at,
+                'created_at'     => $ride->created_at,
+                'passenger'      => $ride->passenger ? [
+                    'id'         => $ride->passenger->id,
+                    'name'       => $ride->passenger->name,
+                    'phone'      => $ride->passenger->phone,
+                    'avatar_url' => $ride->passenger->avatar_url,
+                ] : null,
+                'vehicle'        => $ride->vehicle ? [
+                    'plate' => $ride->vehicle->license_plate,
+                    'make'  => $ride->vehicle->make,
+                    'model' => $ride->vehicle->model,
+                    'type'  => $ride->vehicle->type,
+                ] : null,
+            ]),
+            'pagination' => [
+                'total'        => $rides->total(),
+                'per_page'     => $rides->perPage(),
+                'current_page' => $rides->currentPage(),
+                'last_page'    => $rides->lastPage(),
+            ],
+        ]);
+    }
+
     public function index(Request $request)
     {
         $user = $this->authUser($request);
