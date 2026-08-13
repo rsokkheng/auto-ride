@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\DriverDevice;
 use App\Models\PhoneOtp;
 use App\Models\User;
 use App\Services\SmsService;
@@ -400,6 +401,42 @@ class AuthController extends ApiController
         $user->update(['fcm_token' => $data['fcm_token']]);
 
         return $this->success(['message' => 'FCM token saved.']);
+    }
+
+    /**
+     * POST /v1/driver/device-token
+     * Register or refresh a device FCM token for multi-device driver notifications.
+     * Body: { token, platform: android|ios, device_id?, app_version? }
+     */
+    public function saveDeviceToken(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
+        $data = $request->validate([
+            'token'       => 'required|string|max:512',
+            'platform'    => 'required|in:android,ios',
+            'device_id'   => 'nullable|string|max:255',
+            'app_version' => 'nullable|string|max:32',
+        ]);
+
+        // Upsert by token — reactivate if previously deactivated
+        DriverDevice::updateOrCreate(
+            ['token' => $data['token']],
+            [
+                'user_id'      => $user->id,
+                'platform'     => $data['platform'],
+                'device_id'    => $data['device_id'] ?? null,
+                'app_version'  => $data['app_version'] ?? null,
+                'is_active'    => true,
+                'last_used_at' => now(),
+            ]
+        );
+
+        // Keep users.fcm_token in sync for backward compatibility
+        $user->update(['fcm_token' => $data['token']]);
+
+        return $this->success(['message' => 'Device token registered.']);
     }
 
     // ── Social Login ─────────────────────────────────────────────────────────

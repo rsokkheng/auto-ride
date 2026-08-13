@@ -406,13 +406,12 @@ class RideController extends ApiController
         try {
             $nearbyDrivers = User::where('role', 'driver')
                 ->where('available', true)
-                ->whereNotNull('fcm_token')
                 ->get();
-            $this->fcm->sendToUsers(
+            $this->fcm->rideRequestedToMany(
                 $nearbyDrivers->all(),
-                '🚗 New Ride Request',
-                "{$data['pickup_address']} → {$dropoffLabel}",
-                ['type' => 'ride_requested', 'ride_id' => (string) $ride->id]
+                $ride->id,
+                $data['pickup_address'],
+                $dropoffLabel
             );
         } catch (\Throwable $e) {
             report($e);
@@ -479,6 +478,34 @@ class RideController extends ApiController
             'driver_info' => $this->buildDriverInfo($fresh->driver),
             'message'     => 'Ride accepted. Head to pickup location.',
         ]);
+    }
+
+    /**
+     * POST /v1/rides/{ride}/reject
+     * Driver explicitly rejects a ride request (ride stays pending for other drivers).
+     */
+    public function reject(Request $request, Ride $ride)
+    {
+        $user = $this->authUser($request);
+        if (! $user || $user->role !== 'driver') return $this->unauthorized();
+
+        if ($ride->status !== Ride::STATUS_PENDING) {
+            return response()->json([
+                'data'    => null,
+                'message' => "Cannot reject — ride is \"{$ride->status}\".",
+            ], 422);
+        }
+
+        // Notify passenger only if no other driver has taken it
+        try {
+            if ($ride->passenger) {
+                $this->fcm->rideRejected($ride->passenger, $ride->id);
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return $this->success(['message' => 'Ride rejected.']);
     }
 
     /**

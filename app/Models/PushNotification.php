@@ -16,6 +16,8 @@ class PushNotification extends Model
         'body',
         'type',
         'payload',
+        'fcm_token',
+        'fcm_status',
         'status',
         'is_read',
         'read_at',

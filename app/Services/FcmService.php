@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Models\DriverDevice;
 use App\Models\PushNotification;
 use App\Models\User;
 use Google\Auth\Credentials\ServiceAccountCredentials;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -18,6 +20,9 @@ class FcmService
 {
     private const SCOPES = ['https://www.googleapis.com/auth/firebase.messaging'];
 
+    // FCM error codes that mean the token is permanently dead
+    private const DEAD_TOKEN_ERRORS = ['UNREGISTERED', 'NOT_FOUND', 'INVALID_ARGUMENT'];
+
     private ?string $accessToken = null;
     private int     $tokenExpiry = 0;
     private ?string $projectId   = null;
@@ -25,17 +30,53 @@ class FcmService
     // ── Public send helpers ───────────────────────────────────────────────────
 
     /**
-     * Send to a single user by their User model.
+     * Send to a single user via their users.fcm_token (fallback / passenger use).
      */
     public function sendToUser(User $user, string $title, string $body, array $data = []): void
     {
         if (! $user->fcm_token) return;
-        $this->send($user->fcm_token, $title, $body, $data);
-        $this->storeNotification($user->id, $title, $body, $data);
+        $fcmStatus = $this->sendOne($user->fcm_token, $title, $body, $data);
+        $this->logNotification($user->id, $title, $body, $data, $user->fcm_token, $fcmStatus);
+
+        if ($this->isDeadToken($fcmStatus)) {
+            $user->update(['fcm_token' => null]);
+        }
     }
 
     /**
-     * Send to multiple users at once.
+     * Send to a driver via all their registered devices in driver_devices.
+     * Falls back to users.fcm_token if no devices are registered.
+     */
+    public function sendToDriver(User $driver, string $title, string $body, array $data = []): void
+    {
+        $devices = DriverDevice::where('user_id', $driver->id)
+            ->where('is_active', true)
+            ->get();
+
+        if ($devices->isEmpty()) {
+            // Fallback to legacy single token
+            $this->sendToUser($driver, $title, $body, $data);
+            return;
+        }
+
+        foreach ($devices as $device) {
+            $fcmStatus = $this->sendOne($device->token, $title, $body, $data, $device->platform);
+            $this->logNotification($driver->id, $title, $body, $data, $device->token, $fcmStatus);
+
+            if ($this->isDeadToken($fcmStatus)) {
+                $device->update(['is_active' => false]);
+                // Clear from users table if it matches
+                if ($driver->fcm_token === $device->token) {
+                    $driver->update(['fcm_token' => null]);
+                }
+            } else {
+                $device->update(['last_used_at' => now()]);
+            }
+        }
+    }
+
+    /**
+     * Send to multiple users at once (passengers / broadcast).
      */
     public function sendToUsers(array $users, string $title, string $body, array $data = []): void
     {
@@ -48,26 +89,42 @@ class FcmService
 
     public function rideRequested(User $driver, int $rideId, string $pickup, string $dropoff): void
     {
-        $this->sendToUser($driver,
-            '🚗 New Ride Request',
+        $this->sendToDriver($driver,
+            'New Ride Request',
             "{$pickup} → {$dropoff}",
-            ['type' => 'ride_requested', 'ride_id' => (string) $rideId]
+            ['type' => 'ride_requested', 'ride_id' => (string) $rideId, 'sound' => 'booking']
         );
+    }
+
+    public function rideRequestedToMany(array $drivers, int $rideId, string $pickup, string $dropoff): void
+    {
+        foreach ($drivers as $driver) {
+            $this->rideRequested($driver, $rideId, $pickup, $dropoff);
+        }
     }
 
     public function rideAccepted(User $passenger, int $rideId, string $driverName): void
     {
         $this->sendToUser($passenger,
-            '✅ Driver Found',
+            'Driver Found',
             "{$driverName} is on the way to pick you up.",
             ['type' => 'ride_accepted', 'ride_id' => (string) $rideId]
+        );
+    }
+
+    public function rideRejected(User $passenger, int $rideId): void
+    {
+        $this->sendToUser($passenger,
+            'No Driver Available',
+            'Your ride request could not be accepted. Please try again.',
+            ['type' => 'ride_rejected', 'ride_id' => (string) $rideId]
         );
     }
 
     public function driverArrived(User $passenger, int $rideId, string $driverName): void
     {
         $this->sendToUser($passenger,
-            '📍 Driver Arrived',
+            'Driver Arrived',
             "{$driverName} has arrived at your pickup location.",
             ['type' => 'driver_arrived', 'ride_id' => (string) $rideId]
         );
@@ -76,7 +133,7 @@ class FcmService
     public function rideStarted(User $passenger, int $rideId): void
     {
         $this->sendToUser($passenger,
-            '🚀 Trip Started',
+            'Trip Started',
             'Your trip is now in progress. Have a safe journey!',
             ['type' => 'ride_started', 'ride_id' => (string) $rideId]
         );
@@ -85,7 +142,7 @@ class FcmService
     public function rideCompleted(User $passenger, int $rideId, int $fare): void
     {
         $this->sendToUser($passenger,
-            '🏁 Trip Completed',
+            'Trip Completed',
             "You have arrived. Fare: {$fare} KHR.",
             ['type' => 'ride_completed', 'ride_id' => (string) $rideId, 'fare' => (string) $fare]
         );
@@ -94,7 +151,7 @@ class FcmService
     public function rideCancelledByDriver(User $passenger, int $rideId): void
     {
         $this->sendToUser($passenger,
-            '❌ Ride Cancelled',
+            'Ride Cancelled',
             'Your driver has cancelled the ride. Please book again.',
             ['type' => 'ride_cancelled', 'ride_id' => (string) $rideId, 'cancelled_by' => 'driver']
         );
@@ -102,8 +159,8 @@ class FcmService
 
     public function rideCancelledByPassenger(User $driver, int $rideId): void
     {
-        $this->sendToUser($driver,
-            '❌ Ride Cancelled',
+        $this->sendToDriver($driver,
+            'Ride Cancelled',
             'The passenger has cancelled the ride.',
             ['type' => 'ride_cancelled', 'ride_id' => (string) $rideId, 'cancelled_by' => 'passenger']
         );
@@ -113,17 +170,17 @@ class FcmService
 
     public function deliveryRequested(User $driver, int $deliveryId, string $pickup, string $dropoff): void
     {
-        $this->sendToUser($driver,
-            '📦 New Delivery Request',
+        $this->sendToDriver($driver,
+            'New Delivery Request',
             "{$pickup} → {$dropoff}",
-            ['type' => 'delivery_requested', 'delivery_id' => (string) $deliveryId]
+            ['type' => 'delivery_requested', 'delivery_id' => (string) $deliveryId, 'sound' => 'booking']
         );
     }
 
     public function deliveryAccepted(User $sender, int $deliveryId, string $driverName): void
     {
         $this->sendToUser($sender,
-            '✅ Driver Assigned',
+            'Driver Assigned',
             "{$driverName} has accepted your delivery.",
             ['type' => 'delivery_accepted', 'delivery_id' => (string) $deliveryId]
         );
@@ -132,7 +189,7 @@ class FcmService
     public function deliveryPickedUp(User $sender, int $deliveryId, string $driverName): void
     {
         $this->sendToUser($sender,
-            '🚚 Package Picked Up',
+            'Package Picked Up',
             "{$driverName} has picked up your package and is on the way.",
             ['type' => 'delivery_picked_up', 'delivery_id' => (string) $deliveryId]
         );
@@ -141,7 +198,7 @@ class FcmService
     public function deliveryCompleted(User $sender, int $deliveryId): void
     {
         $this->sendToUser($sender,
-            '✅ Delivery Completed',
+            'Delivery Completed',
             'Your package has been delivered successfully.',
             ['type' => 'delivery_completed', 'delivery_id' => (string) $deliveryId]
         );
@@ -150,7 +207,7 @@ class FcmService
     public function deliveryCancelled(User $user, int $deliveryId, string $cancelledBy): void
     {
         $this->sendToUser($user,
-            '❌ Delivery Cancelled',
+            'Delivery Cancelled',
             $cancelledBy === 'driver'
                 ? 'Your driver cancelled the delivery. Please book again.'
                 : 'The delivery has been cancelled.',
@@ -158,19 +215,27 @@ class FcmService
         );
     }
 
-    // ── Core send ─────────────────────────────────────────────────────────────
+    // ── Core single-token send — returns FCM status string ────────────────────
 
-    private function send(string $fcmToken, string $title, string $body, array $data = []): void
-    {
+    /**
+     * @return string  'SUCCESS' | FCM error code | 'HTTP_ERROR_{status}' | 'EXCEPTION'
+     */
+    private function sendOne(
+        string  $fcmToken,
+        string  $title,
+        string  $body,
+        array   $data = [],
+        string  $platform = 'android'
+    ): string {
         $projectId = $this->projectId();
         $token     = $this->token();
 
-        if (! $projectId || ! $token) return;
+        if (! $projectId || ! $token) return 'NO_CREDENTIALS';
 
-        $url = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
-
-        // FCM data values must all be strings
+        $url        = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
         $stringData = array_map('strval', $data);
+        $isBooking  = in_array($data['type'] ?? '', ['ride_requested', 'delivery_requested'], true);
+        $iosSound   = $isBooking ? 'booking.wav' : 'default';
 
         $payload = [
             'message' => [
@@ -183,15 +248,25 @@ class FcmService
                 'android' => [
                     'priority' => 'high',
                     'notification' => [
-                        'sound'        => 'default',
-                        'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                        'sound'               => 'default',
+                        'channel_id'          => $isBooking ? 'booking_alerts' : 'general',
+                        'click_action'        => 'FLUTTER_NOTIFICATION_CLICK',
+                        'notification_count'  => 1,
                     ],
                 ],
                 'apns' => [
+                    'headers' => [
+                        'apns-priority' => '10',
+                    ],
                     'payload' => [
                         'aps' => [
-                            'sound' => 'default',
-                            'badge' => 1,
+                            'alert' => [
+                                'title' => $title,
+                                'body'  => $body,
+                            ],
+                            'sound'             => $iosSound,
+                            'badge'             => 1,
+                            'content-available' => 1,
                         ],
                     ],
                 ],
@@ -199,29 +274,65 @@ class FcmService
         ];
 
         try {
-            Http::withToken($token)
+            $response = Http::withToken($token)
+                ->timeout(10)
                 ->post($url, $payload);
+
+            if ($response->successful()) {
+                return 'SUCCESS';
+            }
+
+            // Parse FCM v1 error
+            $error = $response->json('error.details.0.errorCode')
+                ?? $response->json('error.status')
+                ?? ('HTTP_ERROR_' . $response->status());
+
+            Log::warning('[FCM] Send failed', [
+                'token'  => substr($fcmToken, 0, 20) . '...',
+                'status' => $response->status(),
+                'error'  => $error,
+            ]);
+
+            return (string) $error;
+
         } catch (Throwable $e) {
-            report($e);
+            Log::error('[FCM] Exception', ['error' => $e->getMessage()]);
+            return 'EXCEPTION';
         }
     }
 
-    // ── Store in DB for in-app notification inbox ─────────────────────────────
+    // ── Notification log ──────────────────────────────────────────────────────
 
-    private function storeNotification(int $userId, string $title, string $body, array $data): void
-    {
+    private function logNotification(
+        int    $userId,
+        string $title,
+        string $body,
+        array  $data,
+        string $fcmToken,
+        string $fcmStatus
+    ): void {
         try {
             PushNotification::create([
-                'user_id' => $userId,
-                'title'   => $title,
-                'body'    => $body,
-                'type'    => $data['type'] ?? null,
-                'payload' => $data,
-                'status'  => 'sent',
+                'user_id'    => $userId,
+                'title'      => $title,
+                'body'       => $body,
+                'type'       => $data['type'] ?? null,
+                'payload'    => $data,
+                'fcm_token'  => $fcmToken,
+                'fcm_status' => $fcmStatus,
+                'status'     => $fcmStatus === 'SUCCESS' ? 'sent' : 'failed',
             ]);
         } catch (Throwable $e) {
-            report($e);
+            Log::error('[FCM] Log failed', ['error' => $e->getMessage()]);
         }
+    }
+
+    private function isDeadToken(string $fcmStatus): bool
+    {
+        foreach (self::DEAD_TOKEN_ERRORS as $dead) {
+            if (str_contains($fcmStatus, $dead)) return true;
+        }
+        return false;
     }
 
     // ── Auth token ────────────────────────────────────────────────────────────

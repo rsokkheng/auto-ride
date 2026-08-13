@@ -60,7 +60,8 @@ Route::prefix('v1')->group(function () {
     Route::post('auth/otp/send',    [AuthController::class, 'sendOTP']);
     Route::post('auth/otp/verify',  [AuthController::class, 'verifyOTP']);
     Route::post('auth/phone/verify',[AuthController::class, 'verifyPhone']);
-    Route::post('auth/fcm-token', [AuthController::class, 'saveFcmToken']);
+    Route::post('auth/fcm-token',      [AuthController::class, 'saveFcmToken']);
+    Route::post('driver/device-token', [AuthController::class, 'saveDeviceToken']);
 
     Route::get('vehicle-types',                    [VehicleController::class, 'types']);
     Route::post('vehicle-types',                   [VehicleController::class, 'storeType']);
@@ -115,6 +116,7 @@ Route::prefix('v1')->group(function () {
     // Parameterised ride routes.
     Route::get('rides/{ride}', [RideController::class, 'show']);
     Route::post('rides/{ride}/accept', [RideController::class, 'accept']);
+    Route::post('rides/{ride}/reject', [RideController::class, 'reject']);
     Route::post('rides/{ride}/arrive', [RideController::class, 'arrive']);
     Route::post('rides/{ride}/start', [RideController::class, 'start']);
     Route::post('rides/{ride}/complete', [RideController::class, 'complete']);
