@@ -65,12 +65,26 @@ class FcmService
 
             if ($this->isDeadToken($fcmStatus)) {
                 $device->update(['is_active' => false]);
-                // Clear from users table if it matches
                 if ($driver->fcm_token === $device->token) {
                     $driver->update(['fcm_token' => null]);
                 }
+                Log::error('[FCM] Dead token deactivated', [
+                    'driver_id' => $driver->id,
+                    'device_id' => $device->id,
+                    'platform'  => $device->platform,
+                    'token'     => substr($device->token, 0, 20) . '...',
+                    'fcm_error' => $fcmStatus,
+                ]);
             } else {
                 $device->update(['last_used_at' => now()]);
+                Log::info('[FCM] Push sent', [
+                    'type'       => $data['type'] ?? 'unknown',
+                    'booking_id' => $data['booking_id'] ?? ($data['ride_id'] ?? null),
+                    'driver_id'  => $driver->id,
+                    'device_id'  => $device->id,
+                    'platform'   => $device->platform,
+                    'status'     => $fcmStatus,
+                ]);
             }
         }
     }
@@ -87,28 +101,35 @@ class FcmService
 
     // ── Ride notification helpers ─────────────────────────────────────────────
 
-    public function rideRequested(User $driver, int $rideId, string $pickup, string $dropoff): void
+    public function rideRequested(User $driver, int $rideId, string $pickup, string $dropoff, string $passengerName = '', int $fare = 0): void
     {
         $this->sendToDriver($driver,
-            'New Ride Request',
-            "{$pickup} → {$dropoff}",
-            ['type' => 'ride_requested', 'ride_id' => (string) $rideId, 'sound' => 'booking']
+            '🚕 មានការកក់ដំណើរថ្មី',
+            'មានអ្នកដំណើរកំពុងស្នើសុំដំណើរ',
+            [
+                'type'           => 'ride_requested',
+                'booking_id'     => (string) $rideId,
+                'passenger_name' => $passengerName,
+                'fare'           => (string) $fare,
+                'pickup'         => $pickup,
+                'dropoff'        => $dropoff,
+            ]
         );
     }
 
-    public function rideRequestedToMany(array $drivers, int $rideId, string $pickup, string $dropoff): void
+    public function rideRequestedToMany(array $drivers, int $rideId, string $pickup, string $dropoff, string $passengerName = '', int $fare = 0): void
     {
         foreach ($drivers as $driver) {
-            $this->rideRequested($driver, $rideId, $pickup, $dropoff);
+            $this->rideRequested($driver, $rideId, $pickup, $dropoff, $passengerName, $fare);
         }
     }
 
     public function rideAccepted(User $passenger, int $rideId, string $driverName): void
     {
         $this->sendToUser($passenger,
-            'Driver Found',
-            "{$driverName} is on the way to pick you up.",
-            ['type' => 'ride_accepted', 'ride_id' => (string) $rideId]
+            '🚕 អ្នកបើកបរបានទទួលដំណើរ',
+            "{$driverName} កំពុងមករកអ្នក",
+            ['type' => 'ride_accepted', 'booking_id' => (string) $rideId]
         );
     }
 
@@ -117,52 +138,52 @@ class FcmService
         $this->sendToUser($passenger,
             'No Driver Available',
             'Your ride request could not be accepted. Please try again.',
-            ['type' => 'ride_rejected', 'ride_id' => (string) $rideId]
+            ['type' => 'ride_rejected', 'booking_id' => (string) $rideId]
         );
     }
 
     public function driverArrived(User $passenger, int $rideId, string $driverName): void
     {
         $this->sendToUser($passenger,
-            'Driver Arrived',
-            "{$driverName} has arrived at your pickup location.",
-            ['type' => 'driver_arrived', 'ride_id' => (string) $rideId]
+            '📍 អ្នកបើកបរបានដល់',
+            "{$driverName} បានដល់កន្លែងទទួលអ្នក",
+            ['type' => 'driver_arrived', 'booking_id' => (string) $rideId]
         );
     }
 
     public function rideStarted(User $passenger, int $rideId): void
     {
         $this->sendToUser($passenger,
-            'Trip Started',
-            'Your trip is now in progress. Have a safe journey!',
-            ['type' => 'ride_started', 'ride_id' => (string) $rideId]
+            '🚀 ដំណើរបានចាប់ផ្តើម',
+            'ដំណើររបស់អ្នកកំពុងដំណើរការ។ សូមធ្វើដំណើរដោយសុវត្ថិភាព!',
+            ['type' => 'ride_started', 'booking_id' => (string) $rideId]
         );
     }
 
     public function rideCompleted(User $passenger, int $rideId, int $fare): void
     {
         $this->sendToUser($passenger,
-            'Trip Completed',
-            "You have arrived. Fare: {$fare} KHR.",
-            ['type' => 'ride_completed', 'ride_id' => (string) $rideId, 'fare' => (string) $fare]
+            '🏁 ដំណើរបានបញ្ចប់',
+            "អ្នកបានដល់គោលដៅ។ ថ្លៃដំណើរ: {$fare} KHR.",
+            ['type' => 'ride_completed', 'booking_id' => (string) $rideId, 'fare' => (string) $fare]
         );
     }
 
     public function rideCancelledByDriver(User $passenger, int $rideId): void
     {
         $this->sendToUser($passenger,
-            'Ride Cancelled',
-            'Your driver has cancelled the ride. Please book again.',
-            ['type' => 'ride_cancelled', 'ride_id' => (string) $rideId, 'cancelled_by' => 'driver']
+            '❌ ដំណើរត្រូវបានលុបចោល',
+            'អ្នកបើកបរបានលុបចោលដំណើរ។ សូមកក់ម្ដងទៀត។',
+            ['type' => 'ride_cancelled', 'booking_id' => (string) $rideId, 'cancelled_by' => 'driver']
         );
     }
 
     public function rideCancelledByPassenger(User $driver, int $rideId): void
     {
         $this->sendToDriver($driver,
-            'Ride Cancelled',
-            'The passenger has cancelled the ride.',
-            ['type' => 'ride_cancelled', 'ride_id' => (string) $rideId, 'cancelled_by' => 'passenger']
+            '❌ ដំណើរត្រូវបានលុបចោល',
+            'អ្នកដំណើរបានលុបចោលការកក់។',
+            ['type' => 'ride_cancelled', 'booking_id' => (string) $rideId, 'cancelled_by' => 'passenger']
         );
     }
 
@@ -260,13 +281,8 @@ class FcmService
                     ],
                     'payload' => [
                         'aps' => [
-                            'alert' => [
-                                'title' => $title,
-                                'body'  => $body,
-                            ],
-                            'sound'             => $iosSound,
-                            'badge'             => 1,
-                            'content-available' => 1,
+                            'sound' => $iosSound,
+                            'badge' => 1,
                         ],
                     ],
                 ],

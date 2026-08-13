@@ -411,7 +411,9 @@ class RideController extends ApiController
                 $nearbyDrivers->all(),
                 $ride->id,
                 $data['pickup_address'],
-                $dropoffLabel
+                $dropoffLabel,
+                $user->name,
+                (int) $finalFare
             );
         } catch (\Throwable $e) {
             report($e);
