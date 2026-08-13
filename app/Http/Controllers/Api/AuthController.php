@@ -395,10 +395,28 @@ class AuthController extends ApiController
         if (! $user) return $this->unauthorized();
 
         $data = $request->validate([
-            'fcm_token' => 'required|string|max:255',
+            'fcm_token' => 'required|string|max:512',
+            'platform'  => 'nullable|in:android,ios',
         ]);
 
-        $user->update(['fcm_token' => $data['fcm_token']]);
+        $token    = $data['fcm_token'];
+        $platform = $data['platform'] ?? 'android';
+
+        $user->update(['fcm_token' => $token]);
+
+        // Auto-register into driver_devices so sendToDriver() works without
+        // requiring the app to call the new /driver/device-token endpoint.
+        if ($user->role === 'driver') {
+            DriverDevice::updateOrCreate(
+                ['token' => $token],
+                [
+                    'user_id'      => $user->id,
+                    'platform'     => $platform,
+                    'is_active'    => true,
+                    'last_used_at' => now(),
+                ]
+            );
+        }
 
         return $this->success(['message' => 'FCM token saved.']);
     }
