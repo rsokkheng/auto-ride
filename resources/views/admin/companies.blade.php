@@ -43,6 +43,9 @@
                         </span>
                     </td>
                     <td>
+                        <a href="{{ route('admin.companies.show', $c) }}" class="btn btn-xs btn-secondary mr-1" title="View">
+                            <i class="fas fa-eye"></i>
+                        </a>
                         <button class="btn btn-xs btn-info mr-1"
                             data-company="{{ e(json_encode([
                                 'id'                       => $c->id,
@@ -55,11 +58,11 @@
                                 'rental_daily_rate'        => $c->rental_daily_rate,
                                 'active'                   => $c->active,
                             ])) }}"
-                            onclick="openEdit(this)"><i class="fas fa-edit"></i></button>
+                            onclick="openEdit(this)" title="Edit"><i class="fas fa-edit"></i></button>
                         <form method="POST" action="{{ route('admin.companies.destroy', $c) }}" class="d-inline"
                               onsubmit="return confirm('Delete company {{ addslashes($c->name) }}?')">
                             @csrf @method('DELETE')
-                            <button class="btn btn-xs btn-danger"><i class="fas fa-trash"></i></button>
+                            <button class="btn btn-xs btn-danger" title="Delete"><i class="fas fa-trash"></i></button>
                         </form>
                     </td>
                 </tr>

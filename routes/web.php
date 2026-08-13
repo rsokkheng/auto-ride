@@ -124,6 +124,7 @@ Route::prefix('admin')->group(function () {
     // Companies
     Route::get('companies', [AdminController::class, 'companies'])->name('admin.companies');
     Route::post('companies', [AdminController::class, 'storeCompany'])->name('admin.companies.store');
+    Route::get('companies/{company}', [AdminController::class, 'showCompany'])->name('admin.companies.show');
     Route::put('companies/{company}', [AdminController::class, 'updateCompany'])->name('admin.companies.update');
     Route::delete('companies/{company}', [AdminController::class, 'destroyCompany'])->name('admin.companies.destroy');
 

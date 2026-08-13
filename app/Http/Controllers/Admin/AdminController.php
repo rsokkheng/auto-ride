@@ -1388,6 +1388,17 @@ class AdminController extends Controller
         ]);
     }
 
+    public function showCompany(Company $company)
+    {
+        $company->loadCount('drivers');
+        $drivers = $company->drivers()
+            ->select('id', 'name', 'phone', 'email', 'status_note', 'approval_status', 'available', 'rating', 'created_at')
+            ->orderByDesc('id')
+            ->paginate(15);
+
+        return view('admin.company-show', compact('company', 'drivers'));
+    }
+
     public function storeCompany(Request $request)
     {
         $data = $request->validate([
