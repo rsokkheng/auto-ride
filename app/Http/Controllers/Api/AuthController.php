@@ -389,6 +389,44 @@ class AuthController extends ApiController
         ]);
     }
 
+    /** GET /v1/auth/fcm-token — return current FCM token for the authenticated user. */
+    public function getFcmToken(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
+        return $this->success([
+            'fcm_token' => $user->fcm_token,
+            'has_token' => ! is_null($user->fcm_token),
+        ]);
+    }
+
+    /** GET /v1/driver/device-token — return all registered devices for the driver. */
+    public function getDeviceTokens(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user || $user->role !== 'driver') return $this->unauthorized();
+
+        $devices = DriverDevice::where('user_id', $user->id)
+            ->orderByDesc('last_used_at')
+            ->get()
+            ->map(fn ($d) => [
+                'id'           => $d->id,
+                'token'        => $d->token,
+                'platform'     => $d->platform,
+                'device_id'    => $d->device_id,
+                'app_version'  => $d->app_version,
+                'is_active'    => $d->is_active,
+                'last_used_at' => $d->last_used_at,
+                'created_at'   => $d->created_at,
+            ]);
+
+        return $this->success([
+            'fcm_token' => $user->fcm_token,
+            'devices'   => $devices,
+        ]);
+    }
+
     public function saveFcmToken(Request $request)
     {
         $user = $this->authUser($request);

@@ -60,7 +60,9 @@ Route::prefix('v1')->group(function () {
     Route::post('auth/otp/send',    [AuthController::class, 'sendOTP']);
     Route::post('auth/otp/verify',  [AuthController::class, 'verifyOTP']);
     Route::post('auth/phone/verify',[AuthController::class, 'verifyPhone']);
+    Route::get('auth/fcm-token',       [AuthController::class, 'getFcmToken']);
     Route::post('auth/fcm-token',      [AuthController::class, 'saveFcmToken']);
+    Route::get('driver/device-token',  [AuthController::class, 'getDeviceTokens']);
     Route::post('driver/device-token', [AuthController::class, 'saveDeviceToken']);
 
     Route::get('vehicle-types',                    [VehicleController::class, 'types']);
