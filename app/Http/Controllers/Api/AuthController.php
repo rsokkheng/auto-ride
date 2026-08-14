@@ -395,12 +395,16 @@ class AuthController extends ApiController
         if (! $user) return $this->unauthorized();
 
         $data = $request->validate([
-            'fcm_token' => 'required|string|max:512',
-            'platform'  => 'nullable|in:android,ios',
+            'fcm_token'   => 'required|string|max:512',
+            'platform'    => 'nullable|in:android,ios',
+            'device_id'   => 'nullable|string|max:255',
+            'app_version' => 'nullable|string|max:32',
         ]);
 
-        $token    = $data['fcm_token'];
-        $platform = $data['platform'] ?? 'android';
+        $token     = $data['fcm_token'];
+        $platform  = $data['platform'] ?? 'android';
+        // Use provided device_id or derive a stable one from the token
+        $deviceId  = $data['device_id'] ?? substr(md5($token), 0, 16);
 
         $user->update(['fcm_token' => $token]);
 
@@ -412,6 +416,8 @@ class AuthController extends ApiController
                 [
                     'user_id'      => $user->id,
                     'platform'     => $platform,
+                    'device_id'    => $deviceId,
+                    'app_version'  => $data['app_version'] ?? null,
                     'is_active'    => true,
                     'last_used_at' => now(),
                 ]
@@ -438,13 +444,15 @@ class AuthController extends ApiController
             'app_version' => 'nullable|string|max:32',
         ]);
 
+        $deviceId = $data['device_id'] ?? substr(md5($data['token']), 0, 16);
+
         // Upsert by token — reactivate if previously deactivated
         DriverDevice::updateOrCreate(
             ['token' => $data['token']],
             [
                 'user_id'      => $user->id,
                 'platform'     => $data['platform'],
-                'device_id'    => $data['device_id'] ?? null,
+                'device_id'    => $deviceId,
                 'app_version'  => $data['app_version'] ?? null,
                 'is_active'    => true,
                 'last_used_at' => now(),
