@@ -12,6 +12,7 @@ use App\Services\FareService;
 use App\Models\Company;
 use App\Models\Delivery;
 use App\Models\MarketplaceProduct;
+use App\Models\MovingFloorFeeTier;
 use App\Models\MarketplaceProductImage;
 use App\Models\Ride;
 use App\Models\SafetyIncident;
@@ -1537,13 +1538,12 @@ class AdminController extends Controller
             'moving_base_fee', 'moving_truck_fee', 'moving_distance_rate',
             'moving_helper_rate_normal', 'moving_helper_rate_heavy',
             'moving_no_elevator_mult',
-            'moving_floor_fee_tier_1', 'moving_floor_fee_tier_3',
-            'moving_floor_fee_tier_6', 'moving_floor_fee_tier_7plus',
         ];
 
         $settings = PricingSetting::whereIn('key', $keys)->get()->keyBy('key');
+        $floorTiers = MovingFloorFeeTier::ordered();
 
-        return view('admin.moving-fare', compact('settings'));
+        return view('admin.moving-fare', compact('settings', 'floorTiers'));
     }
 
     public function updateMovingFare(Request $request)
@@ -1555,10 +1555,6 @@ class AdminController extends Controller
             'moving_helper_rate_normal'   => 'required|integer|min:0',
             'moving_helper_rate_heavy'    => 'required|integer|min:0',
             'moving_no_elevator_mult'     => 'required|numeric|min:1|max:5',
-            'moving_floor_fee_tier_1'     => 'required|integer|min:0',
-            'moving_floor_fee_tier_3'     => 'required|integer|min:0',
-            'moving_floor_fee_tier_6'     => 'required|integer|min:0',
-            'moving_floor_fee_tier_7plus' => 'required|integer|min:0',
         ]);
 
         foreach ($data as $key => $value) {
@@ -1566,6 +1562,41 @@ class AdminController extends Controller
         }
 
         return redirect()->route('admin.moving-fare')->with('success', 'Moving fare rates saved.');
+    }
+
+    /**
+     * POST /admin/moving-fare/floor-tiers
+     * Add a new floor carry fee tier. Leave max_floor empty for the open-ended
+     * top tier (only one such tier should exist — a new one replaces the old).
+     */
+    public function storeMovingFloorFeeTier(Request $request)
+    {
+        $data = $request->validate([
+            'max_floor' => 'nullable|integer|min:1|max:200',
+            'fee'       => 'required|integer|min:0',
+        ]);
+
+        if (empty($data['max_floor'])) {
+            // Only one open-ended ("N+") tier makes sense — replace it if present.
+            MovingFloorFeeTier::whereNull('max_floor')->delete();
+            $data['max_floor'] = null;
+        } elseif (MovingFloorFeeTier::where('max_floor', $data['max_floor'])->exists()) {
+            return back()->withErrors(['max_floor' => 'A tier for this floor already exists.']);
+        }
+
+        MovingFloorFeeTier::create($data);
+
+        return redirect()->route('admin.moving-fare')->with('success', 'Floor fee tier added.');
+    }
+
+    /**
+     * DELETE /admin/moving-fare/floor-tiers/{tier}
+     */
+    public function destroyMovingFloorFeeTier(MovingFloorFeeTier $tier)
+    {
+        $tier->delete();
+
+        return redirect()->route('admin.moving-fare')->with('success', 'Floor fee tier removed.');
     }
 
     // ─── Package Delivery Fare Pricing ──────────────────────────────────────

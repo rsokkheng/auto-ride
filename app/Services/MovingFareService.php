@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\MovingFloorFeeTier;
 use App\Models\PricingSetting;
 
 /**
@@ -9,8 +10,10 @@ use App\Models\PricingSetting;
  *
  * Total = base_fee + distance_fee + truck_fee + helper_fee + floor_fee
  *
- * All amounts are in KHR. Rates are managed via the admin Moving Fare page
- * and stored in the pricing_settings table (keys prefixed with moving_).
+ * All amounts are in KHR. Base/truck/distance/helper rates are managed via
+ * the admin Moving Fare page and stored in pricing_settings (keys prefixed
+ * moving_). Floor fee tiers are admin-managed (add/delete) in the
+ * moving_floor_fee_tiers table.
  */
 class MovingFareService
 {
@@ -19,14 +22,23 @@ class MovingFareService
         return (float) PricingSetting::get($key, $default);
     }
 
+    /** [floor_threshold => fee], ascending, with the open-ended tier keyed PHP_INT_MAX. */
     private function floorFeeTiers(): array
     {
-        return [
-            1           => (int) $this->cfg('moving_floor_fee_tier_1',     4000),
-            3           => (int) $this->cfg('moving_floor_fee_tier_3',    12000),
-            6           => (int) $this->cfg('moving_floor_fee_tier_6',    20000),
-            PHP_INT_MAX => (int) $this->cfg('moving_floor_fee_tier_7plus', 40000),
-        ];
+        $tiers = MovingFloorFeeTier::ordered();
+
+        if ($tiers->isEmpty()) {
+            return [
+                1           => 4000,
+                3           => 12000,
+                6           => 20000,
+                PHP_INT_MAX => 40000,
+            ];
+        }
+
+        return $tiers->mapWithKeys(fn(MovingFloorFeeTier $t) => [
+            ($t->max_floor ?? PHP_INT_MAX) => $t->fee,
+        ])->all();
     }
 
     // ─────────────────────────────────────────────────────────────────────────

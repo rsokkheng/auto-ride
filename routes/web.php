@@ -83,6 +83,8 @@ Route::prefix('admin')->group(function () {
     // Moving Fare Pricing
     Route::get('moving-fare', [AdminController::class, 'movingFare'])->name('admin.moving-fare');
     Route::post('moving-fare', [AdminController::class, 'updateMovingFare'])->name('admin.moving-fare.update');
+    Route::post('moving-fare/floor-tiers', [AdminController::class, 'storeMovingFloorFeeTier'])->name('admin.moving-fare.floor-tiers.store');
+    Route::delete('moving-fare/floor-tiers/{tier}', [AdminController::class, 'destroyMovingFloorFeeTier'])->name('admin.moving-fare.floor-tiers.destroy');
 
     // Package Delivery Fare Pricing
     Route::get('delivery-fare', [AdminController::class, 'deliveryFare'])->name('admin.delivery-fare');

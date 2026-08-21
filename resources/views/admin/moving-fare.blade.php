@@ -119,80 +119,32 @@
     </div>
 </div>
 
-{{-- ── Floor Carry Fees ─────────────────────────────────────────────────── --}}
+{{-- ── No-Elevator Multiplier ───────────────────────────────────────────── --}}
 <div class="fare-section">
-    <div class="fare-sec-hdr" style="background:#eff6ff;">
-        <div class="fare-sec-icon" style="background:#3b82f6;"><i class="fas fa-building"></i></div>
+    <div class="fare-sec-hdr" style="background:#f5f3ff;">
+        <div class="fare-sec-icon" style="background:#8b5cf6;"><i class="fas fa-stairs"></i></div>
         <div>
-            <div class="font-weight-bold" style="color:#1e293b;">Floor Carry Fee Tiers</div>
-            <small class="text-muted">Applied to the higher floor of pickup / dropoff. No-elevator penalty applied on top.</small>
+            <div class="font-weight-bold" style="color:#1e293b;">No-Elevator Multiplier</div>
+            <small class="text-muted">Applied on top of the floor fee tier below when the building has no elevator</small>
         </div>
     </div>
     <div class="fare-sec-body">
-
-        <div class="tier-row">
-            <div><div class="tier-label">Ground / F1 <div class="tier-sub">Floor ≤ 1</div></div></div>
-            <div class="input-wrap">
-                <span class="input-prefix">៛</span>
-                <input type="number" name="moving_floor_fee_tier_1" class="fare-input currency"
-                       value="{{ $settings['moving_floor_fee_tier_1']->value ?? 4000 }}" min="0" required>
-            </div>
-        </div>
-
-        <div class="tier-row">
-            <div><div class="tier-label">F2 – F3 <div class="tier-sub">Floor 2–3</div></div></div>
-            <div class="input-wrap">
-                <span class="input-prefix">៛</span>
-                <input type="number" name="moving_floor_fee_tier_3" class="fare-input currency"
-                       value="{{ $settings['moving_floor_fee_tier_3']->value ?? 12000 }}" min="0" required>
-            </div>
-        </div>
-
-        <div class="tier-row">
-            <div><div class="tier-label">F4 – F6 <div class="tier-sub">Floor 4–6</div></div></div>
-            <div class="input-wrap">
-                <span class="input-prefix">៛</span>
-                <input type="number" name="moving_floor_fee_tier_6" class="fare-input currency"
-                       value="{{ $settings['moving_floor_fee_tier_6']->value ?? 20000 }}" min="0" required>
-            </div>
-        </div>
-
-        <div class="tier-row">
-            <div><div class="tier-label">F7 + <div class="tier-sub">Floor 7 and above</div></div></div>
-            <div class="input-wrap">
-                <span class="input-prefix">៛</span>
-                <input type="number" name="moving_floor_fee_tier_7plus" class="fare-input currency"
-                       value="{{ $settings['moving_floor_fee_tier_7plus']->value ?? 40000 }}" min="0" required>
-            </div>
-        </div>
-
-        {{-- No-elevator multiplier --}}
-        <div class="mt-3 pt-3 border-top">
-            <div class="field-label">No-Elevator Multiplier</div>
-            <div class="row align-items-center">
-                <div class="col-md-3">
-                    <div class="input-wrap">
-                        <span class="input-prefix">×</span>
-                        <input type="number" name="moving_no_elevator_mult" class="fare-input"
-                               style="padding-left:32px;"
-                               value="{{ $settings['moving_no_elevator_mult']->value ?? 1.5 }}"
-                               min="1" max="5" step="0.1" required>
-                    </div>
-                </div>
-                <div class="col-md-9">
-                    <small class="text-muted">
-                        When the building has no elevator, the floor fee is multiplied by this value.
-                        E.g. <strong>1.5</strong> means stairs jobs cost 50% more for floor carry.
-                    </small>
+        <div class="row align-items-center">
+            <div class="col-md-3">
+                <div class="input-wrap">
+                    <span class="input-prefix">×</span>
+                    <input type="number" name="moving_no_elevator_mult" class="fare-input"
+                           style="padding-left:32px;"
+                           value="{{ $settings['moving_no_elevator_mult']->value ?? 1.5 }}"
+                           min="1" max="5" step="0.1" required>
                 </div>
             </div>
+            <div class="col-md-9">
+                <small class="text-muted">
+                    E.g. <strong>1.5</strong> means stairs jobs cost 50% more for floor carry.
+                </small>
+            </div>
         </div>
-
-        <div class="formula-box">
-            <strong>Logic:</strong> effective_floor_fee = tier_fee × (no_elevator ? multiplier : 1)
-            &nbsp;·&nbsp; tier is chosen from the <em>higher</em> of pickup floor vs dropoff floor
-        </div>
-
     </div>
 </div>
 
@@ -204,5 +156,79 @@
 </div>
 
 </form>
+
+{{-- ── Floor Carry Fees (own CRUD — outside the settings form above) ────── --}}
+<div class="fare-section">
+    <div class="fare-sec-hdr" style="background:#eff6ff;">
+        <div class="fare-sec-icon" style="background:#3b82f6;"><i class="fas fa-building"></i></div>
+        <div>
+            <div class="font-weight-bold" style="color:#1e293b;">Floor Carry Fee Tiers</div>
+            <small class="text-muted">Applied to the higher floor of pickup / dropoff. No-elevator penalty applied on top (see above).</small>
+        </div>
+    </div>
+    <div class="fare-sec-body">
+
+        @php $prevFloor = 0; @endphp
+        @foreach($floorTiers as $tier)
+        <div class="tier-row">
+            <div>
+                <div class="tier-label">
+                    {{ $tier->max_floor ? ($prevFloor + 1).' – '.$tier->max_floor : ($prevFloor + 1).'+' }}
+                    <div class="tier-sub">{{ $tier->max_floor ? "Floor {$prevFloor}–{$tier->max_floor}" : "Floor ".($prevFloor + 1)." and above" }}</div>
+                </div>
+            </div>
+            <div class="d-flex align-items-center" style="gap:10px;">
+                <div class="input-wrap flex-grow-1">
+                    <span class="input-prefix">៛</span>
+                    <div class="fare-input currency" style="background:#f8fafc;color:#475569;">{{ number_format($tier->fee) }}</div>
+                </div>
+                <form method="POST" action="{{ route('admin.moving-fare.floor-tiers.destroy', $tier) }}"
+                      onsubmit="return confirm('Remove this floor tier?');">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete tier">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+        @php $prevFloor = $tier->max_floor ?? $prevFloor; @endphp
+        @endforeach
+
+        {{-- Add new tier --}}
+        <form method="POST" action="{{ route('admin.moving-fare.floor-tiers.store') }}" class="mt-4 pt-3 border-top">
+            @csrf
+            <div class="field-label">Add New Tier</div>
+            <div class="row align-items-end">
+                <div class="col-md-4">
+                    <label class="tier-sub d-block mb-1">Up to floor (blank = open-ended "N+")</label>
+                    <input type="number" name="max_floor" class="fare-input" min="1" max="200"
+                           placeholder="e.g. 10">
+                </div>
+                <div class="col-md-4">
+                    <label class="tier-sub d-block mb-1">Fee</label>
+                    <div class="input-wrap">
+                        <span class="input-prefix">៛</span>
+                        <input type="number" name="fee" class="fare-input currency" min="0" required>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-outline-primary">
+                        <i class="fas fa-plus mr-1"></i> Add Tier
+                    </button>
+                </div>
+            </div>
+            @if ($errors->has('max_floor'))
+                <small class="text-danger d-block mt-2">{{ $errors->first('max_floor') }}</small>
+            @endif
+        </form>
+
+        <div class="formula-box">
+            <strong>Logic:</strong> effective_floor_fee = tier_fee × (no_elevator ? multiplier : 1)
+            &nbsp;·&nbsp; tier is chosen from the <em>higher</em> of pickup floor vs dropoff floor
+        </div>
+
+    </div>
+</div>
 
 @endsection
