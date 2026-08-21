@@ -331,6 +331,91 @@ $colors = [
     </div>
 </div>
 
+<div class="card mt-2">
+    <div class="card-header">
+        <h3 class="card-title mb-0">
+            <i class="fas fa-route mr-2 text-primary"></i> Ride Dispatch (Grab-style Matching)
+        </h3>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ route('admin.ride-pricing.settings') }}">
+            @csrf
+            <div class="row">
+                <div class="col-md-3 mb-3">
+                    <label class="field-label">Ride Dispatch Radius</label>
+                    <div class="input-group">
+                        <input type="number" name="ride_match_radius_km" class="form-control"
+                               value="{{ $settings['ride_match_radius_km']->value ?? 8 }}"
+                               step="0.1" min="1" max="100" required>
+                        <div class="input-group-append"><span class="input-group-text">km</span></div>
+                    </div>
+                    <small class="text-muted">Search radius from pickup for a ride</small>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="field-label">Dispatch Queue Size</label>
+                    <div class="input-group">
+                        <input type="number" name="ride_dispatch_limit" class="form-control"
+                               value="{{ $settings['ride_dispatch_limit']->value ?? 10 }}"
+                               min="1" max="50" required>
+                        <div class="input-group-append"><span class="input-group-text">drivers</span></div>
+                    </div>
+                    <small class="text-muted">Ranked drivers queued per ride</small>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="field-label">Offer Timeout</label>
+                    <div class="input-group">
+                        <input type="number" name="ride_offer_timeout_seconds" class="form-control"
+                               value="{{ $settings['ride_offer_timeout_seconds']->value ?? 15 }}"
+                               min="5" max="120" required>
+                        <div class="input-group-append"><span class="input-group-text">sec</span></div>
+                    </div>
+                    <small class="text-muted">Time before offering the next driver</small>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="field-label">Delivery Dispatch Radius</label>
+                    <div class="input-group">
+                        <input type="number" name="delivery_match_radius_km" class="form-control"
+                               value="{{ $settings['delivery_match_radius_km']->value ?? 30 }}"
+                               step="0.1" min="1" max="100" required>
+                        <div class="input-group-append"><span class="input-group-text">km</span></div>
+                    </div>
+                    <small class="text-muted">Search radius from pickup for a delivery</small>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="field-label">Match Weight — Distance</label>
+                    <div class="input-group">
+                        <input type="number" name="driver_match_distance_weight" class="form-control"
+                               value="{{ $settings['driver_match_distance_weight']->value ?? 6 }}"
+                               step="0.1" min="0" max="50" required>
+                    </div>
+                    <small class="text-muted">Score penalty per km — higher favours closer drivers</small>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="field-label">Match Weight — ETA</label>
+                    <div class="input-group">
+                        <input type="number" name="driver_match_eta_weight" class="form-control"
+                               value="{{ $settings['driver_match_eta_weight']->value ?? 1.5 }}"
+                               step="0.1" min="0" max="50" required>
+                    </div>
+                    <small class="text-muted">Score penalty per ETA-minute — higher favours faster arrival</small>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="field-label">Match Weight — Rating</label>
+                    <div class="input-group">
+                        <input type="number" name="driver_match_rating_weight" class="form-control"
+                               value="{{ $settings['driver_match_rating_weight']->value ?? 4 }}"
+                               step="0.1" min="0" max="50" required>
+                    </div>
+                    <small class="text-muted">Score penalty per rating point below 5.0</small>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save mr-1"></i> Save Dispatch Settings
+            </button>
+        </form>
+    </div>
+</div>
+
 {{-- ── Fare Formula Reference ──────────────────────────────────────────── --}}
 <div class="card mt-3">
     <div class="card-header">

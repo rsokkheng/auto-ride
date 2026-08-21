@@ -962,6 +962,13 @@ class AdminController extends Controller
             'partner_express_fee'               => 'sometimes|integer|min:0',
             'partner_surcharge_large'           => 'sometimes|integer|min:0',
             'partner_surcharge_extra_large'     => 'sometimes|integer|min:0',
+            'ride_match_radius_km'              => 'sometimes|numeric|min:1|max:100',
+            'ride_dispatch_limit'               => 'sometimes|integer|min:1|max:50',
+            'ride_offer_timeout_seconds'        => 'sometimes|integer|min:5|max:120',
+            'delivery_match_radius_km'          => 'sometimes|numeric|min:1|max:100',
+            'driver_match_distance_weight'      => 'sometimes|numeric|min:0|max:50',
+            'driver_match_eta_weight'           => 'sometimes|numeric|min:0|max:50',
+            'driver_match_rating_weight'        => 'sometimes|numeric|min:0|max:50',
         ]);
 
         foreach ($data as $key => $value) {
