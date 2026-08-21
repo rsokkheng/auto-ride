@@ -23,6 +23,19 @@ class FcmService
     // FCM error codes that mean the token is permanently dead
     private const DEAD_TOKEN_ERRORS = ['UNREGISTERED', 'NOT_FOUND', 'INVALID_ARGUMENT'];
 
+    /**
+     * Notification type → (sound name, Android channel). Single source of truth
+     * so per-event sound/channel choices can't silently drift between call sites
+     * (rideRequested() previously lost its 'sound' key in a refactor because it
+     * was set ad hoc in each caller's $data array instead of here).
+     */
+    private const TYPE_SOUNDS = [
+        'ride_requested'     => ['booking',  'booking_alerts'],
+        'delivery_requested' => ['booking',  'booking_alerts'],
+        'ride_accepted'      => ['accepted', 'ride_updates'],
+        'delivery_accepted'  => ['accepted', 'ride_updates'],
+    ];
+
     private ?string $accessToken = null;
     private int     $tokenExpiry = 0;
     private ?string $projectId   = null;
@@ -194,7 +207,7 @@ class FcmService
         $this->sendToDriver($driver,
             'New Delivery Request',
             "{$pickup} → {$dropoff}",
-            ['type' => 'delivery_requested', 'delivery_id' => (string) $deliveryId, 'sound' => 'booking']
+            ['type' => 'delivery_requested', 'delivery_id' => (string) $deliveryId]
         );
     }
 
@@ -253,10 +266,12 @@ class FcmService
 
         if (! $projectId || ! $token) return 'NO_CREDENTIALS';
 
-        $url        = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
-        $stringData = array_map('strval', $data);
-        $isBooking  = in_array($data['type'] ?? '', ['ride_requested', 'delivery_requested'], true);
-        $iosSound   = $isBooking ? 'booking.wav' : 'default';
+        $url = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
+
+        [$soundName, $channelId] = self::TYPE_SOUNDS[$data['type'] ?? ''] ?? [null, 'general'];
+        $iosSound = $soundName ? "{$soundName}.wav" : 'default';
+
+        $stringData = array_map('strval', $data + ['sound' => $soundName ?? 'default']);
 
         $payload = [
             'message' => [
@@ -270,7 +285,7 @@ class FcmService
                     'priority' => 'high',
                     'notification' => [
                         'sound'               => 'default',
-                        'channel_id'          => $isBooking ? 'booking_alerts' : 'general',
+                        'channel_id'          => $channelId,
                         'click_action'        => 'FLUTTER_NOTIFICATION_CLICK',
                         'notification_count'  => 1,
                     ],
