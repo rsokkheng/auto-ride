@@ -16,6 +16,7 @@ use App\Services\RideDispatchService;
 use App\Services\WalletService;
 use App\Mail\TripReceipt;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 class RideController extends ApiController
@@ -227,9 +228,15 @@ class RideController extends ApiController
         $user = $this->authUser($request);
         if (! $user || $user->role !== 'driver') return $this->unauthorized();
 
+        // Only self-serve-eligible rides: the ranked dispatch queue has been exhausted
+        // (self_serve_expires_at set) and the grace window hasn't expired yet. While a
+        // ride is still being offered sequentially to its ranked queue (expires_at NULL),
+        // it must not be snipeable here by a driver outside that queue.
         $rides = Ride::with(['passenger', 'vehicle'])
             ->where('status', Ride::STATUS_REQUESTED)
             ->whereNull('driver_id')
+            ->whereNotNull('self_serve_expires_at')
+            ->where('self_serve_expires_at', '>', now())
             ->orderBy('created_at')
             ->paginate(10);
 
@@ -549,12 +556,27 @@ class RideController extends ApiController
 
         $vehicle = $user->vehicles()->where('status', 'active')->latest()->first();
 
-        $ride->update([
-            'driver_id'   => $user->id,
-            'vehicle_id'  => $vehicle?->id,
-            'status'      => Ride::STATUS_ACCEPTED,
-            'accepted_at' => now(),
-        ]);
+        // Atomic: the open-status + unclaimed guard is enforced in the same UPDATE
+        // statement (not a separate read-then-write) so this can never race against
+        // CancelUnclaimedRide cancelling the ride in the same instant — only one wins.
+        $affected = Ride::where('id', $ride->id)
+            ->whereIn('status', Ride::OPEN_STATUSES)
+            ->whereNull('driver_id')
+            ->update([
+                'driver_id'   => $user->id,
+                'vehicle_id'  => $vehicle?->id,
+                'status'      => Ride::STATUS_ACCEPTED,
+                'accepted_at' => now(),
+            ]);
+
+        if ($affected === 0) {
+            return response()->json(['data' => null, 'message' => 'Ride already claimed or no longer available.'], 422);
+        }
+
+        $isSelfServe = ! in_array($user->id, $ride->dispatch_queue ?? [], true) || $ride->self_serve_expires_at;
+        if ($isSelfServe) {
+            Log::info('self_serve_accepted', ['ride_id' => $ride->id, 'driver_id' => $user->id]);
+        }
 
         $fresh = $ride->fresh()->load('passenger', 'driver', 'vehicle', 'stops');
         $this->firestore->syncRide($fresh);

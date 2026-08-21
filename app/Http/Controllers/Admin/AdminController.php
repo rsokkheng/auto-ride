@@ -968,6 +968,7 @@ class AdminController extends Controller
             'ride_match_radius_km'              => 'sometimes|numeric|min:1|max:100',
             'ride_dispatch_limit'               => 'sometimes|integer|min:1|max:50',
             'ride_offer_timeout_seconds'        => 'sometimes|integer|min:5|max:120',
+            'ride_self_serve_window_seconds'    => 'sometimes|integer|min:5|max:600',
             'delivery_match_radius_km'          => 'sometimes|numeric|min:1|max:100',
             'driver_match_distance_weight'      => 'sometimes|numeric|min:0|max:50',
             'driver_match_eta_weight'           => 'sometimes|numeric|min:0|max:50',

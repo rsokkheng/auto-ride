@@ -169,6 +169,12 @@ class RidePricingSeeder extends Seeder
                 'description' => 'How long a driver has to accept before the ride is offered to the next driver in the queue',
             ],
             [
+                'key'         => 'ride_self_serve_window_seconds',
+                'value'       => '60',
+                'label'       => 'Ride Self-Serve Window (seconds)',
+                'description' => 'After the ranked queue is exhausted, how long the ride stays open for any driver to self-serve before auto-cancelling',
+            ],
+            [
                 'key'         => 'driver_match_distance_weight',
                 'value'       => '6',
                 'label'       => 'Driver Match — Distance Weight',

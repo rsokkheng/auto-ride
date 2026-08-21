@@ -23,8 +23,9 @@
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
-        <env name="DB_CONNECTION" value="sqlite"/>
-        <env name="DB_DATABASE" value=":memory:"/>
+        <!-- DB_CONNECTION/DB_HOST/DB_PORT/DB_USERNAME/DB_PASSWORD are set in the
+             gitignored .env.testing (not here — this file is committed to git). -->
+        <env name="DB_DATABASE" value="auto_ride_db_testing"/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>

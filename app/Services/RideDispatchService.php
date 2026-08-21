@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Jobs\AdvanceRideDispatch;
+use App\Jobs\CancelUnclaimedRide;
 use App\Models\PricingSetting;
 use App\Models\Ride;
 use App\Models\User;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -94,21 +96,65 @@ class RideDispatchService
             $position++;
         }
 
-        // Ranked queue exhausted — no nearby driver accepted (or none were available). Auto-cancel
-        // rather than leaving the ride stuck in "requested" forever with no driver ever notified again.
+        // Ranked queue exhausted — no nearby driver accepted (or none were available). Ride stays
+        // "requested" so any driver can still self-serve it via GET /v1/rides/available, but only for
+        // a grace window: if nobody claims it in that time, auto-cancel rather than leaving it stuck
+        // forever with no driver ever notified again.
+        Log::info('ranked_queue_exhausted', ['ride_id' => $ride->id, 'queue_size' => count($queue)]);
+
+        $windowSeconds = (int) PricingSetting::get('ride_self_serve_window_seconds', config('ride.self_serve_window_seconds', 60));
+        $expiresAt     = now()->addSeconds($windowSeconds);
+
         $ride->update([
-            'dispatch_position'   => $position,
-            'status'              => Ride::STATUS_CANCELLED,
-            'cancelled_at'        => now(),
-            'cancellation_reason' => 'no_driver_available',
-            'cancellation_fee'    => 0,
+            'dispatch_position'     => $position,
+            'self_serve_expires_at' => $expiresAt,
         ]);
 
+        Log::info('self_serve_started', ['ride_id' => $ride->id, 'expires_at' => $expiresAt->toIso8601String(), 'window_seconds' => $windowSeconds]);
+
+        CancelUnclaimedRide::dispatch($ride->id)
+            ->delay($expiresAt);
+    }
+
+    /**
+     * Cancels a ride nobody ever claimed — the ranked queue was exhausted and the
+     * self-serve grace window expired with no driver picking it up.
+     *
+     * Atomic: the status/driver_id guard is enforced in the same UPDATE statement
+     * (not a separate read-then-write) so a driver's concurrent accept() can never
+     * be silently clobbered by this cancellation, and vice versa — only one wins.
+     */
+    public function autoCancelNoDriver(Ride $ride): void
+    {
+        if ($ride->self_serve_expires_at && $ride->self_serve_expires_at->isFuture()) {
+            return; // window was extended/reset since this job was scheduled
+        }
+
+        Log::info('self_serve_expired', ['ride_id' => $ride->id]);
+
+        $affected = Ride::where('id', $ride->id)
+            ->where('status', Ride::STATUS_REQUESTED)
+            ->whereNull('driver_id')
+            ->update([
+                'status'              => Ride::STATUS_CANCELLED,
+                'cancelled_at'        => now(),
+                'cancellation_reason' => 'no_driver_available',
+                'cancellation_fee'    => 0,
+            ]);
+
+        if ($affected === 0) {
+            // A driver claimed it in the same instant this job ran — nothing to cancel.
+            return;
+        }
+
+        Log::info('auto_cancelled', ['ride_id' => $ride->id, 'reason' => 'no_driver_available']);
+
         try {
-            if ($ride->passenger) {
-                $this->fcm->rideRejected($ride->passenger, $ride->id);
+            $fresh = $ride->fresh()->load('passenger', 'driver', 'vehicle');
+            if ($fresh->passenger) {
+                $this->fcm->rideRejected($fresh->passenger, $fresh->id);
             }
-            $this->firestore->syncRide($ride->fresh()->load('passenger', 'driver', 'vehicle'));
+            $this->firestore->syncRide($fresh);
         } catch (Throwable $e) {
             report($e);
         }
