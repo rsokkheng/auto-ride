@@ -112,6 +112,25 @@ class FcmService
         }
     }
 
+    /**
+     * Push a promo/event announcement to one user (drivers get it on all their
+     * registered devices, others via their single fcm_token).
+     */
+    public function promoEvent(User $user, int $eventId, string $title, string $body, ?string $imageUrl = null): void
+    {
+        $data = [
+            'type'     => 'promo_event',
+            'event_id' => (string) $eventId,
+        ];
+        if ($imageUrl) {
+            $data['image_url'] = $imageUrl;
+        }
+
+        $user->role === 'driver'
+            ? $this->sendToDriver($user, $title, $body, $data)
+            : $this->sendToUser($user, $title, $body, $data);
+    }
+
     // ── Ride notification helpers ─────────────────────────────────────────────
 
     public function rideRequested(User $driver, int $rideId, string $pickup, string $dropoff, string $passengerName = '', int $fare = 0): void

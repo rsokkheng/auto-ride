@@ -13,6 +13,7 @@ use App\Models\Company;
 use App\Models\Delivery;
 use App\Models\MarketplaceProduct;
 use App\Models\MovingFloorFeeTier;
+use App\Models\PromoEvent;
 use App\Models\MarketplaceProductImage;
 use App\Models\Ride;
 use App\Models\SafetyIncident;
@@ -25,6 +26,7 @@ use App\Models\Vehicle;
 use App\Models\WalletTransaction;
 use App\Models\WithdrawalRequest;
 use App\Models\AirportZone;
+use App\Jobs\SendPromoEventPush;
 use App\Models\Banner;
 use App\Models\BusinessAccount;
 use App\Models\MembershipTier;
@@ -2015,6 +2017,84 @@ class AdminController extends Controller
     {
         $banner->delete();
         return redirect()->route('admin.banners')->with('success', 'Banner deleted.');
+    }
+
+    // ─── Promo Events (push notification announcements) ─────────────────────
+
+    public function promoEvents()
+    {
+        $emptyPage = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
+
+        return view('admin.promo-events', [
+            'events' => rescue(
+                fn () => PromoEvent::orderByDesc('created_at')->paginate(10),
+                $emptyPage,
+                false
+            ),
+        ]);
+    }
+
+    public function storePromoEvent(Request $request)
+    {
+        $data = $request->validate([
+            'title'       => 'required|string|max:100',
+            'body'        => 'required|string|max:1000',
+            'target_role' => 'required|in:all,passenger,driver',
+            'active'      => 'boolean',
+            'image'       => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
+        ]);
+
+        if ($request->hasFile('image')) {
+            $data['image'] = $request->file('image')->store('promo-events', 'public');
+        }
+
+        $data['active']     = $request->boolean('active', true);
+        $data['created_by'] = Auth::id();
+
+        $event = PromoEvent::create($data);
+
+        if ($event->active) {
+            SendPromoEventPush::dispatch($event->id);
+        }
+
+        return redirect()->route('admin.promo-events')
+            ->with('success', $event->active ? 'Event created — pushing notification to users now.' : 'Event created (inactive, no push sent).');
+    }
+
+    public function updatePromoEvent(Request $request, PromoEvent $event)
+    {
+        $data = $request->validate([
+            'title'       => 'required|string|max:100',
+            'body'        => 'required|string|max:1000',
+            'target_role' => 'required|in:all,passenger,driver',
+            'active'      => 'boolean',
+            'resend'      => 'boolean',
+            'image'       => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
+        ]);
+
+        $resend = $request->boolean('resend');
+        unset($data['resend']);
+
+        if ($request->hasFile('image')) {
+            $data['image'] = $request->file('image')->store('promo-events', 'public');
+        } else {
+            unset($data['image']);
+        }
+
+        $data['active'] = $request->boolean('active');
+        $event->update($data);
+
+        if ($resend && $event->active) {
+            SendPromoEventPush::dispatch($event->id);
+        }
+
+        return redirect()->route('admin.promo-events')->with('success', 'Event updated.' . ($resend ? ' Re-sending push now.' : ''));
+    }
+
+    public function destroyPromoEvent(PromoEvent $event)
+    {
+        $event->delete();
+        return redirect()->route('admin.promo-events')->with('success', 'Event deleted.');
     }
 
     // ─── Airport Zones ────────────────────────────────────────────────────────

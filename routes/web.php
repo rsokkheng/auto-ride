@@ -162,6 +162,12 @@ Route::prefix('admin')->group(function () {
     Route::put('banners/{banner}', [AdminController::class, 'updateBanner'])->name('admin.banners.update');
     Route::delete('banners/{banner}', [AdminController::class, 'destroyBanner'])->name('admin.banners.destroy');
 
+    // Promo Events (push notification announcements)
+    Route::get('promo-events', [AdminController::class, 'promoEvents'])->name('admin.promo-events');
+    Route::post('promo-events', [AdminController::class, 'storePromoEvent'])->name('admin.promo-events.store');
+    Route::put('promo-events/{event}', [AdminController::class, 'updatePromoEvent'])->name('admin.promo-events.update');
+    Route::delete('promo-events/{event}', [AdminController::class, 'destroyPromoEvent'])->name('admin.promo-events.destroy');
+
     // Airport Zones
     Route::get('airport-zones', [AdminController::class, 'airportZones'])->name('admin.airport-zones');
     Route::post('airport-zones', [AdminController::class, 'storeAirportZone'])->name('admin.airport-zones.store');

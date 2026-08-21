@@ -125,7 +125,7 @@
                     'admin.ride-pricing', 'admin.fare-management', 'admin.moving-fare', 'admin.delivery-fare',
                     'admin.surge-zones', 'admin.airport-zones*', 'admin.charging-stations',
                     'admin.subscription-plans*', 'admin.business-accounts*',
-                    'admin.banners', 'admin.chat'
+                    'admin.banners', 'admin.promo-events', 'admin.chat'
                 );
                 $isReports = request()->routeIs(
                     'admin.operations-report', 'admin.report.*'
@@ -432,6 +432,12 @@
                                 <a href="{{ route('admin.banners') }}" class="nav-link {{ request()->routeIs('admin.banners') ? 'active' : '' }}">
                                     <i class="nav-icon fas fa-images"></i>
                                     <p>Promo Banners</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.promo-events') }}" class="nav-link {{ request()->routeIs('admin.promo-events') ? 'active' : '' }}">
+                                    <i class="nav-icon fas fa-bullhorn"></i>
+                                    <p>Promo Events</p>
                                 </a>
                             </li>
                             <li class="nav-item">

@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\VehicleController;
 use App\Http\Controllers\Api\AccessibilityController;
 use App\Http\Controllers\Api\AdminApiController;
 use App\Http\Controllers\Api\BannerController;
+use App\Http\Controllers\Api\PromoEventController;
 use App\Http\Controllers\Api\BiometricController;
 use App\Http\Controllers\Api\HelmetDetectionController;
 use App\Http\Controllers\Api\MembershipController;
@@ -352,6 +353,9 @@ Route::prefix('v1')->group(function () {
 
     // ── Promotional banners ───────────────────────────────────────────────────
     Route::get('banners', [BannerController::class, 'index']);
+
+    // ── Promo events (push notification announcements) ───────────────────────
+    Route::get('events', [PromoEventController::class, 'index']);
 
     // ── Driver withdrawals ────────────────────────────────────────────────────
     Route::post('driver/withdraw', [WithdrawalController::class, 'store']);
