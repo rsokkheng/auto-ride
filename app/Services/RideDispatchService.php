@@ -6,6 +6,7 @@ use App\Jobs\AdvanceRideDispatch;
 use App\Models\PricingSetting;
 use App\Models\Ride;
 use App\Models\User;
+use Throwable;
 
 /**
  * Grab-style sequential ride dispatch: rank nearby drivers once, then offer
@@ -18,6 +19,7 @@ class RideDispatchService
     public function __construct(
         private DriverMatchingService $matcher,
         private FcmService $fcm,
+        private FirestoreService $firestore,
     ) {}
 
     /**
@@ -92,7 +94,23 @@ class RideDispatchService
             $position++;
         }
 
-        // Ranked queue exhausted — ride stays open; drivers can still self-serve via GET /v1/rides/available.
-        $ride->update(['dispatch_position' => $position]);
+        // Ranked queue exhausted — no nearby driver accepted (or none were available). Auto-cancel
+        // rather than leaving the ride stuck in "requested" forever with no driver ever notified again.
+        $ride->update([
+            'dispatch_position'   => $position,
+            'status'              => Ride::STATUS_CANCELLED,
+            'cancelled_at'        => now(),
+            'cancellation_reason' => 'no_driver_available',
+            'cancellation_fee'    => 0,
+        ]);
+
+        try {
+            if ($ride->passenger) {
+                $this->fcm->rideRejected($ride->passenger, $ride->id);
+            }
+            $this->firestore->syncRide($ride->fresh()->load('passenger', 'driver', 'vehicle'));
+        } catch (Throwable $e) {
+            report($e);
+        }
     }
 }
