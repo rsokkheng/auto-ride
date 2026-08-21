@@ -115,6 +115,36 @@ class RidePricingSeeder extends Seeder
                 'description' => 'Extra % on delivery fee from 22:00–05:00',
             ],
             [
+                'key'         => 'delivery_fee_base',
+                'value'       => '3000',
+                'label'       => 'Delivery Base Fee',
+                'description' => 'Flat fee (KHR) applied to every package delivery',
+            ],
+            [
+                'key'         => 'delivery_fee_per_km',
+                'value'       => '1200',
+                'label'       => 'Delivery Per-KM Rate',
+                'description' => 'KHR charged per km of distance for package delivery',
+            ],
+            [
+                'key'         => 'delivery_fee_surcharge_small',
+                'value'       => '0',
+                'label'       => 'Delivery Surcharge — Small Package',
+                'description' => 'Extra KHR added for small packages',
+            ],
+            [
+                'key'         => 'delivery_fee_surcharge_medium',
+                'value'       => '2000',
+                'label'       => 'Delivery Surcharge — Medium Package',
+                'description' => 'Extra KHR added for medium packages',
+            ],
+            [
+                'key'         => 'delivery_fee_surcharge_large',
+                'value'       => '5000',
+                'label'       => 'Delivery Surcharge — Large Package',
+                'description' => 'Extra KHR added for large packages',
+            ],
+            [
                 'key'         => 'delivery_match_radius_km',
                 'value'       => '30',
                 'label'       => 'Delivery Dispatch Radius (km)',

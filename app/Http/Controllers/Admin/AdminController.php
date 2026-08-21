@@ -1568,6 +1568,42 @@ class AdminController extends Controller
         return redirect()->route('admin.moving-fare')->with('success', 'Moving fare rates saved.');
     }
 
+    // ─── Package Delivery Fare Pricing ──────────────────────────────────────
+
+    public function deliveryFare()
+    {
+        $keys = [
+            'delivery_fee_base', 'delivery_fee_per_km',
+            'delivery_fee_surcharge_small', 'delivery_fee_surcharge_medium', 'delivery_fee_surcharge_large',
+            'delivery_night_surcharge_rate', 'delivery_express_multiplier',
+        ];
+
+        $settings = PricingSetting::whereIn('key', $keys)->get()->keyBy('key');
+
+        return view('admin.delivery-fare', compact('settings'));
+    }
+
+    public function updateDeliveryFare(Request $request)
+    {
+        $data = $request->validate([
+            'delivery_fee_base'             => 'required|integer|min:0',
+            'delivery_fee_per_km'           => 'required|integer|min:0',
+            'delivery_fee_surcharge_small'  => 'required|integer|min:0',
+            'delivery_fee_surcharge_medium' => 'required|integer|min:0',
+            'delivery_fee_surcharge_large'  => 'required|integer|min:0',
+            'delivery_night_surcharge_rate' => 'required|numeric|min:0|max:1',
+            'delivery_express_multiplier'   => 'required|numeric|min:1|max:10',
+        ]);
+
+        foreach ($data as $key => $value) {
+            PricingSetting::where('key', $key)->update(['value' => $value]);
+        }
+
+        FareService::clearCache();
+
+        return redirect()->route('admin.delivery-fare')->with('success', 'Delivery fare rates saved.');
+    }
+
     // ─── Driver Approvals ─────────────────────────────────────────────────────
 
     public function drivers(Request $request)

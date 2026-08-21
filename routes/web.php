@@ -84,6 +84,10 @@ Route::prefix('admin')->group(function () {
     Route::get('moving-fare', [AdminController::class, 'movingFare'])->name('admin.moving-fare');
     Route::post('moving-fare', [AdminController::class, 'updateMovingFare'])->name('admin.moving-fare.update');
 
+    // Package Delivery Fare Pricing
+    Route::get('delivery-fare', [AdminController::class, 'deliveryFare'])->name('admin.delivery-fare');
+    Route::post('delivery-fare', [AdminController::class, 'updateDeliveryFare'])->name('admin.delivery-fare.update');
+
     // Admin Chat
     Route::get('chat', [AdminController::class, 'adminChat'])->name('admin.chat');
     Route::get('chat/{conversation}/messages', [AdminController::class, 'adminChatMessages'])->name('admin.chat.messages');

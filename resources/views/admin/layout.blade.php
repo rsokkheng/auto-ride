@@ -122,7 +122,7 @@
                 $pendingWithdraw   = rescue(fn() => \App\Models\WithdrawalRequest::where('status','pending')->count(), 0, false);
 
                 $isSettings = request()->routeIs(
-                    'admin.ride-pricing', 'admin.fare-management', 'admin.moving-fare',
+                    'admin.ride-pricing', 'admin.fare-management', 'admin.moving-fare', 'admin.delivery-fare',
                     'admin.surge-zones', 'admin.airport-zones*', 'admin.charging-stations',
                     'admin.subscription-plans*', 'admin.business-accounts*',
                     'admin.banners', 'admin.chat'
@@ -384,6 +384,12 @@
                                 <a href="{{ route('admin.moving-fare') }}" class="nav-link {{ request()->routeIs('admin.moving-fare') ? 'active' : '' }}">
                                     <i class="nav-icon fas fa-truck-moving"></i>
                                     <p>Moving Fare</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('admin.delivery-fare') }}" class="nav-link {{ request()->routeIs('admin.delivery-fare') ? 'active' : '' }}">
+                                    <i class="nav-icon fas fa-box"></i>
+                                    <p>Delivery Fare</p>
                                 </a>
                             </li>
                             <li class="nav-item">
