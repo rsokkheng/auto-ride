@@ -10,5 +10,12 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command(AutoCancelTimedOutRides::class)->everyMinute();
-Schedule::command(SendRideReminders::class)->everyFifteenMinutes();
+Schedule::command(AutoCancelTimedOutRides::class)
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/scheduler.log'));
+
+Schedule::command(SendRideReminders::class)
+    ->everyFifteenMinutes()
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/scheduler.log'));
