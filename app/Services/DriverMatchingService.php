@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\PricingSetting;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
@@ -11,20 +12,24 @@ class DriverMatchingService
 {
     private float $radiusKm;
     private float $distanceWeight;
+    private float $etaWeight;
     private float $ratingWeight;
 
     public function __construct()
     {
-        $this->radiusKm      = (float) config('delivery.match_radius_km', 30);
-        $this->distanceWeight = (float) config('delivery.match_distance_weight', 0.7);
-        $this->ratingWeight   = (float) config('delivery.match_rating_weight', 1.5);
+        // Admin-managed via PricingSetting (Admin > Pricing Settings), falls back to config/.env.
+        $this->radiusKm       = (float) PricingSetting::get('delivery_match_radius_km', config('delivery.match_radius_km', 30));
+        $this->distanceWeight = (float) PricingSetting::get('driver_match_distance_weight', config('delivery.match_distance_weight', 6));
+        $this->etaWeight      = (float) PricingSetting::get('driver_match_eta_weight', config('delivery.match_eta_weight', 1.5));
+        $this->ratingWeight   = (float) PricingSetting::get('driver_match_rating_weight', config('delivery.match_rating_weight', 4));
     }
 
     /**
-     * Return available drivers ranked by a weighted score of distance and rating.
+     * Return available drivers ranked by a weighted score of distance, ETA and rating.
      *
-     * Score = distance_km * distanceWeight + (5.0 - rating) * ratingWeight
-     * Lower score = better match.
+     * Score = 100 - (distance_km * distanceWeight) - (eta_minutes * etaWeight)
+     *             - ((5.0 - rating) * ratingWeight), clamped to [0, 100].
+     * Higher score = better match (Grab-style: 0-100, best driver first).
      */
     public function findDrivers(float $pickupLat, float $pickupLng, int $limit = 10, ?float $radiusKm = null): Collection
     {
@@ -53,18 +58,22 @@ class DriverMatchingService
                         $pickupLng
                     );
 
+                $etaMinutes = (int) ceil(($distanceKm / 30) * 60); // avg 30 km/h city speed
+
+                $rawScore = 100
+                    - ($distanceKm * $this->distanceWeight)
+                    - ($etaMinutes * $this->etaWeight)
+                    - ((5.0 - (float) $driver->rating) * $this->ratingWeight);
+
                 $driver->distance_km     = round($distanceKm, 2);
-                $driver->eta_minutes     = (int) ceil(($distanceKm / 30) * 60); // avg 30 km/h city speed
-                $driver->score           = round(
-                    $distanceKm * $this->distanceWeight + (5.0 - (float) $driver->rating) * $this->ratingWeight,
-                    4
-                );
+                $driver->eta_minutes     = $etaMinutes;
+                $driver->score           = (int) round(max(0, min(100, $rawScore)));
                 $driver->distance_source = isset($googleDistances[$driver->id]) ? 'google_maps' : 'haversine';
 
                 return $driver;
             })
             ->filter(fn(User $d) => $d->distance_km <= $radius)
-            ->sortBy('score')
+            ->sortByDesc('score')
             ->take($limit)
             ->values();
     }

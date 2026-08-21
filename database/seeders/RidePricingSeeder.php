@@ -114,6 +114,48 @@ class RidePricingSeeder extends Seeder
                 'label'       => 'Delivery Night Surcharge Rate',
                 'description' => 'Extra % on delivery fee from 22:00–05:00',
             ],
+            [
+                'key'         => 'delivery_match_radius_km',
+                'value'       => '30',
+                'label'       => 'Delivery Dispatch Radius (km)',
+                'description' => 'Max distance from pickup to search for drivers when a delivery is requested',
+            ],
+            [
+                'key'         => 'ride_match_radius_km',
+                'value'       => '8',
+                'label'       => 'Ride Dispatch Radius (km)',
+                'description' => 'Max distance from pickup to search for drivers when a ride is requested',
+            ],
+            [
+                'key'         => 'ride_dispatch_limit',
+                'value'       => '10',
+                'label'       => 'Ride Dispatch Queue Size',
+                'description' => 'Max number of ranked drivers queued for sequential dispatch per ride',
+            ],
+            [
+                'key'         => 'ride_offer_timeout_seconds',
+                'value'       => '15',
+                'label'       => 'Ride Offer Timeout (seconds)',
+                'description' => 'How long a driver has to accept before the ride is offered to the next driver in the queue',
+            ],
+            [
+                'key'         => 'driver_match_distance_weight',
+                'value'       => '6',
+                'label'       => 'Driver Match — Distance Weight',
+                'description' => 'Score penalty per km when ranking drivers (higher = favour closer drivers more)',
+            ],
+            [
+                'key'         => 'driver_match_eta_weight',
+                'value'       => '1.5',
+                'label'       => 'Driver Match — ETA Weight',
+                'description' => 'Score penalty per ETA-minute when ranking drivers (higher = favour faster arrival more)',
+            ],
+            [
+                'key'         => 'driver_match_rating_weight',
+                'value'       => '4',
+                'label'       => 'Driver Match — Rating Weight',
+                'description' => 'Score penalty per rating-point below 5.0 when ranking drivers (higher = favour highly-rated drivers more)',
+            ],
         ];
 
         foreach ($settings as $row) {

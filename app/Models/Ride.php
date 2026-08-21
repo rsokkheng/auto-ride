@@ -13,6 +13,7 @@ class Ride extends Model
 
     // ── Status constants ───────────────────────────────────────────────────────
     const STATUS_REQUESTED      = 'requested';
+    const STATUS_PENDING        = 'pending';
     const STATUS_ACCEPTED       = 'accepted';
     const STATUS_DRIVER_ARRIVED = 'driver_arrived';
     const STATUS_IN_PROGRESS    = 'in_progress';
@@ -34,6 +35,9 @@ class Ride extends Model
         'passenger_id',
         'driver_id',
         'vehicle_id',
+        'dispatch_queue',
+        'dispatch_position',
+        'dispatch_offered_at',
         'pickup_address',
         'dropoff_address',
         'pickup_lat',
@@ -100,6 +104,9 @@ class Ride extends Model
         'completed_at'      => 'datetime',
         'cancelled_at'      => 'datetime',
         'pickup_timeout_at' => 'datetime',
+        'dispatch_queue'      => 'array',
+        'dispatch_position'   => 'integer',
+        'dispatch_offered_at' => 'datetime',
         'fare'              => 'integer',
         'cancellation_fee'  => 'integer',
         'waiting_fee'       => 'integer',

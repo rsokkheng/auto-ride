@@ -12,6 +12,7 @@ use App\Services\FareService;
 use App\Services\FcmService;
 use App\Services\FirestoreService;
 use App\Services\PaymentService;
+use App\Services\RideDispatchService;
 use App\Services\WalletService;
 use App\Mail\TripReceipt;
 use Illuminate\Http\Request;
@@ -24,6 +25,7 @@ class RideController extends ApiController
         private FirestoreService $firestore,
         private FcmService $fcm,
         private WalletService $wallet,
+        private RideDispatchService $dispatcher,
     ) {}
 
     // ── List / History ────────────────────────────────────────────────────────
@@ -500,19 +502,8 @@ class RideController extends ApiController
         $ride->load('driver', 'vehicle', 'stops');
         $this->firestore->syncRide($ride);
 
-        $dropoffLabel = $data['dropoff_address'] ?? 'Destination TBD';
         try {
-            $nearbyDrivers = User::where('role', 'driver')
-                ->where('available', true)
-                ->get();
-            $this->fcm->rideRequestedToMany(
-                $nearbyDrivers->all(),
-                $ride->id,
-                $data['pickup_address'],
-                $dropoffLabel,
-                $user->name,
-                (int) $finalFare
-            );
+            $this->dispatcher->start($ride->fresh());
         } catch (\Throwable $e) {
             report($e);
         }
@@ -589,20 +580,24 @@ class RideController extends ApiController
         $user = $this->authUser($request);
         if (! $user || $user->role !== 'driver') return $this->unauthorized();
 
-        if ($ride->status !== Ride::STATUS_PENDING) {
+        if (! in_array($ride->status, Ride::OPEN_STATUSES, true)) {
             return response()->json([
                 'data'    => null,
                 'message' => "Cannot reject — ride is \"{$ride->status}\".",
             ], 422);
         }
 
-        // Notify passenger only if no other driver has taken it
-        try {
-            if ($ride->passenger) {
-                $this->fcm->rideRejected($ride->passenger, $ride->id);
+        // Only the driver currently offered the ride advances the dispatch queue —
+        // a stale/duplicate reject from another driver is a no-op.
+        $queue    = $ride->dispatch_queue ?? [];
+        $position = $ride->dispatch_position ?? 0;
+
+        if (isset($queue[$position]) && (int) $queue[$position] === $user->id) {
+            try {
+                $this->dispatcher->advance($ride, $position);
+            } catch (\Throwable $e) {
+                report($e);
             }
-        } catch (\Throwable $e) {
-            report($e);
         }
 
         return $this->success(['message' => 'Ride rejected.']);
