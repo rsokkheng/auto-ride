@@ -46,9 +46,13 @@ class DriverSeeder extends Seeder
                     'rating'            => round(mt_rand(35, 50) / 10, 2), // 3.5–5.0
                     'total_ratings'     => mt_rand(5, 200),
                     'api_token'         => 'seed-driver-token-' . str_pad((string) $i, 3, '0', STR_PAD_LEFT),
-                    'email_verified_at' => now(),
                 ]
             );
+
+            // Not in User's fillable list, so it's set outside mass assignment.
+            if (! $driver->email_verified_at) {
+                $driver->forceFill(['email_verified_at' => now()])->save();
+            }
 
             Vehicle::updateOrCreate(
                 ['user_id' => $driver->id],
