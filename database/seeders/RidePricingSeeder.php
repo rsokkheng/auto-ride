@@ -151,10 +151,10 @@ class RidePricingSeeder extends Seeder
                 'description' => 'Max distance from pickup to search for drivers when a delivery is requested',
             ],
             [
-                'key'         => 'ride_match_radius_km',
-                'value'       => '8',
-                'label'       => 'Ride Dispatch Radius (km)',
-                'description' => 'Max distance from pickup to search for drivers when a ride is requested',
+                'key'         => 'ride_radius_tiers_km',
+                'value'       => '2,4,6,8',
+                'label'       => 'Ride Dispatch Radius Tiers (km)',
+                'description' => 'Comma-separated expanding search radii, narrowest first — e.g. "2,4,6,8" tries 2km, then 4km, 6km, 8km before falling to self-serve',
             ],
             [
                 'key'         => 'ride_dispatch_limit',

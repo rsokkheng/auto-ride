@@ -122,6 +122,48 @@ class RideDispatchTest extends TestCase
         $this->assertSame(1, $ride->dispatch_position);
     }
 
+    public function test_widens_to_next_radius_tier_when_narrow_tier_has_no_candidates(): void
+    {
+        // ~3km north of the pickup point — outside the first tier (2km) but inside
+        // the second (4km), per config/ride.php's default 'radius_tiers_km' => '2,4,6,8'.
+        $farDriver = $this->makeDriver(['current_latitude' => 11.5564 + 0.027]);
+        $passenger = $this->makePassenger();
+        $ride      = $this->makeRide($passenger);
+
+        app(RideDispatchService::class)->start($ride->fresh());
+        $ride->refresh();
+
+        $this->assertSame(1, $ride->dispatch_tier, 'tier 0 (2km) had no candidates, so it should have widened to tier 1 (4km)');
+        $this->assertSame([$farDriver->id], $ride->dispatch_queue);
+        $this->assertSame(0, $ride->dispatch_position);
+        $this->assertNull($ride->self_serve_expires_at, 'a candidate was found in tier 1 — must not fall through to self-serve');
+    }
+
+    public function test_rejected_driver_is_not_reoffered_after_widening_to_next_tier(): void
+    {
+        // Both within 4km (so both are candidates once the search widens), but only
+        // $near is within the first 2km tier — it should be offered first, and once
+        // rejected must never reappear when the search widens to include $near again.
+        $near      = $this->makeDriver(); // 0km — inside every tier
+        $far       = $this->makeDriver(['current_latitude' => 11.5564 + 0.027]); // ~3km — tier 1 only
+        $passenger = $this->makePassenger();
+        $ride      = $this->makeRide($passenger);
+
+        app(RideDispatchService::class)->start($ride->fresh());
+        $ride->refresh();
+        $this->assertSame(0, $ride->dispatch_tier);
+        $this->assertSame([$near->id], $ride->dispatch_queue, 'only $near is within the 2km first tier');
+
+        $this->withHeader('Authorization', 'Bearer ' . $near->api_token)
+            ->postJson("/api/v1/rides/{$ride->id}/reject")
+            ->assertOk();
+
+        $ride->refresh();
+        $this->assertSame(1, $ride->dispatch_tier, 'tier 0 exhausted after rejecting its only candidate — widened to tier 1');
+        $this->assertSame([$far->id], $ride->dispatch_queue, '$near must not be re-offered even though it is still within the wider 4km tier');
+        $this->assertContains($near->id, $ride->tried_driver_ids);
+    }
+
     public function test_non_ranked_driver_can_self_serve_once_queue_is_exhausted(): void
     {
         // No available driver exists yet at dispatch time — DriverMatchingService

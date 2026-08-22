@@ -4,14 +4,18 @@ return [
 
     /*
     |------------------------------------------------------------------
-    | Sequential Dispatch (Grab-style)
+    | Sequential Dispatch (Grab-style, expanding radius)
     |------------------------------------------------------------------
-    | When a ride is requested, the top N nearby drivers are ranked by
-    | DriverMatchingService and offered the ride one at a time — best
-    | match first. If a driver doesn't accept within the offer window,
-    | the ride is automatically offered to the next driver in the queue.
+    | When a ride is requested, drivers within the first radius tier are
+    | ranked by DriverMatchingService and offered the ride one at a time —
+    | best match first. If a driver doesn't accept within the offer window,
+    | the ride is offered to the next driver in that tier's queue. Once a
+    | tier's ranked queue is exhausted (nobody accepted, or none were
+    | available), the search widens to the next radius tier — drivers
+    | already tried are never re-offered — before finally falling through
+    | to the untargeted self-serve window below.
     */
-    'match_radius_km'       => env('RIDE_MATCH_RADIUS_KM', 8),
+    'radius_tiers_km'       => env('RIDE_RADIUS_TIERS_KM', '2,4,6,8'),
     'dispatch_limit'        => env('RIDE_DISPATCH_LIMIT', 10),
     'offer_timeout_seconds' => env('RIDE_OFFER_TIMEOUT_SECONDS', 15),
 

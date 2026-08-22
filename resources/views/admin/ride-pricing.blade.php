@@ -342,14 +342,14 @@ $colors = [
             @csrf
             <div class="row">
                 <div class="col-md-3 mb-3">
-                    <label class="field-label">Ride Dispatch Radius</label>
+                    <label class="field-label">Ride Dispatch Radius Tiers</label>
                     <div class="input-group">
-                        <input type="number" name="ride_match_radius_km" class="form-control"
-                               value="{{ $settings['ride_match_radius_km']->value ?? 8 }}"
-                               step="0.1" min="1" max="100" required>
+                        <input type="text" name="ride_radius_tiers_km" class="form-control"
+                               value="{{ $settings['ride_radius_tiers_km']->value ?? '2,4,6,8' }}"
+                               pattern="^(\d+(\.\d+)?)(,\d+(\.\d+)?)*$" required>
                         <div class="input-group-append"><span class="input-group-text">km</span></div>
                     </div>
-                    <small class="text-muted">Search radius from pickup for a ride</small>
+                    <small class="text-muted">Comma-separated, narrowest first — e.g. "2,4,6,8"</small>
                 </div>
                 <div class="col-md-3 mb-3">
                     <label class="field-label">Dispatch Queue Size</label>
