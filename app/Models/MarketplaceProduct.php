@@ -16,6 +16,9 @@ class MarketplaceProduct extends Model
         'guest_phone',
         'category_id',
         'vehicle_id',
+        'marketplace_vehicle_type_id',
+        'marketplace_vehicle_color_id',
+        'marketplace_vehicle_size_id',
         'title',
         'slug',
         'description',
@@ -64,6 +67,21 @@ class MarketplaceProduct extends Model
     public function vehicle(): BelongsTo
     {
         return $this->belongsTo(Vehicle::class);
+    }
+
+    public function marketplaceVehicleType(): BelongsTo
+    {
+        return $this->belongsTo(MarketplaceVehicleType::class);
+    }
+
+    public function marketplaceVehicleColor(): BelongsTo
+    {
+        return $this->belongsTo(MarketplaceVehicleColor::class);
+    }
+
+    public function marketplaceVehicleSize(): BelongsTo
+    {
+        return $this->belongsTo(MarketplaceVehicleSize::class);
     }
 
     public function images(): HasMany

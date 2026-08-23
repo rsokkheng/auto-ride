@@ -7,6 +7,9 @@ use App\Models\MarketplaceItem;
 use App\Models\MarketplaceOrder;
 use App\Models\MarketplaceProduct;
 use App\Models\MarketplaceProductImage;
+use App\Models\MarketplaceVehicleColor;
+use App\Models\MarketplaceVehicleSize;
+use App\Models\MarketplaceVehicleType;
 use App\Models\PromoCode;
 use App\Models\PromoCodeUsage;
 use Illuminate\Http\Request;
@@ -27,12 +30,44 @@ class MarketplaceController extends ApiController
         return $this->success(['categories' => $categories]);
     }
 
+    // ── Vehicle types / colors / sizes (for listing form + filters) ───────────
+
+    /**
+     * Each type includes its valid sizes and body-style categories, so the app can
+     * show the right size/category options as soon as a vehicle type is picked,
+     * without a second request (e.g. Passenger → 1.4M/1.6M + ធម្មតា only;
+     * Cargo → 1.4M/1.8M/2.2M + បើកបូល/ដំបូលក្លុបបិទជិត).
+     */
+    public function vehicleTypes()
+    {
+        $types = MarketplaceVehicleType::active()
+            ->with(['sizes', 'categories'])
+            ->orderBy('sort_order')
+            ->get();
+
+        return $this->success(['vehicle_types' => $types]);
+    }
+
+    public function vehicleColors()
+    {
+        return $this->success([
+            'vehicle_colors' => MarketplaceVehicleColor::active()->orderBy('sort_order')->get(),
+        ]);
+    }
+
+    public function vehicleSizes()
+    {
+        return $this->success([
+            'vehicle_sizes' => MarketplaceVehicleSize::active()->orderBy('sort_order')->get(),
+        ]);
+    }
+
     // ── Products — browse ─────────────────────────────────────────────────────
 
     public function index(Request $request)
     {
         try {
-            $query = MarketplaceProduct::with(['seller', 'category', 'images'])
+            $query = MarketplaceProduct::with(['seller', 'category', 'images', 'marketplaceVehicleType', 'marketplaceVehicleColor', 'marketplaceVehicleSize'])
                 ->where('status', 'active');
 
             if ($request->filled('category_id')) {
@@ -52,6 +87,15 @@ class MarketplaceController extends ApiController
             }
             if ($request->filled('condition')) {
                 $query->where('condition', $request->condition);
+            }
+            if ($request->filled('marketplace_vehicle_type_id')) {
+                $query->where('marketplace_vehicle_type_id', $request->marketplace_vehicle_type_id);
+            }
+            if ($request->filled('marketplace_vehicle_color_id')) {
+                $query->where('marketplace_vehicle_color_id', $request->marketplace_vehicle_color_id);
+            }
+            if ($request->filled('marketplace_vehicle_size_id')) {
+                $query->where('marketplace_vehicle_size_id', $request->marketplace_vehicle_size_id);
             }
             if ($request->filled('min_price')) {
                 $query->where('price', '>=', (float) $request->min_price);
@@ -87,7 +131,7 @@ class MarketplaceController extends ApiController
             return response()->json(['success' => false, 'message' => 'This product is no longer available.'], 404);
         }
         $product->increment('views_count');
-        return $this->success(['product' => $product->load(['seller', 'category', 'images', 'vehicle'])]);
+        return $this->success(['product' => $product->load(['seller', 'category', 'images', 'vehicle', 'marketplaceVehicleType', 'marketplaceVehicleColor', 'marketplaceVehicleSize'])]);
     }
 
     // ── My products (seller) ──────────────────────────────────────────────────
@@ -112,16 +156,13 @@ class MarketplaceController extends ApiController
         $user = $this->authUser($request);
         if (! $user) return $this->unauthorized();
 
-        $isGuest = $request->input('entry_type') === 'guest';
-
         $data = $request->validate([
-            'entry_type'         => 'nullable|in:user,guest',
-            'guest_name'         => $isGuest ? 'required|string|max:100' : 'nullable|string|max:100',
-            'guest_phone'        => $isGuest ? 'required|string|max:20'  : 'nullable|string|max:20',
             'title'              => 'required|string|max:200',
             'description'        => 'nullable|string',
             'category_id'        => 'nullable|exists:marketplace_categories,id',
-            'vehicle_id'         => 'nullable|exists:vehicles,id',
+            'marketplace_vehicle_type_id'  => 'nullable|exists:marketplace_vehicle_types,id',
+            'marketplace_vehicle_color_id' => 'nullable|exists:marketplace_vehicle_colors,id',
+            'marketplace_vehicle_size_id'  => 'nullable|exists:marketplace_vehicle_sizes,id',
             'condition'          => 'nullable|in:new,used,refurbished',
             'listing_type'       => 'nullable|in:sale,rent,both',
             'price'              => 'required|numeric|min:0',
@@ -136,11 +177,15 @@ class MarketplaceController extends ApiController
             'images.*'           => 'image|max:5120',
         ]);
 
+        if ($error = $this->vehicleTypeMismatchError($data)) {
+            return response()->json(['success' => false, 'message' => $error], 422);
+        }
+
         $product = MarketplaceProduct::create(array_merge(
             collect($data)->except('images')->toArray(),
             [
-                'seller_id'  => $isGuest ? null : $user->id,
-                'entry_type' => $isGuest ? 'guest' : 'user',
+                'seller_id'  => $user->id,
+                'entry_type' => 'user',
             ]
         ));
 
@@ -170,6 +215,9 @@ class MarketplaceController extends ApiController
             'title'              => 'nullable|string|max:200',
             'description'        => 'nullable|string',
             'category_id'        => 'nullable|exists:marketplace_categories,id',
+            'marketplace_vehicle_type_id'  => 'nullable|exists:marketplace_vehicle_types,id',
+            'marketplace_vehicle_color_id' => 'nullable|exists:marketplace_vehicle_colors,id',
+            'marketplace_vehicle_size_id'  => 'nullable|exists:marketplace_vehicle_sizes,id',
             'condition'          => 'nullable|in:new,used,refurbished',
             'listing_type'       => 'nullable|in:sale,rent,both',
             'price'              => 'nullable|numeric|min:0',
@@ -182,9 +230,41 @@ class MarketplaceController extends ApiController
             'expires_at'         => 'nullable|date',
         ]);
 
+        $effectiveTypeId = $data['marketplace_vehicle_type_id'] ?? $product->marketplace_vehicle_type_id;
+        if ($error = $this->vehicleTypeMismatchError($data, $effectiveTypeId)) {
+            return response()->json(['success' => false, 'message' => $error], 422);
+        }
+
         $product->update(array_filter($data, fn($v) => $v !== null));
 
         return $this->success(['product' => $product->fresh()->load('category', 'images')]);
+    }
+
+    /**
+     * Ensures a submitted size/category actually belongs to the (effective) vehicle
+     * type — e.g. rejects Passenger Three-Wheeler + 2.2M, which is only valid for Cargo.
+     */
+    private function vehicleTypeMismatchError(array $data, ?int $effectiveTypeId = null): ?string
+    {
+        $typeId = $effectiveTypeId ?? ($data['marketplace_vehicle_type_id'] ?? null);
+        if (! $typeId) {
+            return null;
+        }
+
+        $type = MarketplaceVehicleType::with(['sizes', 'categories'])->find($typeId);
+        if (! $type) {
+            return null;
+        }
+
+        if (! empty($data['marketplace_vehicle_size_id']) && ! $type->sizes->contains('id', $data['marketplace_vehicle_size_id'])) {
+            return 'The selected size is not valid for this vehicle type.';
+        }
+
+        if (! empty($data['category_id']) && ! $type->categories->contains('id', $data['category_id'])) {
+            return 'The selected category is not valid for this vehicle type.';
+        }
+
+        return null;
     }
 
     // ── Delete ────────────────────────────────────────────────────────────────

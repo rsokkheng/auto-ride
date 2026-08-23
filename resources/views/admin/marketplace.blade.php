@@ -21,6 +21,9 @@
                     <th>Type</th>
                     <th>Price (USD)</th>
                     <th>Rent/day (USD)</th>
+                    <th>Vehicle Type</th>
+                    <th>Color</th>
+                    <th>Size</th>
                     <th>Condition</th>
                     <th>Available</th>
                     <th>Actions</th>
@@ -74,6 +77,23 @@
                     </td>
                     <td>{{ $item->price ? '$'.number_format($item->price, 2) : '—' }}</td>
                     <td>{{ $item->rent_price_per_day ? '$'.number_format($item->rent_price_per_day, 2) : '—' }}</td>
+                    <td>
+                        @if($item->marketplaceVehicleType)
+                            {{ $item->marketplaceVehicleType->name_km }}
+                            <br><small class="text-muted">{{ $item->marketplaceVehicleType->name_en }}</small>
+                        @else
+                            <span class="text-muted">—</span>
+                        @endif
+                    </td>
+                    <td>
+                        @if($item->marketplaceVehicleColor)
+                            {{ $item->marketplaceVehicleColor->name_km }}
+                            <br><small class="text-muted">{{ $item->marketplaceVehicleColor->name_en }}</small>
+                        @else
+                            <span class="text-muted">—</span>
+                        @endif
+                    </td>
+                    <td>{{ $item->marketplaceVehicleSize->label ?? '—' }}</td>
                     <td>{{ ucfirst($item->condition) }}</td>
                     <td>
                         @php $statusColor = ['active'=>'success','paused'=>'warning','draft'=>'secondary','sold'=>'info'][$item->status] ?? 'secondary' @endphp
@@ -134,58 +154,6 @@
                         </ul>
                     </div>
                     @endif
-
-                    {{-- ── Entry Type ───────────────────────────────────── --}}
-                    <div class="form-group">
-                        <label class="d-block">Entry By</label>
-                        <div class="btn-group btn-group-sm" role="group">
-                            <button type="button" id="btn-entry-user" class="btn btn-primary" onclick="setEntryType('user')">
-                                <i class="fas fa-user mr-1"></i> Registered User
-                            </button>
-                            <button type="button" id="btn-entry-guest" class="btn btn-outline-secondary" onclick="setEntryType('guest')">
-                                <i class="fas fa-user-clock mr-1"></i> Guest
-                            </button>
-                        </div>
-                        <input type="hidden" name="entry_type" id="f-entry-type" value="user">
-                    </div>
-
-                    {{-- ── User Seller (entry_type = user) ─────────────────── --}}
-                    <div id="sellerSection">
-                        <div class="form-row">
-                            <div class="form-group col-md-6">
-                                <label>Seller <span class="text-danger">*</span></label>
-                                <select name="seller_id" id="f-seller" class="form-control">
-                                    <option value="">— Select seller —</option>
-                                    @foreach($sellers as $s)
-                                        <option value="{{ $s->id }}">{{ $s->name }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div class="form-group col-md-6">
-                                <label>Vehicle</label>
-                                <select name="vehicle_id" id="f-vehicle" class="form-control">
-                                    <option value="">— None —</option>
-                                    @foreach($vehicles as $v)
-                                        <option value="{{ $v->id }}">{{ $v->make }} {{ $v->model }} ({{ $v->license_plate }})</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    {{-- ── Guest Info (entry_type = guest) ─────────────────── --}}
-                    <div id="guestSection" style="display:none">
-                        <div class="form-row">
-                            <div class="form-group col-md-6">
-                                <label>Guest Name <span class="text-danger">*</span></label>
-                                <input type="text" name="guest_name" id="f-guest-name" class="form-control" maxlength="100" placeholder="Full name">
-                            </div>
-                            <div class="form-group col-md-6">
-                                <label>Guest Phone <span class="text-danger">*</span></label>
-                                <input type="text" name="guest_phone" id="f-guest-phone" class="form-control" maxlength="20" placeholder="+855...">
-                            </div>
-                        </div>
-                    </div>
 
                     {{-- ── Title / Description ─────────────────────────── --}}
                     <div class="form-group">
@@ -249,6 +217,47 @@
                                 <option value="draft">Draft</option>
                                 <option value="sold">Sold</option>
                             </select>
+                        </div>
+                    </div>
+
+                    {{-- ── Vehicle Type / Size / Category / Color ───────────
+                         Size and Category options depend on the selected Vehicle
+                         Type (e.g. Passenger → 1.4M/1.6M + ធម្មតា only; Cargo →
+                         1.4M/1.8M/2.2M + បើកបូល/ដំបូលក្លុបបិទជិត). --}}
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label>Vehicle Type</label>
+                            <select name="marketplace_vehicle_type_id" id="f-vehicle-type" class="form-control" onchange="refreshVehicleOptions()">
+                                <option value="">— None —</option>
+                                @foreach($vehicleTypes as $t)
+                                    <option value="{{ $t->id }}">{{ $t->name_km }} ({{ $t->name_en }})</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label>Color</label>
+                            <select name="marketplace_vehicle_color_id" id="f-vehicle-color" class="form-control">
+                                <option value="">— None —</option>
+                                @foreach($vehicleColors as $c)
+                                    <option value="{{ $c->id }}">{{ $c->name_km }} ({{ $c->name_en }})</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label>Size</label>
+                            <select name="marketplace_vehicle_size_id" id="f-vehicle-size" class="form-control">
+                                <option value="">— None —</option>
+                            </select>
+                            <small class="text-muted">Select a Vehicle Type first</small>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label>Category</label>
+                            <select name="category_id" id="f-category" class="form-control">
+                                <option value="">— None —</option>
+                            </select>
+                            <small class="text-muted">Select a Vehicle Type first</small>
                         </div>
                     </div>
 
@@ -350,6 +359,43 @@ const updateBase    = '/admin/marketplace/';
 const imgDeleteBase = '/admin/marketplace-images/';
 const csrf          = document.querySelector('meta[name="csrf-token"]').content;
 
+// ── Vehicle type → valid sizes / categories (dependent dropdowns) ────────────
+
+@php
+    $vehicleTypeOptionsForJs = $vehicleTypes->mapWithKeys(function ($t) {
+        return [$t->id => [
+            'sizes'      => $t->sizes->map(fn ($s) => ['id' => $s->id, 'label' => $s->label])->values(),
+            'categories' => $t->categories->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->values(),
+        ]];
+    });
+@endphp
+const vehicleTypeOptions = @json($vehicleTypeOptionsForJs);
+
+function refreshVehicleOptions(selectedSizeId = null, selectedCategoryId = null) {
+    const typeId     = document.getElementById('f-vehicle-type').value;
+    const sizeSelect = document.getElementById('f-vehicle-size');
+    const catSelect  = document.getElementById('f-category');
+    const opts       = vehicleTypeOptions[typeId] || { sizes: [], categories: [] };
+
+    sizeSelect.innerHTML = '<option value="">— None —</option>';
+    opts.sizes.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.label;
+        if (selectedSizeId && String(s.id) === String(selectedSizeId)) opt.selected = true;
+        sizeSelect.appendChild(opt);
+    });
+
+    catSelect.innerHTML = '<option value="">— None —</option>';
+    opts.categories.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name;
+        if (selectedCategoryId && String(c.id) === String(selectedCategoryId)) opt.selected = true;
+        catSelect.appendChild(opt);
+    });
+}
+
 // ── Image selection & preview ────────────────────────────────────────────────
 
 function handleImageSelect(input) {
@@ -427,25 +473,6 @@ function deleteExistingImage(id) {
     .catch(() => alert('Failed to delete image. Please try again.'));
 }
 
-// ── Entry type (user vs guest) ───────────────────────────────────────────────
-
-function setEntryType(type) {
-    document.getElementById('f-entry-type').value = type;
-
-    const isGuest = type === 'guest';
-    document.getElementById('sellerSection').style.display = isGuest ? 'none' : '';
-    document.getElementById('guestSection').style.display  = isGuest ? ''     : 'none';
-
-    document.getElementById('f-seller').required      = !isGuest;
-    document.getElementById('f-guest-name').required  = isGuest;
-    document.getElementById('f-guest-phone').required = isGuest;
-
-    document.getElementById('btn-entry-user').className  = isGuest
-        ? 'btn btn-outline-secondary' : 'btn btn-primary';
-    document.getElementById('btn-entry-guest').className = isGuest
-        ? 'btn btn-warning'           : 'btn btn-outline-secondary';
-}
-
 // ── Listing type toggles ─────────────────────────────────────────────────────
 
 function togglePriceFields() {
@@ -504,7 +531,7 @@ function openCreate() {
     document.getElementById('f-status').value          = 'active';
     document.getElementById('f-is-sale').checked       = false;
     document.getElementById('f-is-rent').checked       = false;
-    setEntryType('user');
+    refreshVehicleOptions();
     togglePriceFields();
     resetImageSection();
     $('#formModal').modal('show');
@@ -520,16 +547,9 @@ function openEdit(id, d) {
     document.getElementById('f-rent').value             = d.rent_price_per_day || '';
     document.getElementById('f-condition').value        = d.condition          || 'used';
     document.getElementById('f-status').value           = d.status             || 'active';
-
-    const entryType = d.entry_type || 'user';
-    setEntryType(entryType);
-    if (entryType === 'user') {
-        document.getElementById('f-seller').value  = d.seller_id  || '';
-        document.getElementById('f-vehicle').value = d.vehicle_id || '';
-    } else {
-        document.getElementById('f-guest-name').value  = d.guest_name  || '';
-        document.getElementById('f-guest-phone').value = d.guest_phone || '';
-    }
+    document.getElementById('f-vehicle-type').value       = d.marketplace_vehicle_type_id      || '';
+    document.getElementById('f-vehicle-color').value      = d.marketplace_vehicle_color_id     || '';
+    refreshVehicleOptions(d.marketplace_vehicle_size_id, d.category_id);
 
     setTypeCheckboxes(d.listing_type || 'sale');
     resetImageSection();

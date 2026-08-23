@@ -11,7 +11,11 @@ use App\Models\RidePricing;
 use App\Services\FareService;
 use App\Models\Company;
 use App\Models\Delivery;
+use App\Models\MarketplaceCategory;
 use App\Models\MarketplaceProduct;
+use App\Models\MarketplaceVehicleColor;
+use App\Models\MarketplaceVehicleSize;
+use App\Models\MarketplaceVehicleType;
 use App\Models\MovingFloorFeeTier;
 use App\Models\PromoEvent;
 use App\Models\MarketplaceProductImage;
@@ -689,9 +693,11 @@ class AdminController extends Controller
     public function marketplace()
     {
         return view('admin.marketplace', [
-            'items'    => MarketplaceProduct::with(['seller', 'images'])->orderByDesc('created_at')->paginate(10),
-            'sellers'  => User::orderBy('name')->get(),
-            'vehicles' => Vehicle::orderBy('make')->get(),
+            'items'      => MarketplaceProduct::with(['seller', 'images', 'category', 'marketplaceVehicleType', 'marketplaceVehicleColor', 'marketplaceVehicleSize'])->orderByDesc('created_at')->paginate(10),
+            'categories' => MarketplaceCategory::where('active', true)->orderBy('sort_order')->get(),
+            'vehicleTypes'  => MarketplaceVehicleType::active()->with(['sizes', 'categories'])->orderBy('sort_order')->get(),
+            'vehicleColors' => MarketplaceVehicleColor::active()->orderBy('sort_order')->get(),
+            'vehicleSizes'  => MarketplaceVehicleSize::active()->orderBy('sort_order')->get(),
         ]);
     }
 
@@ -699,7 +705,6 @@ class AdminController extends Controller
     {
         $isSale  = $request->boolean('is_sale');
         $isRent  = $request->boolean('is_rent');
-        $isGuest = $request->input('entry_type') === 'guest';
 
         if (!$isSale && !$isRent) {
             return back()->withErrors(['listing_type' => 'Please select at least one listing type.'])->withInput();
@@ -707,28 +712,27 @@ class AdminController extends Controller
         $listingType = ($isSale && $isRent) ? 'both' : ($isSale ? 'sale' : 'rent');
 
         $data = $request->validate([
-            'entry_type'         => 'required|in:user,guest',
-            'seller_id'          => $isGuest ? 'nullable' : 'required|exists:users,id',
-            'vehicle_id'         => 'nullable|exists:vehicles,id',
-            'guest_name'         => $isGuest ? 'required|string|max:100' : 'nullable',
-            'guest_phone'        => $isGuest ? 'required|string|max:20'  : 'nullable',
             'title'              => 'required|string|max:255',
             'description'        => 'nullable|string',
             'price'              => $isSale ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
             'rent_price_per_day' => $isRent ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
+            'category_id'                  => 'nullable|exists:marketplace_categories,id',
+            'marketplace_vehicle_type_id'  => 'nullable|exists:marketplace_vehicle_types,id',
+            'marketplace_vehicle_color_id' => 'nullable|exists:marketplace_vehicle_colors,id',
+            'marketplace_vehicle_size_id'  => 'nullable|exists:marketplace_vehicle_sizes,id',
             'condition'          => 'required|in:new,used,refurbished',
             'status'             => 'required|in:active,paused,draft',
             'images'             => 'nullable|array|max:10',
             'images.*'           => 'image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
-        $data['listing_type'] = $listingType;
-        $data['seller_id']    = $isGuest ? null : ($data['seller_id']  ?: null);
-        $data['vehicle_id']   = $data['vehicle_id'] ?: null;
-        if ($isGuest) {
-            $data['guest_name']  = $request->input('guest_name');
-            $data['guest_phone'] = $request->input('guest_phone');
+        if ($error = $this->marketplaceVehicleTypeMismatchError($data)) {
+            return back()->withErrors(['marketplace_vehicle_size_id' => $error])->withInput();
         }
+
+        $data['listing_type'] = $listingType;
+        $data['seller_id']    = Auth::id();
+        $data['entry_type']   = 'user';
         unset($data['images']);
 
         try {
@@ -756,36 +760,31 @@ class AdminController extends Controller
     {
         $isSale  = $request->boolean('is_sale');
         $isRent  = $request->boolean('is_rent');
-        $isGuest = $request->input('entry_type') === 'guest';
-
         if (!$isSale && !$isRent) {
             return back()->withErrors(['listing_type' => 'Please select at least one listing type.'])->withInput();
         }
         $listingType = ($isSale && $isRent) ? 'both' : ($isSale ? 'sale' : 'rent');
 
         $data = $request->validate([
-            'entry_type'         => 'required|in:user,guest',
-            'seller_id'          => $isGuest ? 'nullable' : 'required|exists:users,id',
-            'vehicle_id'         => 'nullable|exists:vehicles,id',
-            'guest_name'         => $isGuest ? 'required|string|max:100' : 'nullable',
-            'guest_phone'        => $isGuest ? 'required|string|max:20'  : 'nullable',
             'title'              => 'required|string|max:255',
             'description'        => 'nullable|string',
             'price'              => $isSale ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
             'rent_price_per_day' => $isRent ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
+            'category_id'                  => 'nullable|exists:marketplace_categories,id',
+            'marketplace_vehicle_type_id'  => 'nullable|exists:marketplace_vehicle_types,id',
+            'marketplace_vehicle_color_id' => 'nullable|exists:marketplace_vehicle_colors,id',
+            'marketplace_vehicle_size_id'  => 'nullable|exists:marketplace_vehicle_sizes,id',
             'condition'          => 'required|in:new,used,refurbished',
             'status'             => 'required|in:active,paused,draft',
             'images'             => 'nullable|array|max:10',
             'images.*'           => 'image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
-        $data['listing_type'] = $listingType;
-        $data['seller_id']    = $isGuest ? null : ($data['seller_id']  ?: null);
-        $data['vehicle_id']   = $data['vehicle_id'] ?: null;
-        if ($isGuest) {
-            $data['guest_name']  = $request->input('guest_name');
-            $data['guest_phone'] = $request->input('guest_phone');
+        if ($error = $this->marketplaceVehicleTypeMismatchError($data)) {
+            return back()->withErrors(['marketplace_vehicle_size_id' => $error])->withInput();
         }
+
+        $data['listing_type'] = $listingType;
         unset($data['images']);
 
         try {
@@ -808,6 +807,33 @@ class AdminController extends Controller
         }
 
         return redirect()->route('admin.marketplace')->with('success', 'Item updated successfully.');
+    }
+
+    /**
+     * Ensures a submitted size/category actually belongs to the selected vehicle
+     * type — e.g. rejects Passenger Three-Wheeler + 2.2M, which is only valid for Cargo.
+     */
+    private function marketplaceVehicleTypeMismatchError(array $data): ?string
+    {
+        $typeId = $data['marketplace_vehicle_type_id'] ?? null;
+        if (! $typeId) {
+            return null;
+        }
+
+        $type = MarketplaceVehicleType::with(['sizes', 'categories'])->find($typeId);
+        if (! $type) {
+            return null;
+        }
+
+        if (! empty($data['marketplace_vehicle_size_id']) && ! $type->sizes->contains('id', $data['marketplace_vehicle_size_id'])) {
+            return 'The selected size is not valid for this vehicle type.';
+        }
+
+        if (! empty($data['category_id']) && ! $type->categories->contains('id', $data['category_id'])) {
+            return 'The selected category is not valid for this vehicle type.';
+        }
+
+        return null;
     }
 
     public function destroyMarketplace(MarketplaceProduct $item)
