@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class MarketplaceOrder extends Model
 {
     protected $fillable = [
+        'checkout_batch_id',
         'product_id',
         'buyer_id',
         'entry_type',

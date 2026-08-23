@@ -83,6 +83,7 @@ Route::prefix('v1')->group(function () {
     // Marketplace — my listings & orders (static, before {product} wildcard)
     Route::get('marketplace/my-products', [MarketplaceController::class, 'myProducts']);
     Route::get('marketplace/my-orders',   [MarketplaceController::class, 'myOrders']);
+    Route::post('marketplace/checkout',   [MarketplaceController::class, 'checkout']);
 
     // Marketplace — products CRUD
     Route::get('marketplace',                            [MarketplaceController::class, 'index']);
