@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\PromoCode;
 use App\Models\PromoCodeUsage;
+use App\Models\PricingSetting;
 use App\Services\FareService;
 use App\Services\FcmService;
 use App\Services\FirestoreService;
@@ -879,7 +880,7 @@ class RideController extends ApiController
             if ($driver) {
                 $newCount = $driver->cancellation_count + 1;
                 $updates  = ['cancellation_count' => $newCount];
-                if ($newCount >= 5) {
+                if ($newCount >= (int) PricingSetting::get('driver_cancellation_limit', 5)) {
                     $updates['cancellation_penalty_until'] = now()->addHours(24);
                 }
                 $driver->update($updates);

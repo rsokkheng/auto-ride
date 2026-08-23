@@ -10,6 +10,7 @@ use App\Models\PricingSetting;
 use App\Models\RideDecline;
 use App\Models\User;
 use App\Models\WithdrawalRequest;
+use App\Services\CommissionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -111,15 +112,22 @@ class DriverFeaturesController extends ApiController
             default   => now()->startOfDay(),
         };
 
-        $rideEarnings = Ride::where('driver_id', $user->id)
+        $grossRideFare = (int) Ride::where('driver_id', $user->id)
             ->where('status', 'completed')
             ->where('completed_at', '>=', $start)
             ->sum('fare');
 
-        $deliveryEarnings = Delivery::where('driver_id', $user->id)
+        $grossDeliveryFee = (int) Delivery::where('driver_id', $user->id)
             ->where('status', 'completed')
             ->where('updated_at', '>=', $start)
             ->sum('fee');
+
+        // Net take-home after the platform/company commission split — NOT the same
+        // as gross fare. For 'employee' drivers this is always 0 (paid a fixed
+        // salary instead of a per-trip cut) — see CommissionService for the rules.
+        $commission       = app(CommissionService::class);
+        $rideEarnings     = $commission->split($grossRideFare, $user)['driver_earning'];
+        $deliveryEarnings = $commission->split($grossDeliveryFee, $user)['driver_earning'];
 
         $tripCount = Ride::where('driver_id', $user->id)
             ->where('status', 'completed')
@@ -145,16 +153,20 @@ class DriverFeaturesController extends ApiController
         }
 
         return $this->success([
-            'period'           => $period,
-            'from'             => $start->toDateTimeString(),
-            'ride_earnings'    => (int) $rideEarnings,
-            'delivery_earnings'=> (int) $deliveryEarnings,
-            'total_earnings'   => (int) $rideEarnings + (int) $deliveryEarnings,
-            'trip_count'       => $tripCount,
-            'delivery_count'   => $deliveryCount,
-            'breakdown'        => $breakdown,
-            'currency'         => 'KHR',
-            'wallet_balance'   => $user->wallet_balance,
+            'period'             => $period,
+            'from'               => $start->toDateTimeString(),
+            'ride_earnings'      => (int) $rideEarnings,
+            'delivery_earnings'  => (int) $deliveryEarnings,
+            'total_earnings'     => (int) $rideEarnings + (int) $deliveryEarnings,
+            'gross_ride_fare'    => $grossRideFare,
+            'gross_delivery_fee' => $grossDeliveryFee,
+            'trip_count'         => $tripCount,
+            'delivery_count'     => $deliveryCount,
+            'breakdown'          => $breakdown,
+            'currency'           => 'KHR',
+            'wallet_balance'     => $user->wallet_balance,
+            'driver_type'        => $user->driver_type ?? 'owner',
+            'salary'             => $user->driver_type === 'employee' ? $user->salary : null,
         ]);
     }
 
@@ -193,7 +205,7 @@ class DriverFeaturesController extends ApiController
             'cancellation_count'      => $user->cancellation_count,
             'is_penalised'            => $isPenalised,
             'penalty_until'           => $user->cancellation_penalty_until,
-            'limit_before_penalty'    => 5, // configurable
+            'limit_before_penalty'    => (int) PricingSetting::get('driver_cancellation_limit', 5),
         ]);
     }
 
@@ -315,15 +327,23 @@ class DriverFeaturesController extends ApiController
         $todayStart = now()->startOfDay();
         $weekStart  = now()->startOfWeek();
 
-        $todayKhr = (int) Ride::where('driver_id', $user->id)->where('status', 'completed')
+        // Net take-home after the platform/company commission split — NOT the same
+        // as gross fare. For 'employee' drivers this is always 0 (paid a fixed
+        // salary instead of a per-trip cut) — see CommissionService for the rules.
+        $commission = app(CommissionService::class);
+
+        $grossToday = (int) Ride::where('driver_id', $user->id)->where('status', 'completed')
             ->where('completed_at', '>=', $todayStart)->sum('fare')
             + (int) Delivery::where('driver_id', $user->id)->where('status', 'completed')
             ->where('updated_at', '>=', $todayStart)->sum('fee');
 
-        $weekKhr = (int) Ride::where('driver_id', $user->id)->where('status', 'completed')
+        $grossWeek = (int) Ride::where('driver_id', $user->id)->where('status', 'completed')
             ->where('completed_at', '>=', $weekStart)->sum('fare')
             + (int) Delivery::where('driver_id', $user->id)->where('status', 'completed')
             ->where('updated_at', '>=', $weekStart)->sum('fee');
+
+        $todayKhr = $commission->split($grossToday, $user)['driver_earning'];
+        $weekKhr  = $commission->split($grossWeek, $user)['driver_earning'];
 
         $totalTrips = Ride::where('driver_id', $user->id)->where('status', 'completed')->count()
             + Delivery::where('driver_id', $user->id)->where('status', 'completed')->count();
@@ -351,6 +371,8 @@ class DriverFeaturesController extends ApiController
                 'account_number' => $pendingWithdrawal->account_number,
                 'created_at'     => $pendingWithdrawal->created_at->toDateTimeString(),
             ] : null,
+            'driver_type' => $user->driver_type ?? 'owner',
+            'salary'      => $user->driver_type === 'employee' ? $user->salary : null,
         ]);
     }
 
@@ -383,16 +405,21 @@ class DriverFeaturesController extends ApiController
             ->get()
             ->keyBy('date');
 
-        // Merge rides + deliveries per day
-        $allDates = collect(range(0, $days - 1))->map(fn($i) => now()->subDays($i)->toDateString())->sort()->values();
+        // Merge rides + deliveries per day. amount_khr is the driver's net take-home
+        // after the platform/company commission split, not raw gross fare — always
+        // 0 for 'employee' drivers (paid a fixed salary, not a per-trip cut).
+        $commission = app(CommissionService::class);
+        $allDates   = collect(range(0, $days - 1))->map(fn($i) => now()->subDays($i)->toDateString())->sort()->values();
 
-        $items = $allDates->map(function ($date) use ($rideRows, $deliveryRows) {
+        $items = $allDates->map(function ($date) use ($rideRows, $deliveryRows, $commission, $user) {
             $r = $rideRows->get($date);
             $d = $deliveryRows->get($date);
+            $grossKhr = (int) ($r->amount_khr ?? 0) + (int) ($d->amount_khr ?? 0);
+
             return [
                 'date'       => $date,
                 'trips'      => ($r->trips ?? 0) + ($d->trips ?? 0),
-                'amount_khr' => (int) ($r->amount_khr ?? 0) + (int) ($d->amount_khr ?? 0),
+                'amount_khr' => $commission->split($grossKhr, $user)['driver_earning'],
             ];
         });
 

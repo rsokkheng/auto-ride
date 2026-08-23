@@ -35,15 +35,16 @@ class MarketplaceController extends ApiController
     // ── Vehicle types / colors / sizes (for listing form + filters) ───────────
 
     /**
-     * Each type includes its valid sizes and body-style categories, so the app can
-     * show the right size/category options as soon as a vehicle type is picked,
-     * without a second request (e.g. Passenger → 1.4M/1.6M + ធម្មតា only;
-     * Cargo → 1.4M/1.8M/2.2M + បើកបូល/ដំបូលក្លុបបិទជិត).
+     * Each type includes its valid sizes, body-style categories, and colors, so
+     * the app can show the right options as soon as a vehicle type is picked,
+     * without extra requests (e.g. Passenger → 1.4M/1.6M + ធម្មតា only;
+     * Cargo → 1.4M/1.8M/2.2M + បើកបូល/ដំបូលក្លុបបិទជិត; colors currently apply
+     * to every type).
      */
     public function vehicleTypes()
     {
         $types = MarketplaceVehicleType::active()
-            ->with(['sizes', 'categories'])
+            ->with(['sizes', 'categories', 'colors'])
             ->orderBy('sort_order')
             ->get();
 
@@ -253,7 +254,7 @@ class MarketplaceController extends ApiController
             return null;
         }
 
-        $type = MarketplaceVehicleType::with(['sizes', 'categories'])->find($typeId);
+        $type = MarketplaceVehicleType::with(['sizes', 'categories', 'colors'])->find($typeId);
         if (! $type) {
             return null;
         }
@@ -264,6 +265,10 @@ class MarketplaceController extends ApiController
 
         if (! empty($data['category_id']) && ! $type->categories->contains('id', $data['category_id'])) {
             return 'The selected category is not valid for this vehicle type.';
+        }
+
+        if (! empty($data['marketplace_vehicle_color_id']) && ! $type->colors->contains('id', $data['marketplace_vehicle_color_id'])) {
+            return 'The selected color is not valid for this vehicle type.';
         }
 
         return null;

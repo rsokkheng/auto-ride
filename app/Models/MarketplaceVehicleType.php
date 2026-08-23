@@ -28,6 +28,13 @@ class MarketplaceVehicleType extends Model
             ->orderBy('marketplace_categories.sort_order');
     }
 
+    /** Colors valid for this vehicle type. */
+    public function colors(): BelongsToMany
+    {
+        return $this->belongsToMany(MarketplaceVehicleColor::class, 'marketplace_vehicle_type_color', 'marketplace_vehicle_type_id', 'marketplace_vehicle_color_id')
+            ->orderBy('marketplace_vehicle_colors.sort_order');
+    }
+
     public function scopeActive($query)
     {
         return $query->where('active', true);

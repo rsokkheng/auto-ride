@@ -224,37 +224,33 @@
                          Size and Category options depend on the selected Vehicle
                          Type (e.g. Passenger → 1.4M/1.6M + ធម្មតា only; Cargo →
                          1.4M/1.8M/2.2M + បើកបូល/ដំបូលក្លុបបិទជិត). --}}
-                    <div class="form-row">
-                        <div class="form-group col-md-6">
-                            <label>Vehicle Type</label>
-                            <select name="marketplace_vehicle_type_id" id="f-vehicle-type" class="form-control" onchange="refreshVehicleOptions()">
-                                <option value="">— None —</option>
-                                @foreach($vehicleTypes as $t)
-                                    <option value="{{ $t->id }}">{{ $t->name_km }} ({{ $t->name_en }})</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="form-group col-md-6">
-                            <label>Color</label>
-                            <select name="marketplace_vehicle_color_id" id="f-vehicle-color" class="form-control">
-                                <option value="">— None —</option>
-                                @foreach($vehicleColors as $c)
-                                    <option value="{{ $c->id }}">{{ $c->name_km }} ({{ $c->name_en }})</option>
-                                @endforeach
-                            </select>
-                        </div>
+                    <div class="form-group">
+                        <label>Vehicle Type</label>
+                        <select name="marketplace_vehicle_type_id" id="f-vehicle-type" class="form-control" onchange="refreshVehicleOptions()">
+                            <option value="">— None —</option>
+                            @foreach($vehicleTypes as $t)
+                                <option value="{{ $t->id }}">{{ $t->name_km }} ({{ $t->name_en }})</option>
+                            @endforeach
+                        </select>
                     </div>
                     <div class="form-row">
-                        <div class="form-group col-md-6">
+                        <div class="form-group col-md-4">
                             <label>Size</label>
                             <select name="marketplace_vehicle_size_id" id="f-vehicle-size" class="form-control">
                                 <option value="">— None —</option>
                             </select>
                             <small class="text-muted">Select a Vehicle Type first</small>
                         </div>
-                        <div class="form-group col-md-6">
+                        <div class="form-group col-md-4">
                             <label>Category</label>
                             <select name="category_id" id="f-category" class="form-control">
+                                <option value="">— None —</option>
+                            </select>
+                            <small class="text-muted">Select a Vehicle Type first</small>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label>Color</label>
+                            <select name="marketplace_vehicle_color_id" id="f-vehicle-color" class="form-control">
                                 <option value="">— None —</option>
                             </select>
                             <small class="text-muted">Select a Vehicle Type first</small>
@@ -359,41 +355,40 @@ const updateBase    = '/admin/marketplace/';
 const imgDeleteBase = '/admin/marketplace-images/';
 const csrf          = document.querySelector('meta[name="csrf-token"]').content;
 
-// ── Vehicle type → valid sizes / categories (dependent dropdowns) ────────────
+// ── Vehicle type → valid sizes / categories / colors (dependent dropdowns) ───
 
 @php
     $vehicleTypeOptionsForJs = $vehicleTypes->mapWithKeys(function ($t) {
         return [$t->id => [
             'sizes'      => $t->sizes->map(fn ($s) => ['id' => $s->id, 'label' => $s->label])->values(),
             'categories' => $t->categories->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->values(),
+            'colors'     => $t->colors->map(fn ($c) => ['id' => $c->id, 'name' => $c->name_km . ' (' . $c->name_en . ')'])->values(),
         ]];
     });
 @endphp
 const vehicleTypeOptions = @json($vehicleTypeOptionsForJs);
 
-function refreshVehicleOptions(selectedSizeId = null, selectedCategoryId = null) {
-    const typeId     = document.getElementById('f-vehicle-type').value;
-    const sizeSelect = document.getElementById('f-vehicle-size');
-    const catSelect  = document.getElementById('f-category');
-    const opts       = vehicleTypeOptions[typeId] || { sizes: [], categories: [] };
+function refreshVehicleOptions(selectedSizeId = null, selectedCategoryId = null, selectedColorId = null) {
+    const typeId       = document.getElementById('f-vehicle-type').value;
+    const sizeSelect    = document.getElementById('f-vehicle-size');
+    const catSelect     = document.getElementById('f-category');
+    const colorSelect   = document.getElementById('f-vehicle-color');
+    const opts          = vehicleTypeOptions[typeId] || { sizes: [], categories: [], colors: [] };
 
-    sizeSelect.innerHTML = '<option value="">— None —</option>';
-    opts.sizes.forEach(s => {
-        const opt = document.createElement('option');
-        opt.value = s.id;
-        opt.textContent = s.label;
-        if (selectedSizeId && String(s.id) === String(selectedSizeId)) opt.selected = true;
-        sizeSelect.appendChild(opt);
-    });
+    const fillSelect = (select, options, selectedId, labelKey) => {
+        select.innerHTML = '<option value="">— None —</option>';
+        options.forEach(o => {
+            const opt = document.createElement('option');
+            opt.value = o.id;
+            opt.textContent = o[labelKey];
+            if (selectedId && String(o.id) === String(selectedId)) opt.selected = true;
+            select.appendChild(opt);
+        });
+    };
 
-    catSelect.innerHTML = '<option value="">— None —</option>';
-    opts.categories.forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c.id;
-        opt.textContent = c.name;
-        if (selectedCategoryId && String(c.id) === String(selectedCategoryId)) opt.selected = true;
-        catSelect.appendChild(opt);
-    });
+    fillSelect(sizeSelect, opts.sizes, selectedSizeId, 'label');
+    fillSelect(catSelect, opts.categories, selectedCategoryId, 'name');
+    fillSelect(colorSelect, opts.colors, selectedColorId, 'name');
 }
 
 // ── Image selection & preview ────────────────────────────────────────────────
@@ -548,8 +543,7 @@ function openEdit(id, d) {
     document.getElementById('f-condition').value        = d.condition          || 'used';
     document.getElementById('f-status').value           = d.status             || 'active';
     document.getElementById('f-vehicle-type').value       = d.marketplace_vehicle_type_id      || '';
-    document.getElementById('f-vehicle-color').value      = d.marketplace_vehicle_color_id     || '';
-    refreshVehicleOptions(d.marketplace_vehicle_size_id, d.category_id);
+    refreshVehicleOptions(d.marketplace_vehicle_size_id, d.category_id, d.marketplace_vehicle_color_id);
 
     setTypeCheckboxes(d.listing_type || 'sale');
     resetImageSection();

@@ -695,7 +695,7 @@ class AdminController extends Controller
         return view('admin.marketplace', [
             'items'      => MarketplaceProduct::with(['seller', 'images', 'category', 'marketplaceVehicleType', 'marketplaceVehicleColor', 'marketplaceVehicleSize'])->orderByDesc('created_at')->paginate(10),
             'categories' => MarketplaceCategory::where('active', true)->orderBy('sort_order')->get(),
-            'vehicleTypes'  => MarketplaceVehicleType::active()->with(['sizes', 'categories'])->orderBy('sort_order')->get(),
+            'vehicleTypes'  => MarketplaceVehicleType::active()->with(['sizes', 'categories', 'colors'])->orderBy('sort_order')->get(),
             'vehicleColors' => MarketplaceVehicleColor::active()->orderBy('sort_order')->get(),
             'vehicleSizes'  => MarketplaceVehicleSize::active()->orderBy('sort_order')->get(),
         ]);
@@ -820,7 +820,7 @@ class AdminController extends Controller
             return null;
         }
 
-        $type = MarketplaceVehicleType::with(['sizes', 'categories'])->find($typeId);
+        $type = MarketplaceVehicleType::with(['sizes', 'categories', 'colors'])->find($typeId);
         if (! $type) {
             return null;
         }
@@ -831,6 +831,10 @@ class AdminController extends Controller
 
         if (! empty($data['category_id']) && ! $type->categories->contains('id', $data['category_id'])) {
             return 'The selected category is not valid for this vehicle type.';
+        }
+
+        if (! empty($data['marketplace_vehicle_color_id']) && ! $type->colors->contains('id', $data['marketplace_vehicle_color_id'])) {
+            return 'The selected color is not valid for this vehicle type.';
         }
 
         return null;

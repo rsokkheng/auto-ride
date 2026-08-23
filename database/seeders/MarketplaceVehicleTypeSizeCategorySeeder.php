@@ -3,17 +3,20 @@
 namespace Database\Seeders;
 
 use App\Models\MarketplaceCategory;
+use App\Models\MarketplaceVehicleColor;
 use App\Models\MarketplaceVehicleSize;
 use App\Models\MarketplaceVehicleType;
 use Illuminate\Database\Seeder;
 
 /**
- * Which sizes and body-style categories are valid for each vehicle type:
+ * Which sizes, body-style categories, and colors are valid for each vehicle type:
  *   - Passenger Three-Wheeler → sizes 1.4M/1.6M, category ធម្មតា (normal)
  *   - Cargo Three-Wheeler     → sizes 1.4M/1.8M/2.2M, categories បើកបូល (open roof) / ដំបូលក្លុបបិទជិត (closed cabin)
+ *   - Colors: every color currently applies to every type (no restriction yet —
+ *     the pivot exists so specific colors can be restricted to specific types later).
  *
- * Requires MarketplaceVehicleTypeSeeder, MarketplaceVehicleSizeSeeder, and
- * MarketplaceCategorySeeder to have run first.
+ * Requires MarketplaceVehicleTypeSeeder, MarketplaceVehicleSizeSeeder,
+ * MarketplaceVehicleColorSeeder, and MarketplaceCategorySeeder to have run first.
  */
 class MarketplaceVehicleTypeSizeCategorySeeder extends Seeder
 {
@@ -30,6 +33,8 @@ class MarketplaceVehicleTypeSizeCategorySeeder extends Seeder
             ],
         ];
 
+        $allColorIds = MarketplaceVehicleColor::pluck('id');
+
         foreach ($map as $slug => $rules) {
             $type = MarketplaceVehicleType::where('slug', $slug)->first();
 
@@ -43,8 +48,10 @@ class MarketplaceVehicleTypeSizeCategorySeeder extends Seeder
 
             $categoryIds = MarketplaceCategory::whereIn('name', $rules['categories'])->pluck('id');
             $type->categories()->sync($categoryIds);
+
+            $type->colors()->sync($allColorIds);
         }
 
-        $this->command?->info('Seeded marketplace vehicle type → size/category mappings.');
+        $this->command?->info('Seeded marketplace vehicle type → size/category/color mappings.');
     }
 }
