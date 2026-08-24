@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Models\MarketplaceCategory;
 use App\Models\MarketplaceItem;
 use App\Models\MarketplaceOrder;
+use App\Models\MarketplaceOrderAccessory;
 use App\Models\MarketplaceProduct;
+use App\Models\MarketplaceProductAccessory;
 use App\Models\MarketplaceProductImage;
 use App\Models\MarketplaceVehicleColor;
 use App\Models\MarketplaceVehicleSize;
@@ -65,12 +67,63 @@ class MarketplaceController extends ApiController
         ]);
     }
 
+    /**
+     * GET /v1/marketplace/available-options
+     * Which vehicle_type_id / vehicle_color_id / vehicle_size_id values have
+     * at least one active listing right now — drives the "grayed out /
+     * unavailable" chip state on the buy screen. Optionally scoped to one
+     * category and/or the other two filters already picked, so switching
+     * one facet narrows what's actually orderable for the rest (e.g. once
+     * "Cargo" is picked, only sizes/colors that exist on an active Cargo
+     * listing come back as available).
+     */
+    public function availableOptions(Request $request)
+    {
+        // Each facet's available set is computed while applying the *other*
+        // two filters but not its own — otherwise, once a type is picked,
+        // the type list would collapse down to just that one selection
+        // instead of still showing every type that has any active listing.
+        $base = fn() => MarketplaceProduct::where('status', 'active')
+            ->when($request->filled('category_id'),
+                fn($q) => $q->where('category_id', $request->category_id));
+
+        $typeIds = $base()
+            ->when($request->filled('marketplace_vehicle_color_id'),
+                fn($q) => $q->where('marketplace_vehicle_color_id', $request->marketplace_vehicle_color_id))
+            ->when($request->filled('marketplace_vehicle_size_id'),
+                fn($q) => $q->where('marketplace_vehicle_size_id', $request->marketplace_vehicle_size_id))
+            ->whereNotNull('marketplace_vehicle_type_id')
+            ->distinct()->pluck('marketplace_vehicle_type_id')->values();
+
+        $colorIds = $base()
+            ->when($request->filled('marketplace_vehicle_type_id'),
+                fn($q) => $q->where('marketplace_vehicle_type_id', $request->marketplace_vehicle_type_id))
+            ->when($request->filled('marketplace_vehicle_size_id'),
+                fn($q) => $q->where('marketplace_vehicle_size_id', $request->marketplace_vehicle_size_id))
+            ->whereNotNull('marketplace_vehicle_color_id')
+            ->distinct()->pluck('marketplace_vehicle_color_id')->values();
+
+        $sizeIds = $base()
+            ->when($request->filled('marketplace_vehicle_type_id'),
+                fn($q) => $q->where('marketplace_vehicle_type_id', $request->marketplace_vehicle_type_id))
+            ->when($request->filled('marketplace_vehicle_color_id'),
+                fn($q) => $q->where('marketplace_vehicle_color_id', $request->marketplace_vehicle_color_id))
+            ->whereNotNull('marketplace_vehicle_size_id')
+            ->distinct()->pluck('marketplace_vehicle_size_id')->values();
+
+        return $this->success([
+            'vehicle_type_ids'  => $typeIds,
+            'vehicle_color_ids' => $colorIds,
+            'vehicle_size_ids'  => $sizeIds,
+        ]);
+    }
+
     // ── Products — browse ─────────────────────────────────────────────────────
 
     public function index(Request $request)
     {
         try {
-            $query = MarketplaceProduct::with(['seller', 'category', 'images', 'marketplaceVehicleType', 'marketplaceVehicleColor', 'marketplaceVehicleSize'])
+            $query = MarketplaceProduct::with(['seller', 'category', 'images', 'marketplaceVehicleType', 'marketplaceVehicleColor', 'marketplaceVehicleSize', 'accessories'])
                 ->where('status', 'active');
 
             if ($request->filled('category_id')) {
@@ -134,7 +187,7 @@ class MarketplaceController extends ApiController
             return response()->json(['success' => false, 'message' => 'This product is no longer available.'], 404);
         }
         $product->increment('views_count');
-        return $this->success(['product' => $product->load(['seller', 'category', 'images', 'vehicle', 'marketplaceVehicleType', 'marketplaceVehicleColor', 'marketplaceVehicleSize'])]);
+        return $this->success(['product' => $product->load(['seller', 'category', 'images', 'vehicle', 'marketplaceVehicleType', 'marketplaceVehicleColor', 'marketplaceVehicleSize', 'accessories'])]);
     }
 
     // ── My products (seller) ──────────────────────────────────────────────────
@@ -184,6 +237,11 @@ class MarketplaceController extends ApiController
             return response()->json(['success' => false, 'message' => $error], 422);
         }
 
+        $accessories = $this->parseAccessoriesInput($request);
+        if (isset($accessories['error'])) {
+            return response()->json(['success' => false, 'message' => $accessories['error']], 422);
+        }
+
         $product = MarketplaceProduct::create(array_merge(
             collect($data)->except('images')->toArray(),
             [
@@ -204,7 +262,107 @@ class MarketplaceController extends ApiController
             }
         }
 
-        return $this->success(['product' => $product->load('category', 'images')], 201);
+        $this->syncAccessories($product, $accessories['items']);
+
+        return $this->success(['product' => $product->load('category', 'images', 'accessories')], 201);
+    }
+
+    /**
+     * Accessories arrive as a single JSON-encoded field (`accessories`) —
+     * a plain array of nested objects doesn't survive multipart/form-data
+     * the way the images upload does, so the client JSON-encodes the list
+     * client-side and this decodes it. Returns ['items' => [...]] or
+     * ['error' => string] on malformed input.
+     */
+    private function parseAccessoriesInput(Request $request): array
+    {
+        $raw = $request->input('accessories');
+        if ($raw === null || $raw === '') {
+            return ['items' => []];
+        }
+
+        $decoded = is_array($raw) ? $raw : json_decode($raw, true);
+        if (! is_array($decoded)) {
+            return ['error' => 'accessories must be a JSON array.'];
+        }
+
+        $items = [];
+        foreach ($decoded as $i => $entry) {
+            if (! is_array($entry) || empty($entry['name_en'])) {
+                return ['error' => "accessories[{$i}].name_en is required."];
+            }
+            if (! isset($entry['price']) || ! is_numeric($entry['price']) || $entry['price'] < 0) {
+                return ['error' => "accessories[{$i}].price must be a non-negative number."];
+            }
+            $items[] = [
+                'name_en' => (string) $entry['name_en'],
+                'name_km' => isset($entry['name_km']) ? (string) $entry['name_km'] : null,
+                'price'   => (float) $entry['price'],
+            ];
+        }
+
+        return ['items' => $items];
+    }
+
+    /**
+     * Replaces a product's accessory list wholesale — simpler and safer than
+     * diffing individual rows, and listing forms always submit the full set.
+     */
+    private function syncAccessories(MarketplaceProduct $product, array $items): void
+    {
+        // Not $product->accessories()->delete() — that relation is scoped to
+        // active=true and would leave inactive rows orphaned behind on a sync.
+        MarketplaceProductAccessory::where('product_id', $product->id)->delete();
+        foreach ($items as $i => $item) {
+            MarketplaceProductAccessory::create([
+                'product_id' => $product->id,
+                'name_en'    => $item['name_en'],
+                'name_km'    => $item['name_km'],
+                'price'      => $item['price'],
+                'sort_order' => $i,
+            ]);
+        }
+    }
+
+    /**
+     * Validates a set of accessory ids against one product (must be active
+     * and actually belong to it) and totals their price. Returns
+     * ['items' => Collection<MarketplaceProductAccessory>, 'total' => float]
+     * or ['error' => string].
+     */
+    private function resolveAccessories(MarketplaceProduct $product, array $ids): array
+    {
+        if (empty($ids)) {
+            return ['items' => collect(), 'total' => 0.0];
+        }
+
+        $found = MarketplaceProductAccessory::whereIn('id', $ids)
+            ->where('product_id', $product->id)
+            ->where('active', true)
+            ->get();
+
+        if ($found->count() !== count(array_unique($ids))) {
+            return ['error' => 'One or more selected accessories are not available for this product.'];
+        }
+
+        return ['items' => $found, 'total' => (float) $found->sum('price')];
+    }
+
+    /**
+     * Snapshots the chosen accessories onto the order — name/price at the
+     * time of purchase, independent of the listing's accessory rows.
+     */
+    private function createOrderAccessories(MarketplaceOrder $order, $accessories): void
+    {
+        foreach ($accessories as $accessory) {
+            MarketplaceOrderAccessory::create([
+                'order_id'     => $order->id,
+                'accessory_id' => $accessory->id,
+                'name_en'      => $accessory->name_en,
+                'name_km'      => $accessory->name_km,
+                'price'        => $accessory->price,
+            ]);
+        }
     }
 
     // ── Update ────────────────────────────────────────────────────────────────
@@ -238,9 +396,20 @@ class MarketplaceController extends ApiController
             return response()->json(['success' => false, 'message' => $error], 422);
         }
 
+        // Only touch accessories when the field is actually present — a
+        // partial update (e.g. just flipping status to "paused") shouldn't
+        // silently wipe the listing's accessory list.
+        if ($request->has('accessories')) {
+            $accessories = $this->parseAccessoriesInput($request);
+            if (isset($accessories['error'])) {
+                return response()->json(['success' => false, 'message' => $accessories['error']], 422);
+            }
+            $this->syncAccessories($product, $accessories['items']);
+        }
+
         $product->update(array_filter($data, fn($v) => $v !== null));
 
-        return $this->success(['product' => $product->fresh()->load('category', 'images')]);
+        return $this->success(['product' => $product->fresh()->load('category', 'images', 'accessories')]);
     }
 
     /**
@@ -352,17 +521,25 @@ class MarketplaceController extends ApiController
         }
 
         $data = $request->validate([
-            'order_type'      => 'nullable|in:purchase,rent',
-            'quantity'        => 'nullable|integer|min:1',
-            'rent_start_date' => 'required_if:order_type,rent|nullable|date',
-            'rent_end_date'   => 'required_if:order_type,rent|nullable|date|after:rent_start_date',
-            'payment_method'  => 'nullable|in:cash,wallet,aba,wing,other_online',
-            'notes'           => 'nullable|string',
-            'promo_code'      => 'nullable|string|max:32',
+            'order_type'       => 'nullable|in:purchase,rent',
+            'quantity'         => 'nullable|integer|min:1',
+            'rent_start_date'  => 'required_if:order_type,rent|nullable|date',
+            'rent_end_date'    => 'required_if:order_type,rent|nullable|date|after:rent_start_date',
+            'payment_method'   => 'nullable|in:cash,wallet,aba,wing,other_online',
+            'notes'            => 'nullable|string',
+            'promo_code'       => 'nullable|string|max:32',
+            'accessory_ids'    => 'nullable|array',
+            'accessory_ids.*'  => 'integer|exists:marketplace_product_accessories,id',
         ]);
 
         $orderType = $data['order_type'] ?? 'purchase';
         $quantity  = $data['quantity']   ?? 1;
+
+        $accessories = $this->resolveAccessories($product, $data['accessory_ids'] ?? []);
+        if (isset($accessories['error'])) {
+            return response()->json(['success' => false, 'message' => $accessories['error']], 422);
+        }
+        $accessoriesTotal = $accessories['total'];
 
         // Block purchase if product already has a completed purchase order
         $hasSold = MarketplaceOrder::where('product_id', $product->id)
@@ -401,10 +578,10 @@ class MarketplaceController extends ApiController
         if ($orderType === 'rent') {
             $days      = now()->parse($data['rent_start_date'])->diffInDays($data['rent_end_date']) + 1;
             $unitPrice = $product->rent_price_per_day ?? $product->price;
-            $total     = $unitPrice * $days * $quantity;
+            $total     = $unitPrice * $days * $quantity + $accessoriesTotal;
         } else {
             $unitPrice = $product->price;
-            $total     = $unitPrice * $quantity;
+            $total     = $unitPrice * $quantity + $accessoriesTotal;
         }
 
         // Apply promo code if provided
@@ -420,16 +597,17 @@ class MarketplaceController extends ApiController
         }
 
         $order = MarketplaceOrder::create([
-            'product_id'      => $product->id,
-            'buyer_id'        => $user->id,
-            'seller_id'       => $product->seller_id,
-            'order_type'      => $orderType,
-            'quantity'        => $quantity,
-            'unit_price'      => $unitPrice,
-            'total_price'     => $total,
-            'rent_start_date' => $data['rent_start_date'] ?? null,
-            'rent_end_date'   => $data['rent_end_date']   ?? null,
-            'payment_method'  => $data['payment_method']  ?? 'cash',
+            'product_id'         => $product->id,
+            'buyer_id'           => $user->id,
+            'seller_id'          => $product->seller_id,
+            'order_type'         => $orderType,
+            'quantity'           => $quantity,
+            'unit_price'         => $unitPrice,
+            'total_price'        => $total,
+            'accessories_total'  => $accessoriesTotal,
+            'rent_start_date'    => $data['rent_start_date'] ?? null,
+            'rent_end_date'      => $data['rent_end_date']   ?? null,
+            'payment_method'     => $data['payment_method']  ?? 'cash',
             'payment_status'  => 'unpaid',
             'status'          => 'pending',
             'notes'           => $data['notes'] ?? null,
@@ -446,7 +624,8 @@ class MarketplaceController extends ApiController
             PromoCode::where('id', $promoCodeId)->increment('used_count');
         }
 
-        $order->load(['product.images', 'buyer', 'seller']);
+        $this->createOrderAccessories($order, $accessories['items']);
+        $order->load(['product.images', 'buyer', 'seller', 'accessories']);
 
         return $this->success([
             'order' => [
@@ -458,6 +637,10 @@ class MarketplaceController extends ApiController
                 'quantity'       => $order->quantity,
                 'unit_price_usd'  => (float) $order->unit_price,
                 'total_price_usd' => (float) $order->total_price,
+                'accessories_total_usd' => (float) $order->accessories_total,
+                'accessories' => $order->accessories->map(fn(MarketplaceOrderAccessory $a) => [
+                    'name_en' => $a->name_en, 'name_km' => $a->name_km, 'price' => (float) $a->price,
+                ])->values(),
                 'discount_amount' => $discountAmount,
                 'promo_applied'   => $promoCodeId !== null,
                 'days'           => $orderType === 'rent' ? $days : null,
@@ -510,6 +693,8 @@ class MarketplaceController extends ApiController
             'items.*.quantity'         => 'nullable|integer|min:1',
             'items.*.rent_start_date'  => 'required_if:items.*.order_type,rent|nullable|date',
             'items.*.rent_end_date'    => 'required_if:items.*.order_type,rent|nullable|date|after:items.*.rent_start_date',
+            'items.*.accessory_ids'    => 'nullable|array',
+            'items.*.accessory_ids.*'  => 'integer|exists:marketplace_product_accessories,id',
             'payment_method'           => 'nullable|in:cash,wallet,aba,wing,other_online',
             'notes'                    => 'nullable|string',
             'promo_code'               => 'nullable|string|max:32',
@@ -561,23 +746,25 @@ class MarketplaceController extends ApiController
                 $finalTotal   = max(0, $pricing['total'] - $itemDiscount);
 
                 $order = MarketplaceOrder::create([
-                    'checkout_batch_id' => $batchId,
-                    'product_id'        => $product->id,
-                    'buyer_id'          => $user->id,
-                    'seller_id'         => $product->seller_id,
-                    'order_type'        => $pricing['order_type'],
-                    'quantity'          => $pricing['quantity'],
-                    'unit_price'        => $pricing['unit_price'],
-                    'total_price'       => $finalTotal,
-                    'rent_start_date'   => $pricing['rent_start_date'],
-                    'rent_end_date'     => $pricing['rent_end_date'],
-                    'payment_method'    => $data['payment_method'] ?? 'cash',
-                    'payment_status'    => 'unpaid',
-                    'status'            => 'pending',
-                    'notes'             => $data['notes'] ?? null,
+                    'checkout_batch_id'  => $batchId,
+                    'product_id'         => $product->id,
+                    'buyer_id'           => $user->id,
+                    'seller_id'          => $product->seller_id,
+                    'order_type'         => $pricing['order_type'],
+                    'quantity'           => $pricing['quantity'],
+                    'unit_price'         => $pricing['unit_price'],
+                    'total_price'        => $finalTotal,
+                    'accessories_total'  => $pricing['accessories_total'],
+                    'rent_start_date'    => $pricing['rent_start_date'],
+                    'rent_end_date'      => $pricing['rent_end_date'],
+                    'payment_method'     => $data['payment_method'] ?? 'cash',
+                    'payment_status'     => 'unpaid',
+                    'status'             => 'pending',
+                    'notes'              => $data['notes'] ?? null,
                 ]);
 
-                $orders[] = $order->load(['product.images', 'seller']);
+                $this->createOrderAccessories($order, $pricing['accessories']);
+                $orders[] = $order->load(['product.images', 'seller', 'accessories']);
             }
 
             if ($promoCodeId) {
@@ -605,6 +792,10 @@ class MarketplaceController extends ApiController
                 'quantity'        => $order->quantity,
                 'unit_price_usd'  => (float) $order->unit_price,
                 'total_price_usd' => (float) $order->total_price,
+                'accessories_total_usd' => (float) $order->accessories_total,
+                'accessories' => $order->accessories->map(fn(MarketplaceOrderAccessory $a) => [
+                    'name_en' => $a->name_en, 'name_km' => $a->name_km, 'price' => (float) $a->price,
+                ])->values(),
                 'rent_start_date' => $order->rent_start_date?->toDateString(),
                 'rent_end_date'   => $order->rent_end_date?->toDateString(),
                 'product' => [
@@ -659,6 +850,12 @@ class MarketplaceController extends ApiController
             return ['error' => "Not enough stock for \"{$product->title}\". Available: {$product->quantity}"];
         }
 
+        $accessories = $this->resolveAccessories($product, $item['accessory_ids'] ?? []);
+        if (isset($accessories['error'])) {
+            return ['error' => "\"{$product->title}\": {$accessories['error']}"];
+        }
+        $accessoriesTotal = $accessories['total'];
+
         $days = null;
 
         if ($orderType === 'rent') {
@@ -682,20 +879,22 @@ class MarketplaceController extends ApiController
 
             $days      = now()->parse($startDate)->diffInDays($endDate) + 1;
             $unitPrice = $product->rent_price_per_day ?? $product->price;
-            $total     = $unitPrice * $days * $quantity;
+            $total     = $unitPrice * $days * $quantity + $accessoriesTotal;
         } else {
             $unitPrice = $product->price;
-            $total     = $unitPrice * $quantity;
+            $total     = $unitPrice * $quantity + $accessoriesTotal;
         }
 
         return [
-            'order_type'      => $orderType,
-            'quantity'        => $quantity,
-            'unit_price'      => $unitPrice,
-            'total'           => $total,
-            'rent_start_date' => $item['rent_start_date'] ?? null,
-            'rent_end_date'   => $item['rent_end_date'] ?? null,
-            'days'            => $days,
+            'order_type'         => $orderType,
+            'quantity'           => $quantity,
+            'unit_price'         => $unitPrice,
+            'total'              => $total,
+            'accessories_total'  => $accessoriesTotal,
+            'accessories'        => $accessories['items'],
+            'rent_start_date'    => $item['rent_start_date'] ?? null,
+            'rent_end_date'      => $item['rent_end_date']   ?? null,
+            'days'               => $days,
         ];
     }
 

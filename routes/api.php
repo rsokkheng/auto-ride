@@ -79,6 +79,7 @@ Route::prefix('v1')->group(function () {
     Route::get('marketplace/vehicle-types',  [MarketplaceController::class, 'vehicleTypes']);
     Route::get('marketplace/vehicle-colors', [MarketplaceController::class, 'vehicleColors']);
     Route::get('marketplace/vehicle-sizes',  [MarketplaceController::class, 'vehicleSizes']);
+    Route::get('marketplace/available-options', [MarketplaceController::class, 'availableOptions']);
 
     // Marketplace — my listings & orders (static, before {product} wildcard)
     Route::get('marketplace/my-products', [MarketplaceController::class, 'myProducts']);

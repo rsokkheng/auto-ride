@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MarketplaceOrder extends Model
 {
@@ -19,6 +20,7 @@ class MarketplaceOrder extends Model
         'quantity',
         'unit_price',
         'total_price',
+        'accessories_total',
         'rent_start_date',
         'rent_end_date',
         'status',
@@ -28,16 +30,22 @@ class MarketplaceOrder extends Model
     ];
 
     protected $casts = [
-        'unit_price'      => 'decimal:2',
-        'total_price'     => 'decimal:2',
-        'quantity'        => 'integer',
-        'rent_start_date' => 'date',
-        'rent_end_date'   => 'date',
+        'unit_price'         => 'decimal:2',
+        'total_price'        => 'decimal:2',
+        'accessories_total'  => 'decimal:2',
+        'quantity'           => 'integer',
+        'rent_start_date'    => 'date',
+        'rent_end_date'      => 'date',
     ];
 
     public function product(): BelongsTo
     {
         return $this->belongsTo(MarketplaceProduct::class, 'product_id');
+    }
+
+    public function accessories(): HasMany
+    {
+        return $this->hasMany(MarketplaceOrderAccessory::class, 'order_id');
     }
 
     public function isGuest(): bool

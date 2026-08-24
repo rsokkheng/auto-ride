@@ -93,4 +93,10 @@ class MarketplaceProduct extends Model
     {
         return $this->hasMany(MarketplaceOrder::class, 'product_id');
     }
+
+    public function accessories(): HasMany
+    {
+        return $this->hasMany(MarketplaceProductAccessory::class, 'product_id')
+            ->where('active', true)->orderBy('sort_order');
+    }
 }

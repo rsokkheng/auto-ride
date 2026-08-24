@@ -9,6 +9,7 @@ use App\Models\Ride;
 use App\Models\User;
 use Google\Auth\Credentials\ServiceAccountCredentials;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -277,10 +278,27 @@ class FirestoreService
 
     // ── Auth ──────────────────────────────────────────────────────────────────
 
+    private static bool $loggedMissingCredentials = false;
+
     private function credentialsPath(): ?string
     {
         $path = env('FIREBASE_CREDENTIALS');
-        return ($path && file_exists($path)) ? $path : null;
+        if ($path && file_exists($path)) {
+            return $path;
+        }
+        // Every Firestore write (driver live location, ride status sync,
+        // chat, etc.) depends on this — previously it failed completely
+        // silently, which looked identical to "everything's fine, Firestore
+        // just isn't getting updated" with zero trace in the logs. Logged
+        // once per request lifecycle (not once per write) to avoid flooding
+        // the log during a burst of GPS ticks.
+        if (! self::$loggedMissingCredentials) {
+            self::$loggedMissingCredentials = true;
+            Log::error('FirestoreService: FIREBASE_CREDENTIALS not set or file missing', [
+                'env_value' => $path ?: '(empty)',
+            ]);
+        }
+        return null;
     }
 
     private function projectId(): ?string
@@ -326,9 +344,21 @@ class FirestoreService
         $body = json_encode(['fields' => $this->toFirestoreFields($data)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         try {
-            Http::withToken($token)
+            $response = Http::withToken($token)
                 ->withBody($body, 'application/json')
                 ->patch($url);
+            // Http::patch() doesn't throw on a non-2xx response by default —
+            // a 403 (bad service-account permissions) or 404 (wrong
+            // project_id/database) would otherwise look identical to a
+            // successful write from every caller's perspective.
+            if ($response->failed()) {
+                Log::error('FirestoreService: write failed', [
+                    'collection' => $collection,
+                    'doc_id'     => $docId,
+                    'status'     => $response->status(),
+                    'body'       => $response->body(),
+                ]);
+            }
         } catch (Throwable $e) {
             report($e);
         }
