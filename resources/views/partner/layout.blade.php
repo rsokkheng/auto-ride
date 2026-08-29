@@ -172,7 +172,7 @@
     </main>
 
     <footer class="text-center py-4 text-xs text-slate-400 border-t border-slate-200 bg-white">
-        AutoRide Partner Portal &copy; {{ date('Y') }}
+        ROTEH Partner Portal &copy; {{ date('Y') }}
     </footer>
 </div>
 

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Admin Login | {{ config('app.name', 'AutoRide') }}</title>
+    <title>Admin Login | {{ config('app.name', 'ROTEH') }}</title>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -119,7 +119,7 @@
             <i class="fas fa-car-side text-white text-sm"></i>
         </div>
         <div>
-            <div class="text-white text-lg font-bold leading-none">AutoRide</div>
+            <div class="text-white text-lg font-bold leading-none">ROTEH</div>
             <div class="text-xs font-semibold tracking-widest uppercase mt-0.5" style="color:#e63946;">Admin Panel</div>
         </div>
     </div>
@@ -178,7 +178,7 @@
 
     {{-- Footer --}}
     <div class="relative z-10 text-xs" style="color:#475569;">
-        &copy; {{ date('Y') }} AutoRide. All rights reserved.
+        &copy; {{ date('Y') }} ROTEH. All rights reserved.
     </div>
 </div>
 
@@ -192,7 +192,7 @@
                  style="background:linear-gradient(135deg,#e63946,#c1121f);">
                 <i class="fas fa-car-side text-white text-sm"></i>
             </div>
-            <span class="text-slate-800 text-xl font-bold">AutoRide</span>
+            <span class="text-slate-800 text-xl font-bold">ROTEH</span>
         </div>
 
         {{-- Heading --}}
@@ -316,7 +316,7 @@
 
         {{-- Footer --}}
         <p class="text-center text-xs mt-10" style="color:#94a3b8;">
-            &copy; {{ date('Y') }} AutoRide &mdash; Admin Panel v1.0
+            &copy; {{ date('Y') }} ROTEH &mdash; Admin Panel v1.0
         </p>
     </div>
 </div>

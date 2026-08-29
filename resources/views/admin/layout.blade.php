@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', 'Dashboard') | AutoRide Admin</title>
+    <title>@yield('title', 'Dashboard') | ROTEH Admin</title>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
@@ -53,7 +53,7 @@
             <li class="nav-item d-none d-sm-inline-block">
                 <span class="nav-link text-muted" style="font-size:.8rem;">
                     <i class="fas fa-circle" style="color:#4ade80;font-size:.5rem;vertical-align:middle;"></i>
-                    &nbsp;AutoRide Admin
+                    &nbsp;ROTEH Admin
                 </span>
             </li>
         </ul>
@@ -523,7 +523,7 @@
 
     {{-- ── Footer ── --}}
     <footer class="main-footer">
-        <strong style="color:#1e293b;">AutoRide</strong> &mdash; Admin Panel
+        <strong style="color:#1e293b;">ROTEH</strong> &mdash; Admin Panel
         <div class="float-right d-none d-sm-inline-block" style="font-size:.75rem;">
             v1.0 &nbsp;&bull;&nbsp; {{ date('Y') }}
         </div>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AutoRide Receipt</title>
+<title>ROTEH Receipt</title>
 <style>
   body { font-family: Arial, sans-serif; background:#f4f6f9; margin:0; padding:0; color:#333; }
   .wrap { max-width:560px; margin:32px auto; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.08); }
@@ -37,7 +37,7 @@
 <div class="wrap">
 
   <div class="header">
-    <h1>🚗 AutoRide</h1>
+    <h1>🚗 ROTEH</h1>
     <p>{{ $tripType === 'delivery' ? 'Delivery Receipt' : 'Trip Receipt' }}</p>
   </div>
 
@@ -130,8 +130,8 @@
   </div>
 
   <div class="footer">
-    Thank you for riding with AutoRide!<br>
-    Questions? <a href="mailto:support@auto-supperapp.com">support@auto-supperapp.com</a>
+    Thank you for riding with ROTEH!<br>
+    Questions? <a href="mailto:support@roteh.com">support@roteh.com</a>
   </div>
 </div>
 </body>

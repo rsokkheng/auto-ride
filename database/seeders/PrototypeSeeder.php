@@ -106,7 +106,7 @@ class PrototypeSeeder extends Seeder
 
         \App\Models\PushNotification::create([
             'user_id' => $passenger->id,
-            'title' => 'Welcome to AutoRide',
+            'title' => 'Welcome to ROTEH',
             'body' => 'Your passenger demo account is ready to use for ride booking and delivery.',
             'type' => 'welcome',
             'payload' => ['welcome' => true],

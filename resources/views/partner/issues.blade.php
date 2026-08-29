@@ -93,7 +93,7 @@
         <h3 class="font-semibold text-slate-800 mb-0">Need Help?</h3>
     </div>
     <p class="text-slate-500 text-sm mb-4">
-        If you have unresolved delivery issues, please contact your AutoRide account manager or reach out through:
+        If you have unresolved delivery issues, please contact your ROTEH account manager or reach out through:
     </p>
     <div class="grid sm:grid-cols-2 gap-3">
         <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200">
