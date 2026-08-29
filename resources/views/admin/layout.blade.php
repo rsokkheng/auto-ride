@@ -100,7 +100,7 @@
                 <div style="width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#e63946,#c1121f);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
                     <i class="fas fa-car-side text-white" style="font-size:.8rem;"></i>
                 </div>
-                <span class="brand-text">Auto<span class="brand-accent">Ride</span></span>
+                <span class="brand-text">ROTEH</span>
             </div>
         </a>
 

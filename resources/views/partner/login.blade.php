@@ -95,7 +95,7 @@
     </div>
 
     <p class="text-center text-slate-400 text-xs mt-5">
-        Need an account? Contact your AutoRide account manager.
+        Need an account? Contact your ROTEH account manager.
     </p>
 </div>
 
