@@ -226,7 +226,7 @@ class DeliveryFeeTest extends TestCase
         $this->assertSame('7000', PricingSetting::get('delivery_fee_surcharge_extra_large'));
     }
 
-    public function test_admin_deliveries_view_displays_fare_package_amount_and_net_driver(): void
+    public function test_admin_deliveries_view_displays_delivery_fee_package_amount_and_net_driver(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
         $driver = User::factory()->create(['role' => 'driver', 'commission_rate' => 20]);
@@ -254,7 +254,7 @@ class DeliveryFeeTest extends TestCase
         $response = $this->actingAs($admin)->get('/admin/deliveries?type=delivery');
 
         $response->assertOk();
-        $response->assertSee('FARE');
+        $response->assertSee('Delivery Fee');
         $response->assertSee('Pkg Amount');
         $response->assertSee('Net Driver');
         $response->assertSee('10,000 ៛');
@@ -296,8 +296,8 @@ class DeliveryFeeTest extends TestCase
 
         $response->assertOk();
         $response->assertSee("Delivery Order #{$delivery->id}");
-        $response->assertSee('FARE');
-        $response->assertSee('PKG Amount');
+        $response->assertSee('Delivery Fee');
+        $response->assertSee('Pkg Amount');
         $response->assertSee('10,000 ៛');
         $response->assertSee('45,000 ៛');
         $response->assertSee('8,000 ៛'); // Net driver

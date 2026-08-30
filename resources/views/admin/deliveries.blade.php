@@ -100,7 +100,7 @@
                     <th>Pickup</th>
                     <th>Dropoff</th>
                     <th>Status</th>
-                    <th>FARE</th>
+                    <th>Delivery Fee</th>
                     <th>Pkg Amount</th>
                     <th>Net Driver</th>
                     <th>Paid By</th>
@@ -346,9 +346,9 @@
     </div>
     <div class="card-footer d-flex align-items-center justify-content-between flex-wrap">
         <small class="text-muted">
-            <strong>FARE:</strong> ចំងាយផ្លូវសេវាដឹក ដែលយកពីអ្នក Booking &nbsp;|&nbsp;
-            <strong>PKG Amount:</strong> តម្លៃកញ្ចប់ package ដែលបានកក់ (COD) &nbsp;|&nbsp;
-            <strong>Net Driver:</strong> ទឹកប្រាក់ដែលអ្នកដឹករកបាន (Company បើកជូនអ្នកដឹក បន្ទាប់ពីកាត់ Commission {{ $commissionPct ?? 20 }}%)
+            <strong>Delivery Fee:</strong> ថ្លៃសេវាដឹកដែលក្រុមហ៊ុនគិត (យកពីអ្នក Booking) &nbsp;|&nbsp;
+            <strong>Pkg Amount:</strong> តម្លៃកញ្ចប់ទំនិញដែលអ្នក Booking បញ្ចូល (COD) &nbsp;|&nbsp;
+            <strong>Net Driver:</strong> ទឹកប្រាក់ដែលអ្នកដឹករកបានក្នុង ១ជើងនេះពីក្រុមហ៊ុន (បន្ទាប់ពីកាត់ Commission {{ $commissionPct ?? 20 }}%)
         </small>
         {{ $deliveries->links() }}
     </div>
