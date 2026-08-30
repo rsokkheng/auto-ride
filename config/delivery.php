@@ -22,9 +22,10 @@ return [
     */
     'fee_base'             => env('DELIVERY_FEE_BASE', 3000),
     'fee_per_km'           => env('DELIVERY_FEE_PER_KM', 1200),
-    'fee_surcharge_small'  => env('DELIVERY_FEE_SURCHARGE_SMALL',  0),
-    'fee_surcharge_medium' => env('DELIVERY_FEE_SURCHARGE_MEDIUM', 2000),
-    'fee_surcharge_large'  => env('DELIVERY_FEE_SURCHARGE_LARGE',  5000),
+    'fee_surcharge_small'       => env('DELIVERY_FEE_SURCHARGE_SMALL',  0),
+    'fee_surcharge_medium'      => env('DELIVERY_FEE_SURCHARGE_MEDIUM', 2000),
+    'fee_surcharge_large'       => env('DELIVERY_FEE_SURCHARGE_LARGE',  5000),
+    'fee_surcharge_extra_large' => env('DELIVERY_FEE_SURCHARGE_EXTRA_LARGE', 5000),
 
     /*
     |----------------------------------------------------------------------

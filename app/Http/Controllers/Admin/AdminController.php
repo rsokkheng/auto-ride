@@ -542,7 +542,7 @@ class AdminController extends Controller
             'activeStatus'  => $status,
             'search'        => $search,
             'activePartner' => $partnerId,
-            'commissionPct' => (float) \App\Models\PricingSetting::get('driver_commission_pct', config('commission.platform_rate.owner', 20)),
+            'commissionPct' => (float) \App\Models\PricingSetting::get('delivery_commission_pct', \App\Models\PricingSetting::get('driver_commission_pct', config('commission.platform_rate.owner', 25))),
             'counts'        => [
                 'all'      => Delivery::count(),
                 'delivery' => Delivery::where('service_type', 'delivery')->count(),
@@ -554,7 +554,7 @@ class AdminController extends Controller
     public function showDelivery(Delivery $delivery)
     {
         $delivery->load(['sender', 'driver.company', 'vehicle', 'partner', 'stops', 'promoCode', 'transactions']);
-        $commissionPct = (float) \App\Models\PricingSetting::get('driver_commission_pct', config('commission.platform_rate.owner', 20));
+        $commissionPct = (float) \App\Models\PricingSetting::get('delivery_commission_pct', \App\Models\PricingSetting::get('driver_commission_pct', config('commission.platform_rate.owner', 25)));
         $driverCommRate = $delivery->driver?->commission_rate
             ?? $delivery->driver?->company?->platform_commission_rate
             ?? $commissionPct;
@@ -625,6 +625,27 @@ class AdminController extends Controller
         $data['needs_stairs_carry'] = (bool) ($data['needs_stairs_carry'] ?? false);
         $data['heavy_items']        = (bool) ($data['heavy_items'] ?? false);
 
+        // Auto-calculate delivery fee if not manually specified
+        if (empty($data['fee']) || (int)$data['fee'] === 0) {
+            if (($data['service_type'] ?? 'delivery') === 'delivery') {
+                $pLat = !empty($data['pickup_lat']) ? (float)$data['pickup_lat'] : 11.5564;
+                $pLng = !empty($data['pickup_lng']) ? (float)$data['pickup_lng'] : 104.9282;
+                $dLat = !empty($data['dropoff_lat']) ? (float)$data['dropoff_lat'] : 11.5700;
+                $dLng = !empty($data['dropoff_lng']) ? (float)$data['dropoff_lng'] : 104.9350;
+
+                $fareService = app(\App\Services\FareService::class);
+                $route = $fareService->getRoute($pLat, $pLng, $dLat, $dLng);
+                $fareResult = $fareService->calculateDeliveryFare(
+                    $data['package_size'] ?? 'small',
+                    $route,
+                    $pLat,
+                    $pLng,
+                    'delivery'
+                );
+                $data['fee'] = $fareResult['total'];
+            }
+        }
+
         Delivery::create($data);
 
         return redirect()->route('admin.deliveries', ['type' => $data['service_type']])->with('success', ucfirst($data['service_type']) . ' order created successfully.');
@@ -671,6 +692,27 @@ class AdminController extends Controller
 
         if (! empty($data['driver_id']) && ! $delivery->assigned_at) {
             $data['assigned_at'] = now();
+        }
+
+        // Auto-recalculate delivery fee if fee is empty/zero
+        if (empty($data['fee']) || (int)$data['fee'] === 0) {
+            if (($data['service_type'] ?? $delivery->service_type ?? 'delivery') === 'delivery') {
+                $pLat = !empty($data['pickup_lat']) ? (float)$data['pickup_lat'] : ((float)$delivery->pickup_lat ?: 11.5564);
+                $pLng = !empty($data['pickup_lng']) ? (float)$data['pickup_lng'] : ((float)$delivery->pickup_lng ?: 104.9282);
+                $dLat = !empty($data['dropoff_lat']) ? (float)$data['dropoff_lat'] : ((float)$delivery->dropoff_lat ?: 11.5700);
+                $dLng = !empty($data['dropoff_lng']) ? (float)$data['dropoff_lng'] : ((float)$delivery->dropoff_lng ?: 104.9350);
+
+                $fareService = app(\App\Services\FareService::class);
+                $route = $fareService->getRoute($pLat, $pLng, $dLat, $dLng);
+                $fareResult = $fareService->calculateDeliveryFare(
+                    $data['package_size'] ?? $delivery->package_size ?? 'small',
+                    $route,
+                    $pLat,
+                    $pLng,
+                    'delivery'
+                );
+                $data['fee'] = $fareResult['total'];
+            }
         }
 
         $data['has_elevator']       = (bool) ($data['has_elevator'] ?? false);
@@ -1661,6 +1703,7 @@ class AdminController extends Controller
             'delivery_fee_base', 'delivery_fee_per_km',
             'delivery_fee_surcharge_small', 'delivery_fee_surcharge_medium', 'delivery_fee_surcharge_large', 'delivery_fee_surcharge_extra_large',
             'delivery_night_surcharge_rate', 'delivery_express_multiplier',
+            'delivery_commission_pct',
         ];
 
         $settings = PricingSetting::whereIn('key', $keys)->get()->keyBy('key');
@@ -1679,10 +1722,13 @@ class AdminController extends Controller
             'delivery_fee_surcharge_extra_large'=> 'required|integer|min:0',
             'delivery_night_surcharge_rate'    => 'required|numeric|min:0|max:1',
             'delivery_express_multiplier'      => 'required|numeric|min:1|max:10',
+            'delivery_commission_pct'          => 'nullable|numeric|min:0|max:100',
         ]);
 
         foreach ($data as $key => $value) {
-            PricingSetting::where('key', $key)->update(['value' => $value]);
+            if ($value !== null) {
+                PricingSetting::set($key, $value);
+            }
         }
 
         FareService::clearCache();

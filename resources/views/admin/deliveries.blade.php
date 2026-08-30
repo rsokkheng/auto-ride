@@ -225,7 +225,7 @@
                                 @endif
                             @endif
                         @else
-                            <span class="text-muted">—</span>
+                            <strong class="text-muted">0 ៛</strong>
                         @endif
                     </td>
 
@@ -246,7 +246,7 @@
                             <span class="text-success font-weight-bold">{{ number_format($netDriver) }} ៛</span>
                             <div><small class="text-muted">{{ round(100 - $comm) }}% of fee</small></div>
                         @else
-                            <span class="text-muted">—</span>
+                            <span class="text-muted">0 ៛</span>
                         @endif
                     </td>
                     <td>

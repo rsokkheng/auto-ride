@@ -261,7 +261,7 @@ class DeliveryController extends ApiController
 
         $hasDropoff = ! empty($data['dropoff_lat']) && ! empty($data['dropoff_lng']);
 
-        // Calculate fee based on service type — automatically when pickup & dropoff coords are provided.
+        // Calculate fee based on service type — automatically when pickup & dropoff coords are provided or via standard route.
         $fee        = (int) ($data['fee'] ?? 0);
         $helperFee  = null;
         $floorFee   = null;
@@ -290,6 +290,36 @@ class DeliveryController extends ApiController
                     $route,
                     (float) $data['pickup_lat'],
                     (float) $data['pickup_lng'],
+                    'delivery',
+                );
+                $fee = $fareResult['total'];
+            }
+        } elseif ($fee <= 0) {
+            $pLat = ! empty($data['pickup_lat']) ? (float) $data['pickup_lat'] : 11.5564;
+            $pLng = ! empty($data['pickup_lng']) ? (float) $data['pickup_lng'] : 104.9282;
+            $dLat = ! empty($data['dropoff_lat']) ? (float) $data['dropoff_lat'] : 11.5700;
+            $dLng = ! empty($data['dropoff_lng']) ? (float) $data['dropoff_lng'] : 104.9350;
+
+            if ($serviceType === 'moving') {
+                $fareResult = $this->movingFare->estimate(
+                    $pLat,  $pLng,
+                    $dLat, $dLng,
+                    (int) ($data['floor_pickup']     ?? 0),
+                    (int) ($data['floor_dropoff']    ?? 0),
+                    (bool) ($data['has_elevator']    ?? false),
+                    (int) ($data['requires_helpers'] ?? 0),
+                    $data['helper_type'] ?? 'normal_carry',
+                );
+                $fee       = $fareResult['total'];
+                $helperFee = $fareResult['helper_fee'];
+                $floorFee  = $fareResult['floor_fee'];
+            } elseif ($serviceType === 'delivery') {
+                $route = $this->fare->getRoute($pLat, $pLng, $dLat, $dLng);
+                $fareResult = $this->fare->calculateDeliveryFare(
+                    $data['package_size'] ?? 'small',
+                    $route,
+                    $pLat,
+                    $pLng,
                     'delivery',
                 );
                 $fee = $fareResult['total'];

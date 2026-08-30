@@ -151,6 +151,12 @@ class RidePricingSeeder extends Seeder
                 'description' => 'Extra KHR added for extra large packages',
             ],
             [
+                'key'         => 'delivery_commission_pct',
+                'value'       => '25',
+                'label'       => 'Delivery Platform Commission (%)',
+                'description' => 'Percentage of delivery fee kept by company platform (e.g. 25% company cut, 75% driver net)',
+            ],
+            [
                 'key'         => 'delivery_match_radius_km',
                 'value'       => '30',
                 'label'       => 'Delivery Dispatch Radius (km)',

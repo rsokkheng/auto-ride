@@ -226,6 +226,60 @@ class DeliveryFeeTest extends TestCase
         $this->assertSame('7000', PricingSetting::get('delivery_fee_surcharge_extra_large'));
     }
 
+    public function test_admin_creates_delivery_without_fee_automatically_calculates_fee(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $sender = User::factory()->create(['role' => 'passenger', 'name' => 'Alice Sender']);
+
+        $response = $this->actingAs($admin)
+            ->post('/admin/deliveries', [
+                'service_type'    => 'delivery',
+                'sender_id'       => $sender->id,
+                'sender_name'     => 'Alice Sender',
+                'recipient_name'  => 'Bob Recipient',
+                'recipient_phone' => '012999888',
+                'pickup_address'  => 'Central Market',
+                'dropoff_address' => 'Russian Market',
+                'package_size'    => 'medium',
+                'status'          => 'requested',
+                'fee'             => '', // empty fee
+            ]);
+
+        $response->assertRedirect('/admin/deliveries?type=delivery');
+
+        $delivery = Delivery::latest()->first();
+        $this->assertNotNull($delivery);
+        $this->assertGreaterThan(0, $delivery->fee);
+    }
+
+    public function test_delivery_fare_splits_cleanly_into_driver_net_and_company_share(): void
+    {
+        // Example: 12,000 Delivery Fee with 25% commission rate -> 9,000 Driver Net & 3,000 Company Share
+        $fee = 12000;
+        $commissionRate = 25;
+
+        $companyCut = (int) floor(($fee * $commissionRate) / 100);
+        $driverNet = max(0, $fee - $companyCut);
+
+        $this->assertSame(3000, $companyCut);
+        $this->assertSame(9000, $driverNet);
+    }
+
+    public function test_admin_delivery_fare_view_renders_pricing_settings_and_simulator(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $response = $this->actingAs($admin)->get('/admin/delivery-fare');
+
+        $response->assertOk();
+        $response->assertSee('Base & Distance Fees');
+        $response->assertSee('Package Size Surcharge');
+        $response->assertSee('Night & Express Multipliers');
+        $response->assertSee('Company Commission & Driver Share');
+        $response->assertSee('Live Delivery Fare & Earnings Simulator');
+        $response->assertSee('12,000 ៛');
+    }
+
     public function test_admin_deliveries_view_displays_delivery_fee_package_amount_and_net_driver(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
