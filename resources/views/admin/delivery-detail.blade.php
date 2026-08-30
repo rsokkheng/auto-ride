@@ -11,11 +11,11 @@
             <div class="info-box bg-white shadow-sm border">
                 <span class="info-box-icon bg-primary text-white"><i class="fas fa-money-bill-wave"></i></span>
                 <div class="info-box-content">
-                    <span class="info-box-text text-muted">Customer Fee (ថ្លៃសេវា)</span>
+                    <span class="info-box-text text-muted">FARE (ថ្លៃដឹក)</span>
                     <span class="info-box-number text-primary" style="font-size:1.25rem;">
                         {{ number_format($delivery->fee ?? 0) }} ៛
                     </span>
-                    <small class="text-muted">ថ្លៃសេវា booking delivery</small>
+                    <small class="text-muted">ចំងាយផ្លូវសេវាដឹក (Company យកពីអ្នក Booking)</small>
                 </div>
             </div>
         </div>
@@ -24,7 +24,7 @@
             <div class="info-box bg-white shadow-sm border">
                 <span class="info-box-icon bg-info text-white"><i class="fas fa-box-open"></i></span>
                 <div class="info-box-content">
-                    <span class="info-box-text text-muted">Package Amount (COD)</span>
+                    <span class="info-box-text text-muted">PKG Amount (COD)</span>
                     <span class="info-box-number text-dark" style="font-size:1.25rem;">
                         @if(($delivery->package_amount ?? 0) > 0)
                             {{ number_format($delivery->package_amount) }} ៛
@@ -32,7 +32,7 @@
                             <span class="text-muted" style="font-size:1rem;">0 ៛ (គ្មាន)</span>
                         @endif
                     </span>
-                    <small class="text-muted">តម្លៃទំនិញជាក់ស្ដែង</small>
+                    <small class="text-muted">តម្លៃកញ្ចប់ package ដែលបានកក់</small>
                 </div>
             </div>
         </div>
@@ -45,7 +45,7 @@
                     <span class="info-box-number text-success" style="font-size:1.25rem;">
                         {{ number_format($netDriver ?? 0) }} ៛
                     </span>
-                    <small class="text-muted">ចំណូលសុទ្ធ (កាត់ {{ $driverCommRate }}% Comm)</small>
+                    <small class="text-muted">ទឹកប្រាក់ដែលអ្នកដឹករកបាន (បើកពី Company)</small>
                 </div>
             </div>
         </div>
@@ -411,10 +411,10 @@
                 </div>
                 <div class="card-body p-0">
                     <table class="table table-sm mb-0">
-                        {{-- Customer Fee --}}
+                        {{-- FARE --}}
                         <tr class="bg-light">
                             <td class="pl-3 py-2 font-weight-bold text-primary">
-                                <i class="fas fa-money-bill mr-1"></i>Customer Fee (ថ្លៃសេវា)
+                                <i class="fas fa-money-bill mr-1"></i>FARE (ចំងាយផ្លូវសេវាដឹក)
                             </td>
                             <td class="text-right pr-3 py-2 font-weight-bold text-primary" style="font-size:1.05rem;">
                                 {{ number_format($delivery->fee ?? 0) }} ៛
@@ -423,7 +423,7 @@
 
                         {{-- Package Amount --}}
                         <tr>
-                            <td class="pl-3 text-muted">Package Amount / COD (តម្លៃទំនិញ)</td>
+                            <td class="pl-3 text-muted">PKG Amount (តម្លៃកញ្ចប់ដែលបានកក់)</td>
                             <td class="text-right pr-3 font-weight-bold text-dark">
                                 {{ number_format($delivery->package_amount ?? 0) }} ៛
                             </td>
@@ -480,7 +480,7 @@
                         {{-- Driver Net --}}
                         <tr class="bg-success text-white font-weight-bold" style="font-size:1.05rem;">
                             <td class="pl-3 py-2">
-                                <i class="fas fa-hand-holding-usd mr-1"></i>Net Driver (ចំណូលអ្នកដឹក)
+                                <i class="fas fa-hand-holding-usd mr-1"></i>Net Driver (ទឹកប្រាក់អ្នកដឹករកបាន)
                             </td>
                             <td class="text-right pr-3 py-2">
                                 {{ number_format($netDriver) }} ៛
@@ -488,6 +488,29 @@
                         </tr>
                     </table>
                 </div>
+
+                {{-- Cash Flow & COD Settlement Details --}}
+                <div class="px-3 pt-3 pb-2 border-top" style="background:#f8fafc;">
+                    <div class="font-weight-bold small text-dark mb-2">
+                        <i class="fas fa-exchange-alt text-primary mr-1"></i>លំហូរសាច់ប្រាក់ &amp; ការទូទាត់ (Cash Flow &amp; Settlement)
+                    </div>
+                    <ul class="list-unstyled small text-muted mb-0" style="line-height:1.6;">
+                        <li><i class="fas fa-arrow-right text-info mr-1"></i><strong>Company យកពីអ្នក Booking:</strong> FARE {{ number_format($delivery->fee ?? 0) }} ៛</li>
+                        <li><i class="fas fa-arrow-right text-success mr-1"></i><strong>អ្នកដឹកយកលុយពី Company:</strong> Net {{ number_format($netDriver) }} ៛</li>
+                        @if(($delivery->package_amount ?? 0) > 0)
+                            <li class="mt-1 text-warning-darker" style="color:#b45309;">
+                                <i class="fas fa-box text-warning mr-1"></i><strong>ករណី COD (កាត់តាមជាក់ស្តែង):</strong>
+                                កញ្ចប់ទំនិញតម្លៃ {{ number_format($delivery->package_amount) }} ៛
+                                @if($delivery->payment_by === 'recipient')
+                                    (អ្នកដឹកត្រូវប្រមូលសរុបពីអ្នកទទួល: <strong>{{ number_format(($delivery->fee ?? 0) + $delivery->package_amount) }} ៛</strong> រួមមាន FARE + PKG Amount រួចកាត់កងតាមជាក់ស្តែង)
+                                @else
+                                    (អ្នកដឹកប្រមូល COD ថ្លៃទំនិញ <strong>{{ number_format($delivery->package_amount) }} ៛</strong> ពីអ្នកទទួល ជូនអ្នកផ្ញើ)
+                                @endif
+                            </li>
+                        @endif
+                    </ul>
+                </div>
+
                 <div class="card-footer bg-light p-3">
                     <div class="d-flex justify-content-between mb-1">
                         <span class="text-muted small">Payment Model:</span>

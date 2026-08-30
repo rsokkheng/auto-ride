@@ -100,7 +100,7 @@
                     <th>Pickup</th>
                     <th>Dropoff</th>
                     <th>Status</th>
-                    <th>Customer Fee</th>
+                    <th>FARE</th>
                     <th>Pkg Amount</th>
                     <th>Net Driver</th>
                     <th>Paid By</th>
@@ -344,11 +344,11 @@
             </tbody>
         </table>
     </div>
-    <div class="card-footer d-flex align-items-center justify-content-between">
+    <div class="card-footer d-flex align-items-center justify-content-between flex-wrap">
         <small class="text-muted">
-            <strong>Customer Fee:</strong> ថ្លៃសេវាដែលអតិថិជន booking &nbsp;|&nbsp;
-            <strong>Pkg Amount:</strong> តម្លៃទំនិញជាក់ស្ដែង (COD) &nbsp;|&nbsp;
-            <strong>Net Driver:</strong> ប្រាក់សុទ្ធសម្រាប់អ្នកដឹក (បន្ទាប់ពីកាត់ Commission {{ $commissionPct ?? 20 }}%)
+            <strong>FARE:</strong> ចំងាយផ្លូវសេវាដឹក ដែលយកពីអ្នក Booking &nbsp;|&nbsp;
+            <strong>PKG Amount:</strong> តម្លៃកញ្ចប់ package ដែលបានកក់ (COD) &nbsp;|&nbsp;
+            <strong>Net Driver:</strong> ទឹកប្រាក់ដែលអ្នកដឹករកបាន (Company បើកជូនអ្នកដឹក បន្ទាប់ពីកាត់ Commission {{ $commissionPct ?? 20 }}%)
         </small>
         {{ $deliveries->links() }}
     </div>
