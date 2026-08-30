@@ -225,4 +225,85 @@ class DeliveryFeeTest extends TestCase
         $this->assertSame('3500', PricingSetting::get('delivery_fee_base'));
         $this->assertSame('7000', PricingSetting::get('delivery_fee_surcharge_extra_large'));
     }
+
+    public function test_admin_deliveries_view_displays_customer_fee_package_amount_and_net_driver(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $driver = User::factory()->create(['role' => 'driver', 'commission_rate' => 20]);
+        $sender = User::factory()->create(['role' => 'passenger', 'name' => 'John Sender']);
+
+        $delivery = Delivery::create([
+            'sender_id'       => $sender->id,
+            'sender_name'     => 'John Sender',
+            'recipient_name'  => 'Mary Recipient',
+            'recipient_phone' => '012345678',
+            'driver_id'       => $driver->id,
+            'pickup_address'  => 'Phnom Penh City Center',
+            'dropoff_address' => 'Toul Kork, Phnom Penh',
+            'pickup_lat'      => 11.5564,
+            'pickup_lng'      => 104.9282,
+            'dropoff_lat'     => 11.5700,
+            'dropoff_lng'     => 104.9100,
+            'package_size'    => 'medium',
+            'fee'             => 10000,
+            'package_amount'  => 45000,
+            'status'          => 'in_progress',
+            'service_type'    => 'delivery',
+        ]);
+
+        $response = $this->actingAs($admin)->get('/admin/deliveries?type=delivery');
+
+        $response->assertOk();
+        $response->assertSee('Customer Fee');
+        $response->assertSee('Pkg Amount');
+        $response->assertSee('Net Driver');
+        $response->assertSee('10,000 ៛');
+        $response->assertSee('45,000 ៛');
+        $response->assertSee('8,000 ៛'); // 10,000 - 20% = 8,000
+        $response->assertSee(route('admin.deliveries.show', $delivery->id));
+    }
+
+    public function test_admin_delivery_detail_view_displays_breakdown_and_info(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $driver = User::factory()->create(['role' => 'driver', 'commission_rate' => 20]);
+        $sender = User::factory()->create(['role' => 'passenger', 'name' => 'John Sender']);
+
+        $delivery = Delivery::create([
+            'sender_id'       => $sender->id,
+            'sender_name'     => 'John Sender',
+            'recipient_name'  => 'Mary Recipient',
+            'recipient_phone' => '012345678',
+            'driver_id'       => $driver->id,
+            'pickup_address'  => 'Phnom Penh City Center',
+            'dropoff_address' => 'Toul Kork, Phnom Penh',
+            'pickup_lat'      => 11.5564,
+            'pickup_lng'      => 104.9282,
+            'dropoff_lat'     => 11.5700,
+            'dropoff_lng'     => 104.9100,
+            'package_size'    => 'medium',
+            'package_details' => 'Fragile gifts',
+            'fee'             => 10000,
+            'package_amount'  => 45000,
+            'status'          => 'in_progress',
+            'service_type'    => 'delivery',
+            'payment_by'      => 'recipient',
+            'payment_method'  => 'cash',
+            'payment_status'  => 'unpaid',
+        ]);
+
+        $response = $this->actingAs($admin)->get("/admin/deliveries/{$delivery->id}");
+
+        $response->assertOk();
+        $response->assertSee("Delivery Order #{$delivery->id}");
+        $response->assertSee('10,000 ៛');
+        $response->assertSee('45,000 ៛');
+        $response->assertSee('8,000 ៛'); // Net driver
+        $response->assertSee('2,000 ៛'); // Platform commission
+        $response->assertSee('Fragile gifts');
+        $response->assertSee('Mary Recipient');
+        $response->assertSee('John Sender');
+        $response->assertSee('Phnom Penh City Center');
+        $response->assertSee('Toul Kork, Phnom Penh');
+    }
 }

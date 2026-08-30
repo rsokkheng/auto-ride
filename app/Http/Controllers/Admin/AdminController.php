@@ -542,12 +542,26 @@ class AdminController extends Controller
             'activeStatus'  => $status,
             'search'        => $search,
             'activePartner' => $partnerId,
+            'commissionPct' => (float) \App\Models\PricingSetting::get('driver_commission_pct', config('commission.platform_rate.owner', 20)),
             'counts'        => [
                 'all'      => Delivery::count(),
                 'delivery' => Delivery::where('service_type', 'delivery')->count(),
                 'moving'   => Delivery::where('service_type', 'moving')->count(),
             ],
         ]);
+    }
+
+    public function showDelivery(Delivery $delivery)
+    {
+        $delivery->load(['sender', 'driver.company', 'vehicle', 'partner', 'stops', 'promoCode', 'transactions']);
+        $commissionPct = (float) \App\Models\PricingSetting::get('driver_commission_pct', config('commission.platform_rate.owner', 20));
+        $driverCommRate = $delivery->driver?->commission_rate
+            ?? $delivery->driver?->company?->platform_commission_rate
+            ?? $commissionPct;
+        $platformFee = (int) floor((($delivery->fee ?? 0) * $driverCommRate) / 100);
+        $netDriver = max(0, ($delivery->fee ?? 0) - $platformFee);
+
+        return view('admin.delivery-detail', compact('delivery', 'commissionPct', 'driverCommRate', 'platformFee', 'netDriver'));
     }
 
     public function completeDelivery(Delivery $delivery)

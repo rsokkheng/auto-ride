@@ -50,6 +50,7 @@ Route::prefix('admin')->group(function () {
 
     // Deliveries
     Route::get('deliveries', [AdminController::class, 'deliveries'])->name('admin.deliveries');
+    Route::get('deliveries/{delivery}', [AdminController::class, 'showDelivery'])->name('admin.deliveries.show');
     Route::post('deliveries', [AdminController::class, 'storeDelivery'])->name('admin.deliveries.store');
     Route::put('deliveries/{delivery}', [AdminController::class, 'updateDelivery'])->name('admin.deliveries.update');
     Route::delete('deliveries/{delivery}', [AdminController::class, 'destroyDelivery'])->name('admin.deliveries.destroy');

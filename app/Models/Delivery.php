@@ -129,4 +129,9 @@ class Delivery extends Model
     {
         return $this->belongsTo(PromoCode::class);
     }
+
+    public function transactions()
+    {
+        return $this->morphMany(TransactionRecord::class, 'reference');
+    }
 }

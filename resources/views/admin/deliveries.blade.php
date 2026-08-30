@@ -100,7 +100,9 @@
                     <th>Pickup</th>
                     <th>Dropoff</th>
                     <th>Status</th>
-                    <th>Fee</th>
+                    <th>Customer Fee</th>
+                    <th>Pkg Amount</th>
+                    <th>Net Driver</th>
                     <th>Paid By</th>
                     <th>Method</th>
                     <th>Pay Status</th>
@@ -130,6 +132,8 @@
                         'delivered'   => 'success',
                     ];
                     $canComplete = !in_array($d->status, ['completed', 'cancelled']);
+                    $comm = $d->driver?->commission_rate ?? $d->driver?->company?->platform_commission_rate ?? ($commissionPct ?? 20);
+                    $netDriver = $d->fee ? max(0, round($d->fee * (1 - $comm / 100))) : null;
                 @endphp
                 <tr>
                     <td>{{ ($deliveries->currentPage() - 1) * $deliveries->perPage() + $loop->iteration }}</td>
@@ -207,12 +211,10 @@
                             {{ ucfirst(str_replace('_', ' ', $d->status)) }}
                         </span>
                     </td>
+                    {{-- Customer Fee --}}
                     <td>
                         @if($d->fee)
-                            <strong>{{ number_format($d->fee) }} ៛</strong>
-                            @if(($d->package_amount ?? 0) > 0)
-                                <br><small class="text-muted"><i class="fas fa-box mr-1"></i>Pkg: {{ number_format($d->package_amount) }} ៛</small>
-                            @endif
+                            <strong class="text-primary">{{ number_format($d->fee) }} ៛</strong>
                             @if($isMoving && ($d->helper_fee || $d->floor_fee))
                                 <br>
                                 @if($d->helper_fee)
@@ -223,7 +225,28 @@
                                 @endif
                             @endif
                         @else
-                            —
+                            <span class="text-muted">—</span>
+                        @endif
+                    </td>
+
+                    {{-- Package Amount (COD) --}}
+                    <td>
+                        @if(($d->package_amount ?? 0) > 0)
+                            <span class="badge badge-secondary" style="font-size:.85rem;">
+                                <i class="fas fa-box mr-1"></i>{{ number_format($d->package_amount) }} ៛
+                            </span>
+                        @else
+                            <span class="text-muted">—</span>
+                        @endif
+                    </td>
+
+                    {{-- Net Driver --}}
+                    <td>
+                        @if($netDriver !== null)
+                            <span class="text-success font-weight-bold">{{ number_format($netDriver) }} ៛</span>
+                            <div><small class="text-muted">{{ round(100 - $comm) }}% of fee</small></div>
+                        @else
+                            <span class="text-muted">—</span>
                         @endif
                     </td>
                     <td>
@@ -259,7 +282,10 @@
                         @endif
                     </td>
                     <td>{{ $d->created_at->format('Y-m-d') }}</td>
-                    <td>
+                    <td class="text-nowrap">
+                        <a href="{{ route('admin.deliveries.show', $d->id) }}" class="btn btn-xs btn-primary mr-1" title="View Detail">
+                            <i class="fas fa-eye"></i>
+                        </a>
                         @if($canComplete)
                         <form method="POST" action="{{ route('admin.deliveries.complete', $d) }}" class="d-inline"
                               onsubmit="return confirm('Mark order #{{ $d->id }} as completed?')">
@@ -313,12 +339,19 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="19" class="text-center text-muted py-4">No orders found.</td></tr>
+                <tr><td colspan="21" class="text-center text-muted py-4">No orders found.</td></tr>
                 @endforelse
             </tbody>
         </table>
     </div>
-    <div class="card-footer clearfix">{{ $deliveries->links() }}</div>
+    <div class="card-footer d-flex align-items-center justify-content-between">
+        <small class="text-muted">
+            <strong>Customer Fee:</strong> ថ្លៃសេវាដែលអតិថិជន booking &nbsp;|&nbsp;
+            <strong>Pkg Amount:</strong> តម្លៃទំនិញជាក់ស្ដែង (COD) &nbsp;|&nbsp;
+            <strong>Net Driver:</strong> ប្រាក់សុទ្ធសម្រាប់អ្នកដឹក (បន្ទាប់ពីកាត់ Commission {{ $commissionPct ?? 20 }}%)
+        </small>
+        {{ $deliveries->links() }}
+    </div>
 </div>
 
 {{-- ════════════════ Create / Edit Modal ════════════════ --}}
