@@ -9,6 +9,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            return;
+        }
+
         DB::statement('ALTER TABLE phone_otps MODIFY verified_at DATETIME NULL DEFAULT NULL');
         DB::statement('ALTER TABLE phone_otps MODIFY last_sent_at DATETIME NULL DEFAULT NULL');
         DB::statement('ALTER TABLE phone_otps MODIFY expires_at DATETIME NOT NULL');

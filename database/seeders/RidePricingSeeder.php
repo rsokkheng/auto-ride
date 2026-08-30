@@ -145,6 +145,12 @@ class RidePricingSeeder extends Seeder
                 'description' => 'Extra KHR added for large packages',
             ],
             [
+                'key'         => 'delivery_fee_surcharge_extra_large',
+                'value'       => '5000',
+                'label'       => 'Delivery Surcharge — Extra Large Package',
+                'description' => 'Extra KHR added for extra large packages',
+            ],
+            [
                 'key'         => 'delivery_match_radius_km',
                 'value'       => '30',
                 'label'       => 'Delivery Dispatch Radius (km)',

@@ -177,9 +177,9 @@
                                 @endif
                             </small>
                         @else
-                            @php $pc = ['small'=>'success','medium'=>'warning','large'=>'danger']; @endphp
+                            @php $pc = ['small'=>'success','medium'=>'warning','large'=>'danger','extra_large'=>'dark']; @endphp
                             <span class="badge badge-{{ $pc[$d->package_size] ?? 'secondary' }}">
-                                {{ ucfirst($d->package_size ?? '—') }}
+                                {{ ucfirst(str_replace('_', ' ', $d->package_size ?? '—')) }}
                             </span>
                         @endif
                     </td>
@@ -209,7 +209,10 @@
                     </td>
                     <td>
                         @if($d->fee)
-                            {{ number_format($d->fee) }} ៛
+                            <strong>{{ number_format($d->fee) }} ៛</strong>
+                            @if(($d->package_amount ?? 0) > 0)
+                                <br><small class="text-muted"><i class="fas fa-box mr-1"></i>Pkg: {{ number_format($d->package_amount) }} ៛</small>
+                            @endif
                             @if($isMoving && ($d->helper_fee || $d->floor_fee))
                                 <br>
                                 @if($d->helper_fee)
@@ -280,6 +283,7 @@
                                 'dropoff_address'   => $d->dropoff_address,
                                 'status'            => $d->status,
                                 'fee'               => $d->fee ?? '',
+                                'package_amount'    => $d->package_amount ?? '',
                                 'payment_by'        => $d->payment_by ?? 'sender',
                                 'payment_method'    => $d->payment_method ?? 'cash',
                                 'scheduled_at'      => $d->scheduled_at?->format('Y-m-d\TH:i') ?? '',
@@ -396,7 +400,14 @@
                                 <option value="small">Small — fits in a backpack</option>
                                 <option value="medium">Medium — fits in a car boot</option>
                                 <option value="large">Large — requires a van</option>
+                                <option value="extra_large">Extra Large — requires a truck / large van</option>
                             </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Package Value / COD Amount (KHR ៛)</label>
+                            <input type="number" name="package_amount" id="f-package-amount" class="form-control"
+                                   placeholder="0" min="0" step="100">
+                            <small class="text-muted">Item value for COD/reference (separate from delivery service fee)</small>
                         </div>
                         <div class="form-group">
                             <label>Package Details</label>
@@ -834,6 +845,8 @@ function openCreate(defaultType) {
     document.getElementById('f-split-pct').value = 50;
     updateSplitDisplay(50);
     document.getElementById('f-partner-reference').value = '';
+    const pkgAmt = document.getElementById('f-package-amount');
+    if (pkgAmt) pkgAmt.value = '';
     $('#formModal').modal('show');
 }
 
@@ -858,6 +871,8 @@ function openEdit(btn) {
     document.getElementById('f-dropoff').value          = d.dropoff_address;
     document.getElementById('f-status').value           = d.status;
     document.getElementById('f-fee').value              = d.fee;
+    const pkgAmt = document.getElementById('f-package-amount');
+    if (pkgAmt) pkgAmt.value = d.package_amount || '';
     document.getElementById('f-payment-by').value       = d.payment_by     || 'sender';
     document.getElementById('f-payment-method').value   = d.payment_method || 'cash';
     document.getElementById('f-scheduled-at').value     = d.scheduled_at;

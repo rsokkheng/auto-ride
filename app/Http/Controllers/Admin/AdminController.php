@@ -572,12 +572,13 @@ class AdminController extends Controller
             'sender_name'        => 'required|string|max:255',
             'recipient_name'     => 'required|string|max:255',
             'recipient_phone'    => 'required|string|max:24',
-            'package_size'       => 'nullable|in:small,medium,large',
+            'package_size'       => 'nullable|in:small,medium,large,extra_large',
             'driver_id'          => 'nullable|exists:users,id',
             'pickup_address'     => 'required|string|max:255',
             'dropoff_address'    => 'required|string|max:255',
             'status'             => 'required|in:requested,pending,accepted,in_progress,completed,cancelled',
             'fee'                => 'nullable|numeric|min:0',
+            'package_amount'     => 'nullable|integer|min:0',
             'payment_by'         => 'nullable|in:sender,recipient',
             'payment_method'     => 'nullable|in:cash,wallet,aba,wing,other_online',
             'scheduled_at'       => 'nullable|date',
@@ -600,6 +601,7 @@ class AdminController extends Controller
         ]);
 
         $data['package_details']    = $data['package_details'] ?? '';
+        $data['package_amount']     = (int) ($data['package_amount'] ?? 0);
         $data['payment_by']         = $data['payment_by'] ?? 'sender';
         $data['payment_method']     = $data['payment_method'] ?? 'cash';
         $data['payment_status']     = 'unpaid';
@@ -622,12 +624,13 @@ class AdminController extends Controller
             'sender_name'        => 'required|string|max:255',
             'recipient_name'     => 'required|string|max:255',
             'recipient_phone'    => 'required|string|max:24',
-            'package_size'       => 'nullable|in:small,medium,large',
+            'package_size'       => 'nullable|in:small,medium,large,extra_large',
             'driver_id'          => 'nullable|exists:users,id',
             'pickup_address'     => 'required|string|max:255',
             'dropoff_address'    => 'required|string|max:255',
             'status'             => 'required|in:requested,pending,accepted,in_progress,completed,cancelled',
             'fee'                => 'nullable|numeric|min:0',
+            'package_amount'     => 'nullable|integer|min:0',
             'payment_by'         => 'nullable|in:sender,recipient',
             'payment_method'     => 'nullable|in:cash,wallet,aba,wing,other_online',
             'scheduled_at'       => 'nullable|date',
@@ -647,6 +650,10 @@ class AdminController extends Controller
             'split_pct_customer'  => 'nullable|integer|min:0|max:100',
             'partner_reference'   => 'nullable|string|max:150',
         ]);
+
+        if (array_key_exists('package_amount', $data)) {
+            $data['package_amount'] = (int) ($data['package_amount'] ?? 0);
+        }
 
         if (! empty($data['driver_id']) && ! $delivery->assigned_at) {
             $data['assigned_at'] = now();
@@ -1638,7 +1645,7 @@ class AdminController extends Controller
     {
         $keys = [
             'delivery_fee_base', 'delivery_fee_per_km',
-            'delivery_fee_surcharge_small', 'delivery_fee_surcharge_medium', 'delivery_fee_surcharge_large',
+            'delivery_fee_surcharge_small', 'delivery_fee_surcharge_medium', 'delivery_fee_surcharge_large', 'delivery_fee_surcharge_extra_large',
             'delivery_night_surcharge_rate', 'delivery_express_multiplier',
         ];
 
@@ -1650,13 +1657,14 @@ class AdminController extends Controller
     public function updateDeliveryFare(Request $request)
     {
         $data = $request->validate([
-            'delivery_fee_base'             => 'required|integer|min:0',
-            'delivery_fee_per_km'           => 'required|integer|min:0',
-            'delivery_fee_surcharge_small'  => 'required|integer|min:0',
-            'delivery_fee_surcharge_medium' => 'required|integer|min:0',
-            'delivery_fee_surcharge_large'  => 'required|integer|min:0',
-            'delivery_night_surcharge_rate' => 'required|numeric|min:0|max:1',
-            'delivery_express_multiplier'   => 'required|numeric|min:1|max:10',
+            'delivery_fee_base'                => 'required|integer|min:0',
+            'delivery_fee_per_km'              => 'required|integer|min:0',
+            'delivery_fee_surcharge_small'     => 'required|integer|min:0',
+            'delivery_fee_surcharge_medium'    => 'required|integer|min:0',
+            'delivery_fee_surcharge_large'     => 'required|integer|min:0',
+            'delivery_fee_surcharge_extra_large'=> 'required|integer|min:0',
+            'delivery_night_surcharge_rate'    => 'required|numeric|min:0|max:1',
+            'delivery_express_multiplier'      => 'required|numeric|min:1|max:10',
         ]);
 
         foreach ($data as $key => $value) {

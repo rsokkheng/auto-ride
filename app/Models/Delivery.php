@@ -82,6 +82,7 @@ class Delivery extends Model
         'delivery_scanned_at'=> 'datetime',
         'surge_multiplier'=> 'float',
         'fee'              => 'integer',
+        'package_amount'   => 'integer',
         'rating'           => 'float',
         'pickup_lat'       => 'float',
         'pickup_lng'       => 'float',

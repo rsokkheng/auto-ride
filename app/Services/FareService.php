@@ -213,7 +213,13 @@ class FareService
 
         $baseFare       = (int) $this->setting('delivery_fee_base', config('delivery.fee_base', 3000));
         $perKm          = (int) $this->setting('delivery_fee_per_km', config('delivery.fee_per_km', 1200));
-        $pkgSurcharge   = (int) $this->setting("delivery_fee_surcharge_{$packageSize}", config("delivery.fee_surcharge_{$packageSize}", 0));
+        $defaultPkgSurcharge = match ($packageSize) {
+            'medium'      => 2000,
+            'large'       => 5000,
+            'extra_large' => 5000,
+            default       => 0,
+        };
+        $pkgSurcharge   = (int) $this->setting("delivery_fee_surcharge_{$packageSize}", config("delivery.fee_surcharge_{$packageSize}", $defaultPkgSurcharge));
         $bookingFee     = (int) config('pricing.delivery.booking_fee', 500);
         $distanceFare   = (int) ceil($distanceKm * $perKm);
         $subtotal       = $bookingFee + $baseFare + $distanceFare + $pkgSurcharge;
@@ -318,7 +324,7 @@ class FareService
             'night_surcharge_rate','avg_city_speed_kmh','traffic_speed_threshold_kmh',
             'delivery_night_surcharge_rate','delivery_express_multiplier',
             'delivery_fee_base','delivery_fee_per_km',
-            'delivery_fee_surcharge_small','delivery_fee_surcharge_medium','delivery_fee_surcharge_large',
+            'delivery_fee_surcharge_small','delivery_fee_surcharge_medium','delivery_fee_surcharge_large','delivery_fee_surcharge_extra_large',
         ] as $k) {
             Cache::forget("pricing_setting_{$k}");
         }

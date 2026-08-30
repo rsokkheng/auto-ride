@@ -217,7 +217,7 @@ class DeliveryController extends ApiController
             'sender_phone'      => 'nullable|string|max:24',
             'recipient_name'    => [Rule::requiredIf($serviceType === 'delivery'), 'string', 'max:255'],
             'recipient_phone'   => [Rule::requiredIf($serviceType === 'delivery'), 'string', 'max:24'],
-            'package_size'      => 'nullable|in:small,medium,large',
+            'package_size'      => 'nullable|in:small,medium,large,extra_large',
             'pickup_address'    => 'required|string|max:255',
             'dropoff_address'   => 'nullable|string|max:255',
             'pickup_lat'        => 'nullable|numeric|between:-90,90',
@@ -227,6 +227,7 @@ class DeliveryController extends ApiController
             'scheduled_at'      => 'nullable|date',
             'package_details'   => 'nullable|string|max:500',
             'fee'               => 'nullable|numeric|min:0',
+            'package_amount'    => 'nullable|integer|min:0',
             'payment_by'        => 'nullable|in:sender,recipient',
             'payment_method'    => 'nullable|in:cash,wallet,aba,wing,other_online',
             'notes'             => 'nullable|string',
@@ -260,13 +261,13 @@ class DeliveryController extends ApiController
 
         $hasDropoff = ! empty($data['dropoff_lat']) && ! empty($data['dropoff_lng']);
 
-        // Calculate fee based on service type — only when dropoff coords are known.
+        // Calculate fee based on service type — automatically when pickup & dropoff coords are provided.
         $fee        = (int) ($data['fee'] ?? 0);
         $helperFee  = null;
         $floorFee   = null;
 
-        if ($fee === 0 && $hasDropoff) {
-            if ($serviceType === 'moving' && ! empty($data['pickup_lat'])) {
+        if ($hasDropoff && ! empty($data['pickup_lat']) && ! empty($data['pickup_lng'])) {
+            if ($serviceType === 'moving') {
                 $fareResult = $this->movingFare->estimate(
                     (float) $data['pickup_lat'],  (float) $data['pickup_lng'],
                     (float) $data['dropoff_lat'], (float) $data['dropoff_lng'],
@@ -279,7 +280,7 @@ class DeliveryController extends ApiController
                 $fee       = $fareResult['total'];
                 $helperFee = $fareResult['helper_fee'];
                 $floorFee  = $fareResult['floor_fee'];
-            } elseif ($serviceType === 'delivery' && ! empty($data['pickup_lat'])) {
+            } elseif ($serviceType === 'delivery') {
                 $route = $this->fare->getRoute(
                     (float) $data['pickup_lat'],  (float) $data['pickup_lng'],
                     (float) $data['dropoff_lat'], (float) $data['dropoff_lng'],
@@ -331,6 +332,7 @@ class DeliveryController extends ApiController
             'notes'             => $data['notes'] ?? null,
             'status'            => 'requested',
             'fee'               => $fee,
+            'package_amount'    => (int) ($data['package_amount'] ?? 0),
             'payment_by'        => $data['payment_by'] ?? 'sender',
             'payment_method'    => $data['payment_method'] ?? 'cash',
             'payment_status'    => 'unpaid',
@@ -522,7 +524,7 @@ class DeliveryController extends ApiController
             'dropoff_lat'       => 'required|numeric|between:-90,90',
             'dropoff_lng'       => 'required|numeric|between:-180,180',
             // Delivery
-            'package_size'      => 'nullable|in:small,medium,large',
+            'package_size'      => 'nullable|in:small,medium,large,extra_large',
             // Moving
             'floor_pickup'      => 'nullable|integer|min:0|max:50',
             'floor_dropoff'     => 'nullable|integer|min:0|max:50',
@@ -993,7 +995,8 @@ class DeliveryController extends ApiController
             'service_option'    => 'nullable|in:normal,express',
             'recipient_name'    => 'nullable|string|max:255',
             'recipient_phone'   => 'nullable|string|max:24',
-            'package_size'      => 'nullable|in:small,medium,large',
+            'package_size'      => 'nullable|in:small,medium,large,extra_large',
+            'package_amount'    => 'nullable|integer|min:0',
             'pickup_address'    => 'nullable|string|max:255',
             'dropoff_address'   => 'nullable|string|max:255',
             'pickup_lat'        => 'nullable|numeric|between:-90,90',
@@ -1014,6 +1017,29 @@ class DeliveryController extends ApiController
         ]);
 
         $updateData = array_filter($data, fn($value) => $value !== null);
+
+        // Recalculate fee if route or service attributes changed
+        $merged = array_merge($delivery->toArray(), $updateData);
+        $pLat = $merged['pickup_lat'] ?? null;
+        $pLng = $merged['pickup_lng'] ?? null;
+        $dLat = $merged['dropoff_lat'] ?? null;
+        $dLng = $merged['dropoff_lng'] ?? null;
+
+        if (! empty($pLat) && ! empty($pLng) && ! empty($dLat) && ! empty($dLng)) {
+            $serviceType = $merged['service_type'] ?? 'delivery';
+            if ($serviceType === 'delivery') {
+                $route = $this->fare->getRoute((float) $pLat, (float) $pLng, (float) $dLat, (float) $dLng);
+                $fareResult = $this->fare->calculateDeliveryFare($merged['package_size'] ?? 'small', $route, (float) $pLat, (float) $pLng, 'delivery');
+                $fee = $fareResult['total'];
+                $serviceOption = $merged['service_option'] ?? 'normal';
+                if ($serviceOption === 'express') {
+                    $multiplier = (float) \App\Models\PricingSetting::get('delivery_express_multiplier', config('delivery.express_multiplier', 1.25));
+                    $fee = (int) ceil(($fee * $multiplier) / 100) * 100;
+                    $updateData['express_multiplier'] = $multiplier;
+                }
+                $updateData['fee'] = $fee;
+            }
+        }
 
         $delivery->update($updateData);
         $delivery->load('driver', 'vehicle');

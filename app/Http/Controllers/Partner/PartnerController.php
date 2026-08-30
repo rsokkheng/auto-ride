@@ -133,7 +133,11 @@ class PartnerController extends Controller
     public function createOrder()
     {
         $partner = Auth::guard('partner')->user();
-        return view('partner.order-create', compact('partner'));
+        $contract = PartnerContract::where('partner_id', $partner->id)
+            ->where('is_active', true)
+            ->latest()
+            ->first();
+        return view('partner.order-create', compact('partner', 'contract'));
     }
 
     public function storeOrder(Request $request)

@@ -84,7 +84,7 @@
     </div>
     <div class="fare-sec-body">
         <div class="row">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="field-label">Small</div>
                 <div class="input-wrap">
                     <span class="input-prefix">៛</span>
@@ -92,7 +92,7 @@
                            value="{{ $settings['delivery_fee_surcharge_small']->value ?? 0 }}" min="0" required>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="field-label">Medium</div>
                 <div class="input-wrap">
                     <span class="input-prefix">៛</span>
@@ -100,12 +100,20 @@
                            value="{{ $settings['delivery_fee_surcharge_medium']->value ?? 2000 }}" min="0" required>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="field-label">Large</div>
                 <div class="input-wrap">
                     <span class="input-prefix">៛</span>
                     <input type="number" name="delivery_fee_surcharge_large" class="fare-input currency"
                            value="{{ $settings['delivery_fee_surcharge_large']->value ?? 5000 }}" min="0" required>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="field-label">Extra Large</div>
+                <div class="input-wrap">
+                    <span class="input-prefix">៛</span>
+                    <input type="number" name="delivery_fee_surcharge_extra_large" class="fare-input currency"
+                           value="{{ $settings['delivery_fee_surcharge_extra_large']->value ?? 5000 }}" min="0" required>
                 </div>
             </div>
         </div>
