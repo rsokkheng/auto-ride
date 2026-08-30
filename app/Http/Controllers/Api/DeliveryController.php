@@ -469,8 +469,8 @@ class DeliveryController extends ApiController
             return $this->unauthorized();
         }
 
-        // Idempotent — already started
-        if (in_array($delivery->status, ['in_progress', 'completed'], true)) {
+        // Idempotent — already picked up (either flow) or finished
+        if ($delivery->isInTransit() || $delivery->isFinished()) {
             return $this->success([
                 'delivery' => $delivery->load('sender', 'driver', 'vehicle'),
                 'message'  => 'Already started.',
@@ -496,7 +496,7 @@ class DeliveryController extends ApiController
             if ($fresh->sender) {
                 $label = $fresh->service_type === 'moving' ? 'Moving job' : 'Delivery';
                 $this->fcm->sendToUser(
-                    $fresh->sender_id,
+                    $fresh->sender,
                     "{$label} Started",
                     "Your driver has picked up and is on the way.",
                     ['type' => 'delivery_started', 'delivery_id' => (string) $fresh->id]
@@ -739,20 +739,22 @@ class DeliveryController extends ApiController
             $fresh = $delivery->fresh()->load('sender', 'driver');
             $this->firestore->syncDelivery($fresh);
 
-            // Auto-complete and process payment
-            if ($fresh->fee > 0 && $fresh->payment_status !== 'paid') {
-                try {
-                    app(\App\Services\PaymentService::class)->processDelivery($fresh);
-                    $fresh->refresh();
-                } catch (\Throwable $e) { report($e); }
-            }
+            // Auto-complete and settle payment
+            try {
+                app(\App\Services\PaymentService::class)->settleDelivery($fresh);
+                $fresh->refresh();
+            } catch (\Throwable $e) { report($e); }
 
             // Notify partner/sender
             if ($fresh->sender) {
-                $this->fcm->send($fresh->sender, 'Package Delivered', 'Your package has been delivered successfully.', [
-                    'type'        => 'delivery_delivered',
-                    'delivery_id' => $fresh->id,
-                ]);
+                try {
+                    $this->fcm->sendToUser($fresh->sender, 'Package Delivered', 'Your package has been delivered successfully.', [
+                        'type'        => 'delivery_delivered',
+                        'delivery_id' => (string) $fresh->id,
+                    ]);
+                } catch (\Throwable $e) {
+                    report($e);
+                }
             }
 
             return $this->success([
@@ -778,7 +780,8 @@ class DeliveryController extends ApiController
             return $this->unauthorized();
         }
 
-        if (in_array($delivery->status, ['completed', 'cancelled'], true)) {
+        // Terminal statuses include "delivered" (partner/QR flow), not just "completed".
+        if ($delivery->isTerminal()) {
             return response()->json(['message' => 'Delivery cannot be cancelled'], 422);
         }
 
@@ -807,13 +810,10 @@ class DeliveryController extends ApiController
             return $this->unauthorized();
         }
 
-        $delivery->update(['status' => 'completed']);
+        $delivery->update(['status' => 'completed', 'completed_at' => $delivery->completed_at ?? now()]);
 
-        // Create/update transaction record and process payment (skip if already paid).
-        $transaction = null;
-        if ($delivery->fee > 0 && $delivery->payment_status !== 'paid') {
-            $transaction = app(PaymentService::class)->processDelivery($delivery->fresh());
-        }
+        // Create transaction record and settle payment (no-op if already paid).
+        $transaction = app(PaymentService::class)->settleDelivery($delivery->fresh());
 
         $fresh = $delivery->fresh()->load('sender', 'driver');
         $this->firestore->syncDelivery($fresh);
@@ -905,14 +905,14 @@ class DeliveryController extends ApiController
 
         $fresh = $delivery->fresh()->load('sender', 'driver', 'vehicle');
 
-        // Process payment and credit driver wallet immediately
-        if ($fresh->fee > 0) {
-            try {
-                app(\App\Services\PaymentService::class)->processDelivery($fresh);
-                $fresh->refresh();
-            } catch (\Throwable $e) {
-                report($e);
-            }
+        // Settle payment and credit the driver wallet. settleDelivery() is a no-op
+        // when the job was already paid — a partner order that reached "delivered"
+        // via QR scan settled there, and paying again would double-credit the driver.
+        try {
+            app(\App\Services\PaymentService::class)->settleDelivery($fresh);
+            $fresh->refresh();
+        } catch (\Throwable $e) {
+            report($e);
         }
 
         $this->firestore->syncDelivery($fresh);
@@ -960,7 +960,9 @@ class DeliveryController extends ApiController
             return $this->unauthorized();
         }
 
-        if ($delivery->status !== 'completed') {
+        // "delivered" (partner/QR flow) counts as finished — otherwise those
+        // orders could never be rated.
+        if (! $delivery->isFinished()) {
             return response()->json(['message' => 'Delivery must be completed before rating'], 422);
         }
 
@@ -1012,8 +1014,9 @@ class DeliveryController extends ApiController
             return $this->unauthorized();
         }
 
-        // Only allow updates for pending/requested deliveries
-        if (! in_array($delivery->status, ['requested', 'pending'], true)) {
+        // Only allow updates while the order is still unclaimed (includes the
+        // partner flow's "created").
+        if (! in_array($delivery->status, Delivery::OPEN_STATUSES, true)) {
             return response()->json([
                 'message' => "Cannot update delivery with status '{$delivery->status}'",
             ], 422);
@@ -1103,8 +1106,8 @@ class DeliveryController extends ApiController
             return $this->unauthorized();
         }
 
-        // Only allow deletion for certain statuses
-        if (! in_array($delivery->status, ['requested', 'pending', 'accepted'], true)) {
+        // Only allow deletion before the package has been collected
+        if (! in_array($delivery->status, Delivery::PRE_PICKUP_STATUSES, true)) {
             return response()->json([
                 'message' => "Cannot delete delivery with status '{$delivery->status}'",
             ], 422);

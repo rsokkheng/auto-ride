@@ -27,6 +27,25 @@ class PaymentService
 
     // ── Delivery ─────────────────────────────────────────────────────────────
 
+    /**
+     * Idempotent settlement entry point.
+     *
+     * A delivery can be finished from several places (driver complete, sender
+     * confirm, QR delivery scan, proof-of-delivery upload). Every one of them
+     * should call this rather than processDelivery() directly, so a job that is
+     * finished twice does not credit the driver twice.
+     *
+     * Returns null when there is nothing to settle (no fee, or already paid).
+     */
+    public function settleDelivery(Delivery $delivery): ?TransactionRecord
+    {
+        if ($delivery->fee <= 0 || $delivery->payment_status === 'paid') {
+            return null;
+        }
+
+        return $this->processDelivery($delivery);
+    }
+
     public function processDelivery(Delivery $delivery): TransactionRecord
     {
         $driver = $delivery->driver?->load('company');

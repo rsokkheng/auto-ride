@@ -215,7 +215,7 @@ class PartnerController extends ApiController
         if (! $partner || $partner->role !== 'partner') return $this->unauthorized();
         if ($delivery->partner_id !== $partner->id) return $this->unauthorized();
 
-        if (in_array($delivery->status, ['picked_up', 'in_transit', 'delivered', 'completed'], true)) {
+        if ($delivery->isInTransit() || $delivery->isFinished()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Cannot cancel — package is already in transit.',

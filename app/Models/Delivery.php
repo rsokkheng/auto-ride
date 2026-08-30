@@ -10,6 +10,54 @@ class Delivery extends Model
 {
     use HasFactory;
 
+    /*
+    |--------------------------------------------------------------------------
+    | Status vocabulary
+    |--------------------------------------------------------------------------
+    | Two flows write to this table and each has its own status names:
+    |   Customer app : requested → accepted → in_progress → completed
+    |   Partner / QR : created → assigned → accepted → picked_up → in_transit
+    |                  → delivered
+    | Guards must therefore compare against these groups rather than a single
+    | literal, otherwise a partner order slips past a check written for the
+    | customer flow (and vice versa).
+    */
+
+    /** Awaiting a driver — still assignable/editable. */
+    public const OPEN_STATUSES = ['requested', 'pending', 'created'];
+
+    /** Driver is committed but has not collected the package yet. */
+    public const PRE_PICKUP_STATUSES = ['requested', 'pending', 'created', 'assigned', 'accepted'];
+
+    /** Package is with the driver and moving. */
+    public const IN_TRANSIT_STATUSES = ['in_progress', 'picked_up', 'in_transit'];
+
+    /** Job finished successfully — payment due, rateable. */
+    public const FINISHED_STATUSES = ['delivered', 'completed'];
+
+    /** No further transitions allowed. */
+    public const TERMINAL_STATUSES = ['delivered', 'completed', 'cancelled'];
+
+    public function isTerminal(): bool
+    {
+        return in_array($this->status, self::TERMINAL_STATUSES, true);
+    }
+
+    public function isFinished(): bool
+    {
+        return in_array($this->status, self::FINISHED_STATUSES, true);
+    }
+
+    public function isInTransit(): bool
+    {
+        return in_array($this->status, self::IN_TRANSIT_STATUSES, true);
+    }
+
+    public function isPaid(): bool
+    {
+        return $this->payment_status === 'paid';
+    }
+
     protected $fillable = [
         'sender_id',
         'sender_name',

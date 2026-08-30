@@ -566,7 +566,7 @@ class AdminController extends Controller
 
     public function completeDelivery(Delivery $delivery)
     {
-        if (in_array($delivery->status, ['completed', 'cancelled'])) {
+        if ($delivery->status === 'cancelled' || $delivery->status === 'completed') {
             return back()->with('error', "Order #{$delivery->id} is already {$delivery->status}.");
         }
 
@@ -574,6 +574,13 @@ class AdminController extends Controller
             'status'       => 'completed',
             'completed_at' => $delivery->completed_at ?? now(),
         ]);
+
+        // Settle payment / credit the driver. No-op if a QR scan already paid it out.
+        try {
+            app(\App\Services\PaymentService::class)->settleDelivery($delivery->fresh());
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return back()->with('success', "Order #{$delivery->id} marked as completed.");
     }

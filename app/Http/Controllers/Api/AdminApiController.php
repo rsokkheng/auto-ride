@@ -446,11 +446,27 @@ class AdminApiController extends ApiController
         if (! $admin) return $this->unauthorized();
 
         $data = $request->validate([
-            'status' => 'required|in:pending,accepted,in_transit,completed,cancelled',
+            // Covers both the customer flow (requested → accepted → in_progress →
+            // completed) and the partner/QR flow (created → assigned → picked_up →
+            // in_transit → delivered).
+            'status' => 'required|in:requested,pending,created,assigned,accepted,in_progress,picked_up,in_transit,delivered,completed,cancelled',
             'note'   => 'nullable|string|max:500',
         ]);
 
-        $delivery->update(['status' => $data['status']]);
+        $isFinishing = in_array($data['status'], Delivery::FINISHED_STATUSES, true);
+
+        $delivery->update($isFinishing
+            ? ['status' => $data['status'], 'completed_at' => $delivery->completed_at ?? now()]
+            : ['status' => $data['status']]);
+
+        // Settle payment when an admin closes the job out. No-op if already paid.
+        if ($isFinishing) {
+            try {
+                app(\App\Services\PaymentService::class)->settleDelivery($delivery->fresh());
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
 
         return $this->ok([
             'delivery' => $delivery->fresh()->load('sender', 'driver'),

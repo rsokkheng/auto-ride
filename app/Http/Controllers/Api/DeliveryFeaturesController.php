@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Models\Delivery;
 use App\Models\DeliveryStop;
 use App\Services\FirestoreService;
+use App\Services\PaymentService;
 use Illuminate\Http\Request;
 
 class DeliveryFeaturesController extends ApiController
@@ -27,7 +28,7 @@ class DeliveryFeaturesController extends ApiController
         $user = $this->authUser($request);
         if (! $user || $delivery->sender_id !== $user->id) return $this->unauthorized();
 
-        if (! in_array($delivery->status, ['requested', 'accepted'], true)) {
+        if (! in_array($delivery->status, Delivery::PRE_PICKUP_STATUSES, true)) {
             return response()->json(['data' => null, 'message' => 'Stops can only be added before pickup.'], 422);
         }
 
@@ -62,6 +63,19 @@ class DeliveryFeaturesController extends ApiController
         return $this->success(['stops' => $delivery->stops()->get()]);
     }
 
+    /**
+     * Settle a delivery that was just finished here. Idempotent — does nothing if
+     * another completion path (driver complete / QR scan) already paid it out.
+     */
+    private function settle(Delivery $delivery): void
+    {
+        try {
+            app(PaymentService::class)->settleDelivery($delivery);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
     // ── Proof of delivery ─────────────────────────────────────────────────────
 
     public function uploadProof(Request $request, Delivery $delivery)
@@ -75,9 +89,12 @@ class DeliveryFeaturesController extends ApiController
 
         $path = $request->file('photo')->store('delivery-proofs', 'public');
         $delivery->update([
-            'proof_photo' => $path,
-            'status'      => 'completed',
+            'proof_photo'  => $path,
+            'status'       => 'completed',
+            'completed_at' => $delivery->completed_at ?? now(),
         ]);
+
+        $this->settle($delivery->fresh());
 
         $this->firestore->syncDelivery($delivery->fresh());
 
@@ -105,7 +122,11 @@ class DeliveryFeaturesController extends ApiController
 
         // Mark whole delivery completed if all stops are done
         if ($delivery->stops()->where('status', 'pending')->doesntExist()) {
-            $delivery->update(['status' => 'completed']);
+            $delivery->update([
+                'status'       => 'completed',
+                'completed_at' => $delivery->completed_at ?? now(),
+            ]);
+            $this->settle($delivery->fresh());
             $this->firestore->syncDelivery($delivery->fresh());
         }
 
