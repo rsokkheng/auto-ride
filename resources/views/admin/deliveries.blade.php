@@ -97,8 +97,7 @@
                     <th>Phone</th>
                     <th>Details</th>
                     <th>Driver</th>
-                    <th>Pickup</th>
-                    <th>Dropoff</th>
+                    <th>Address</th>
                     <th>Status</th>
                     <th>Delivery Fee</th>
                     <th>Pkg Amount</th>
@@ -204,8 +203,18 @@
                             </button>
                         @endif
                     </td>
-                    <td>{{ Str::limit($d->pickup_address, 20) }}</td>
-                    <td>{{ Str::limit($d->dropoff_address, 20) }}</td>
+                    <td>
+                        <button type="button" class="btn btn-xs btn-outline-primary"
+                            data-pickup-address="{{ $d->pickup_address }}"
+                            data-pickup-lat="{{ $d->pickup_lat }}"
+                            data-pickup-lng="{{ $d->pickup_lng }}"
+                            data-dropoff-address="{{ $d->dropoff_address }}"
+                            data-dropoff-lat="{{ $d->dropoff_lat }}"
+                            data-dropoff-lng="{{ $d->dropoff_lng }}"
+                            onclick="openAddress(this)">
+                            <i class="fas fa-map-marker-alt mr-1"></i>View
+                        </button>
+                    </td>
                     <td>
                         <span class="badge badge-{{ $sc[$d->status] ?? 'secondary' }} {{ in_array($d->status, ['created','light']) ? 'text-dark' : '' }}">
                             {{ ucfirst(str_replace('_', ' ', $d->status)) }}
@@ -339,7 +348,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="21" class="text-center text-muted py-4">No orders found.</td></tr>
+                <tr><td colspan="20" class="text-center text-muted py-4">No orders found.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -761,6 +770,38 @@
     </div>
 </div>
 
+{{-- ════════════════ Address (Pickup/Dropoff) Modal ════════════════ --}}
+<div class="modal fade" id="addressModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-map-marker-alt mr-2"></i>Location Details</h5>
+                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="font-weight-bold text-success"><i class="fas fa-circle mr-1" style="font-size:.6rem;"></i>Pickup</div>
+                    <div id="address-pickup-text" class="mb-1"></div>
+                    <a id="address-pickup-link" href="#" target="_blank" class="btn btn-xs btn-outline-success">
+                        <i class="fas fa-map-marked-alt mr-1"></i>View on Map
+                    </a>
+                </div>
+                <hr>
+                <div>
+                    <div class="font-weight-bold text-danger"><i class="fas fa-map-marker mr-1"></i>Dropoff</div>
+                    <div id="address-dropoff-text" class="mb-1"></div>
+                    <a id="address-dropoff-link" href="#" target="_blank" class="btn btn-xs btn-outline-danger">
+                        <i class="fas fa-map-marked-alt mr-1"></i>View on Map
+                    </a>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @endsection
 
 @push('scripts')
@@ -864,6 +905,28 @@ function openAssign(btn) {
     document.getElementById('assign-delivery-label').textContent = 'Order ' + btn.dataset.label;
     document.getElementById('assign-driver').value       = btn.dataset.driver || '';
     $('#assignModal').modal('show');
+}
+
+// ── Address ──────────────────────────────────────────────────────────────────
+function mapLink(lat, lng) {
+    return (lat && lng) ? ('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng) : '#';
+}
+
+function openAddress(btn) {
+    const d = btn.dataset;
+
+    document.getElementById('address-pickup-text').textContent  = d.pickupAddress || '—';
+    document.getElementById('address-dropoff-text').textContent = d.dropoffAddress || '—';
+
+    const pickupLink  = document.getElementById('address-pickup-link');
+    const dropoffLink = document.getElementById('address-dropoff-link');
+
+    pickupLink.href  = mapLink(d.pickupLat, d.pickupLng);
+    dropoffLink.href = mapLink(d.dropoffLat, d.dropoffLng);
+    pickupLink.classList.toggle('disabled', pickupLink.href.endsWith('#'));
+    dropoffLink.classList.toggle('disabled', dropoffLink.href.endsWith('#'));
+
+    $('#addressModal').modal('show');
 }
 
 // ── Create ───────────────────────────────────────────────────────────────────
