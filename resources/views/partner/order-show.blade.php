@@ -258,6 +258,42 @@
             </button>
         </div>
 
+        {{-- Share tracking link --}}
+        @if($delivery->tracking_url)
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mb-4">
+            <h3 class="font-semibold text-slate-800 flex items-center gap-2 mb-3">
+                <i class="fas fa-share-nodes text-emerald-500"></i> Tracking Link
+            </h3>
+            <p class="text-muted mb-2" style="font-size:.78rem">
+                Share this with the recipient — no login needed. Shows live driver location and the dropoff point.
+            </p>
+            <div class="input-group input-group-sm">
+                <input type="text" class="form-control font-monospace" id="track-url"
+                       value="{{ $delivery->tracking_url }}" readonly style="font-size:.72rem">
+                <button class="btn btn-outline-secondary" type="button" onclick="copyTrackUrl()">
+                    <i class="fas fa-copy"></i>
+                </button>
+            </div>
+            <div class="d-flex gap-2 mt-3">
+                <a class="btn btn-sm btn-outline-primary flex-fill" target="_blank" rel="noopener"
+                   href="{{ $delivery->tracking_url }}">
+                    <i class="fas fa-arrow-up-right-from-square me-1"></i>Open
+                </a>
+                @if($delivery->recipient_phone)
+                <a class="btn btn-sm btn-outline-success flex-fill"
+                   href="sms:{{ $delivery->recipient_phone }}?&body={{ rawurlencode('Track your delivery: ' . $delivery->tracking_url) }}">
+                    <i class="fas fa-comment-sms me-1"></i>SMS
+                </a>
+                @endif
+            </div>
+            @unless($delivery->share_active)
+                <p class="text-warning mb-0 mt-2" style="font-size:.72rem">
+                    <i class="fas fa-eye-slash me-1"></i>Live location sharing is turned off for this order.
+                </p>
+            @endunless
+        </div>
+        @endif
+
         {{-- Assign Driver --}}
         @if(in_array($delivery->status, ['created','assigned']))
         @php $assignUrl = route('partner.orders.assign', $delivery->id); @endphp
@@ -357,6 +393,25 @@
         a.click();
     };
 })();
+
+function copyTrackUrl() {
+    const input = document.getElementById('track-url');
+    if (! input) return;
+    input.select();
+    const done = () => {
+        const btn = input.nextElementSibling;
+        const original = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i>';
+        setTimeout(() => btn.innerHTML = original, 1500);
+    };
+    // navigator.clipboard needs HTTPS or localhost — fall back to execCommand.
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(input.value).then(done);
+    } else {
+        document.execCommand('copy');
+        done();
+    }
+}
 
 function selectDriver(id, el) {
     document.querySelectorAll('.driver-card').forEach(c => c.classList.remove('selected'));

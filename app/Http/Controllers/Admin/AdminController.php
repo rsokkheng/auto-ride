@@ -553,6 +553,9 @@ class AdminController extends Controller
 
     public function showDelivery(Delivery $delivery)
     {
+        // Older orders predate the tracking link — mint one so the page can always share it.
+        $delivery->ensureShareToken();
+
         $delivery->load(['sender', 'driver.company', 'vehicle', 'partner', 'stops', 'promoCode', 'transactions']);
         $commissionPct = (float) \App\Models\PricingSetting::get('delivery_commission_pct', \App\Models\PricingSetting::get('driver_commission_pct', config('commission.platform_rate.owner', 25)));
         $driverCommRate = $delivery->driver?->commission_rate

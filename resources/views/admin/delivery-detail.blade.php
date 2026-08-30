@@ -533,6 +533,38 @@
                 </div>
             </div>
 
+            {{-- Public Tracking Link Card --}}
+            @if($delivery->tracking_url)
+            <div class="card card-outline card-primary shadow-sm mb-4">
+                <div class="card-header">
+                    <h3 class="card-title font-weight-bold"><i class="fas fa-share-alt mr-2 text-primary"></i>Tracking Link</h3>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-2">
+                        Public link — no login required. Shows live driver location and the dropoff point.
+                    </p>
+                    <div class="input-group input-group-sm mb-2">
+                        <input type="text" class="form-control text-monospace" id="admin-track-url"
+                               value="{{ $delivery->tracking_url }}" readonly style="font-size:.72rem;">
+                        <div class="input-group-append">
+                            <button class="btn btn-outline-secondary" type="button" onclick="copyAdminTrackUrl(this)">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <a class="btn btn-sm btn-primary btn-block" target="_blank" rel="noopener"
+                       href="{{ $delivery->tracking_url }}">
+                        <i class="fas fa-external-link-alt mr-1"></i>Open tracking page
+                    </a>
+                    @if(! $delivery->share_active)
+                        <p class="text-warning small mb-0 mt-2">
+                            <i class="fas fa-eye-slash mr-1"></i>Live location sharing is off — the page hides the driver position.
+                        </p>
+                    @endif
+                </div>
+            </div>
+            @endif
+
             {{-- Timeline & Dates Card --}}
             <div class="card card-outline card-secondary shadow-sm mb-4">
                 <div class="card-header">
@@ -653,5 +685,25 @@ function openAssignModal() {
 }
 </script>
 @endif
+
+<script>
+function copyAdminTrackUrl(btn) {
+    const input = document.getElementById('admin-track-url');
+    if (! input) return;
+    input.select();
+    const done = () => {
+        const original = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i>';
+        setTimeout(() => btn.innerHTML = original, 1500);
+    };
+    // navigator.clipboard needs HTTPS or localhost — fall back to execCommand.
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(input.value).then(done);
+    } else {
+        document.execCommand('copy');
+        done();
+    }
+}
+</script>
 
 @endsection
