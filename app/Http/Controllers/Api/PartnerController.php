@@ -72,6 +72,9 @@ class PartnerController extends ApiController
             'service_type'      => 'delivery',
             'status'            => 'created',
             'qr_token'          => $qrToken,
+            // Public tracking link the partner can forward to the recipient.
+            'share_token'       => Str::random(32),
+            'share_active'      => true,
         ]);
 
         // Auto-assign nearest driver if requested
@@ -303,6 +306,7 @@ class PartnerController extends ApiController
             'assignment_type'     => $d->assignment_type,
             'qr_token'            => $d->qr_token,
             'qr_payload'          => $d->qr_token ? 'AUTORIDE:DELIVERY:' . $d->qr_token : null,
+            'tracking_url'        => $d->tracking_url,
             'driver'              => $d->driver ? [
                 'id'          => $d->driver->id,
                 'name'        => $d->driver->name,

@@ -7,7 +7,10 @@ use App\Http\Controllers\Seller\SellerController;
 use App\Http\Controllers\TrackController;
 use Illuminate\Support\Facades\Route;
 
-// Public live trip tracking page (no auth required)
+// Public live tracking pages (no auth required)
+// Delivery / moving must be declared before the ride route so the literal
+// "delivery_moving" segment is never swallowed by the {token} wildcard.
+Route::get('/track/delivery_moving/{token}', [TrackController::class, 'showDelivery'])->name('track.delivery');
 Route::get('/track/{token}', [TrackController::class, 'show'])->name('track.show');
 
 Route::get('/', function () {

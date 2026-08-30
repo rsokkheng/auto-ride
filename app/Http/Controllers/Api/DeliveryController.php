@@ -14,6 +14,7 @@ use App\Services\PaymentService;
 use App\Mail\TripReceipt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class DeliveryController extends ApiController
@@ -361,6 +362,9 @@ class DeliveryController extends ApiController
             'package_details'   => $data['package_details'] ?? '',
             'notes'             => $data['notes'] ?? null,
             'status'            => 'requested',
+            // Public tracking link, shareable by the sender from the moment of booking.
+            'share_token'       => Str::random(32),
+            'share_active'      => true,
             'fee'               => $fee,
             'package_amount'    => (int) ($data['package_amount'] ?? 0),
             'payment_by'        => $data['payment_by'] ?? 'sender',
@@ -405,7 +409,119 @@ class DeliveryController extends ApiController
             report($e);
         }
 
-        return $this->success(['delivery' => $delivery], 201);
+        return $this->success([
+            'delivery'     => $delivery,
+            'share_token'  => $delivery->share_token,
+            'tracking_url' => $delivery->tracking_url,
+        ], 201);
+    }
+
+    // ── Share tracking link ─────────────────────────────────────────────────
+
+    /**
+     * GET /v1/deliveries/{delivery}/share
+     * GET /v1/movings/{delivery}/share
+     *
+     * Returns the shareable public tracking link for a booking. Minted on demand
+     * so bookings created before this feature (or by a partner/admin) also get one.
+     */
+    public function share(Request $request, Delivery $delivery)
+    {
+        $user = $this->authUser($request);
+
+        if (! $user || ! in_array($user->id, [$delivery->sender_id, $delivery->partner_id, $delivery->driver_id], true)) {
+            return $this->unauthorized();
+        }
+
+        $delivery->ensureShareToken();
+
+        if (! $delivery->share_active) {
+            $delivery->update(['share_active' => true]);
+        }
+
+        $fresh = $delivery->fresh();
+
+        return $this->success([
+            'share_token'   => $fresh->share_token,
+            'tracking_url'  => $fresh->tracking_url,
+            'share_url'     => $fresh->tracking_url,
+            'service_type'  => $fresh->service_type ?? 'delivery',
+            'share_message' => ($fresh->service_type === 'moving' ? 'Track my moving job: ' : 'Track my delivery: ') . $fresh->tracking_url,
+        ]);
+    }
+
+    /**
+     * GET /v1/track/delivery_moving/{token}
+     *
+     * Public, unauthenticated tracking payload behind the shared link. Exposes
+     * only what a recipient needs — no fee, no sender identity, no payment data.
+     */
+    public function trackByToken(string $token)
+    {
+        $delivery = Delivery::with(['driver', 'vehicle'])
+            ->where('share_token', $token)
+            ->first();
+
+        if (! $delivery) {
+            return response()->json(['data' => null, 'message' => 'Link not found.'], 404);
+        }
+
+        $isLive    = $delivery->isTrackable() && $delivery->driver_id !== null;
+        $driverLat = $isLive ? $delivery->driver?->current_latitude  : null;
+        $driverLng = $isLive ? $delivery->driver?->current_longitude : null;
+
+        return response()->json([
+            'data' => [
+                'delivery_id'     => $delivery->id,
+                'service_type'    => $delivery->service_type ?? 'delivery',
+                'status'          => $delivery->status,
+                'is_live'         => $isLive,
+                'pickup_address'  => $delivery->pickup_address,
+                'dropoff_address' => $delivery->dropoff_address,
+                'dropoff_lat'     => $delivery->dropoff_lat,
+                'dropoff_lng'     => $delivery->dropoff_lng,
+                'recipient_name'  => $delivery->recipient_name,
+                'assigned_at'     => $delivery->assigned_at?->toIso8601String(),
+                'started_at'      => $delivery->started_at?->toIso8601String(),
+                'completed_at'    => $delivery->completed_at?->toIso8601String(),
+                'driver'          => $delivery->driver ? [
+                    'name'              => $delivery->driver->name,
+                    'phone'             => $delivery->driver->phone,
+                    'rating'            => $delivery->driver->rating,
+                    'lat'               => $driverLat,
+                    'lng'               => $driverLng,
+                    'latitude'          => $driverLat,
+                    'longitude'         => $driverLng,
+                    'current_latitude'  => $driverLat,
+                    'current_longitude' => $driverLng,
+                    'location_updated'  => (bool) $driverLat,
+                    'vehicle'           => $delivery->vehicle ? [
+                        'type'          => $delivery->vehicle->type ?? null,
+                        'make'          => $delivery->vehicle->make ?? null,
+                        'model'         => $delivery->vehicle->model ?? null,
+                        'plate'         => $delivery->vehicle->plate ?? $delivery->vehicle->license_plate ?? null,
+                        'license_plate' => $delivery->vehicle->plate ?? $delivery->vehicle->license_plate ?? null,
+                        'color'         => $delivery->vehicle->color ?? null,
+                    ] : null,
+                ] : null,
+            ],
+        ]);
+    }
+
+    /**
+     * DELETE /v1/deliveries/{delivery}/share — stop sharing the live location.
+     */
+    public function deactivateShare(Request $request, Delivery $delivery)
+    {
+        $user = $this->authUser($request);
+
+        if (! $user || ! in_array($user->id, [$delivery->sender_id, $delivery->partner_id], true)) {
+            return $this->unauthorized();
+        }
+
+        $delivery->update(['share_active' => false]);
+
+        return $this->success(['message' => 'Tracking link disabled.']);
     }
 
     // ── Accept ──────────────────────────────────────────────────────────────

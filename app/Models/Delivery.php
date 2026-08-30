@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
 
 class Delivery extends Model
 {
@@ -56,6 +57,39 @@ class Delivery extends Model
     public function isPaid(): bool
     {
         return $this->payment_status === 'paid';
+    }
+
+    // ── Public tracking link ─────────────────────────────────────────────────
+
+    /** Path segment of the public tracking page, shared by delivery and moving. */
+    public const TRACK_PATH = 'track/delivery_moving';
+
+    /**
+     * Mint the share token if this booking does not have one yet, so older rows
+     * (and partner/admin-created orders) also get a link the first time it is asked for.
+     */
+    public function ensureShareToken(): string
+    {
+        if (! $this->share_token) {
+            $this->forceFill(['share_token' => Str::random(32)])->save();
+        }
+
+        return $this->share_token;
+    }
+
+    /** Public tracking URL, or null while no token has been minted. */
+    public function getTrackingUrlAttribute(): ?string
+    {
+        return $this->share_token
+            ? url(self::TRACK_PATH . '/' . $this->share_token)
+            : null;
+    }
+
+    /** Live tracking is only meaningful while the driver is en route. */
+    public function isTrackable(): bool
+    {
+        return (bool) $this->share_active
+            && in_array($this->status, array_merge(self::PRE_PICKUP_STATUSES, self::IN_TRANSIT_STATUSES), true);
     }
 
     protected $fillable = [
@@ -116,6 +150,8 @@ class Delivery extends Model
         // Partner delivery
         'partner_id',
         'qr_token',
+        'share_token',
+        'share_active',
         'pickup_scanned_at',
         'delivery_scanned_at',
         'assignment_type',
@@ -146,7 +182,11 @@ class Delivery extends Model
         'helper_fee'          => 'integer',
         'floor_fee'           => 'integer',
         'split_pct_customer'  => 'integer',
+        'share_active'        => 'boolean',
     ];
+
+    /** Expose the tracking link everywhere a delivery is serialised. */
+    protected $appends = ['tracking_url'];
 
     public function sender(): BelongsTo
     {

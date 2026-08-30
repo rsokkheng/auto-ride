@@ -157,6 +157,8 @@ Route::prefix('v1')->group(function () {
     Route::post('deliveries/{delivery}/track', [DeliveryController::class, 'track']);
     Route::post('deliveries/{delivery}/complete', [DeliveryController::class, 'complete']);
     Route::post('deliveries/{delivery}/rate', [DeliveryController::class, 'rate']);
+    Route::get('deliveries/{delivery}/share', [DeliveryController::class, 'share']);
+    Route::delete('deliveries/{delivery}/share', [DeliveryController::class, 'deactivateShare']);
 
     // Aliases for Moving service using the same delivery controller logic.
     Route::post('movings/estimate', [DeliveryController::class, 'estimateMoving']);
@@ -172,6 +174,8 @@ Route::prefix('v1')->group(function () {
     Route::post('movings/{delivery}/track', [DeliveryController::class, 'track']);
     Route::post('movings/{delivery}/complete', [DeliveryController::class, 'complete']);
     Route::post('movings/{delivery}/rate', [DeliveryController::class, 'rate']);
+    Route::get('movings/{delivery}/share', [DeliveryController::class, 'share']);
+    Route::delete('movings/{delivery}/share', [DeliveryController::class, 'deactivateShare']);
 
     Route::get('charging-stations',                              [ChargingStationController::class, 'index']);
     Route::get('charging-stations/favorites',                    [ChargingStationController::class, 'favorites']);
@@ -339,6 +343,8 @@ Route::prefix('v1')->group(function () {
     Route::post('promo/apply', [PromoCodeController::class, 'check']);
 
     // ── Public trip tracking (no auth required) ───────────────────────────────
+    // Delivery/moving first — the literal segment must not be eaten by {token}.
+    Route::get('track/delivery_moving/{token}', [DeliveryController::class, 'trackByToken']);
     Route::get('track/{token}', [RideFeaturesController::class, 'trackByToken']);
 
     // ── Social login ──────────────────────────────────────────────────────────
