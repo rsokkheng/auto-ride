@@ -208,9 +208,15 @@
                             data-pickup-address="{{ $d->pickup_address }}"
                             data-pickup-lat="{{ $d->pickup_lat }}"
                             data-pickup-lng="{{ $d->pickup_lng }}"
+                            data-sender-name="{{ $d->sender_name ?? $d->sender?->name }}"
+                            data-sender-phone="{{ $d->sender_phone ?? $d->sender?->phone }}"
                             data-dropoff-address="{{ $d->dropoff_address }}"
                             data-dropoff-lat="{{ $d->dropoff_lat }}"
                             data-dropoff-lng="{{ $d->dropoff_lng }}"
+                            data-recipient-name="{{ $d->recipient_name }}"
+                            data-recipient-phone="{{ $d->recipient_phone }}"
+                            data-tracking-url="{{ $d->tracking_url }}"
+                            data-completed-at="{{ $d->status === 'completed' ? $d->updated_at?->format('Y-m-d H:i') : '' }}"
                             onclick="openAddress(this)">
                             <i class="fas fa-map-marker-alt mr-1"></i>View
                         </button>
@@ -780,19 +786,33 @@
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <div class="font-weight-bold text-success"><i class="fas fa-circle mr-1" style="font-size:.6rem;"></i>Pickup</div>
+                    <div class="font-weight-bold text-success">
+                        <i class="fas fa-circle mr-1" style="font-size:.6rem;"></i>Pickup Point (ទីតាំងទទួល)
+                    </div>
                     <div id="address-pickup-text" class="mb-1"></div>
+                    <small class="text-muted d-block mb-1">Sender: <span id="address-sender-text"></span></small>
                     <a id="address-pickup-link" href="#" target="_blank" class="btn btn-xs btn-outline-success">
                         <i class="fas fa-map-marked-alt mr-1"></i>View on Map
                     </a>
                 </div>
                 <hr>
-                <div>
-                    <div class="font-weight-bold text-danger"><i class="fas fa-map-marker mr-1"></i>Dropoff</div>
+                <div class="mb-3">
+                    <div class="font-weight-bold text-danger">
+                        <i class="fas fa-map-marker mr-1"></i>Dropoff Point (ទីតាំងដឹកទៅដល់)
+                    </div>
                     <div id="address-dropoff-text" class="mb-1"></div>
+                    <small class="text-muted d-block mb-1">Recipient: <span id="address-recipient-text"></span></small>
                     <a id="address-dropoff-link" href="#" target="_blank" class="btn btn-xs btn-outline-danger">
                         <i class="fas fa-map-marked-alt mr-1"></i>View on Map
                     </a>
+                </div>
+                <hr>
+                <div>
+                    <div class="font-weight-bold"><i class="fas fa-share-alt mr-1"></i>Tracking Link</div>
+                    <div id="address-tracking-wrap" class="mb-1">
+                        <a id="address-tracking-link" href="#" target="_blank"></a>
+                    </div>
+                    <small id="address-completed-text" class="text-muted"></small>
                 </div>
             </div>
             <div class="modal-footer">
@@ -917,6 +937,10 @@ function openAddress(btn) {
 
     document.getElementById('address-pickup-text').textContent  = d.pickupAddress || '—';
     document.getElementById('address-dropoff-text').textContent = d.dropoffAddress || '—';
+    document.getElementById('address-sender-text').textContent =
+        [d.senderName, d.senderPhone].filter(Boolean).join('  •  ') || '—';
+    document.getElementById('address-recipient-text').textContent =
+        [d.recipientName, d.recipientPhone].filter(Boolean).join('  •  ') || '—';
 
     const pickupLink  = document.getElementById('address-pickup-link');
     const dropoffLink = document.getElementById('address-dropoff-link');
@@ -925,6 +949,17 @@ function openAddress(btn) {
     dropoffLink.href = mapLink(d.dropoffLat, d.dropoffLng);
     pickupLink.classList.toggle('disabled', pickupLink.href.endsWith('#'));
     dropoffLink.classList.toggle('disabled', dropoffLink.href.endsWith('#'));
+
+    const trackingLink = document.getElementById('address-tracking-link');
+    if (d.trackingUrl) {
+        trackingLink.href = d.trackingUrl;
+        trackingLink.textContent = d.trackingUrl;
+    } else {
+        trackingLink.removeAttribute('href');
+        trackingLink.textContent = '—';
+    }
+    document.getElementById('address-completed-text').textContent =
+        d.completedAt ? ('Completed at ' + d.completedAt) : '';
 
     $('#addressModal').modal('show');
 }

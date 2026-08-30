@@ -533,8 +533,13 @@ class AdminController extends Controller
             $query->where('partner_id', $partnerId);
         }
 
+        $deliveries = $query->paginate(10)->withQueryString();
+        foreach ($deliveries as $delivery) {
+            $delivery->ensureShareToken();
+        }
+
         return view('admin.deliveries', [
-            'deliveries'    => $query->paginate(10)->withQueryString(),
+            'deliveries'    => $deliveries,
             'senders'       => User::where('role', 'passenger')->orderBy('name')->get(),
             'drivers'       => User::where('role', 'driver')->orderBy('name')->get(),
             'partners'      => User::where('role', 'partner')->orderBy('name')->get(),
