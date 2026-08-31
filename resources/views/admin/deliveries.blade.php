@@ -778,7 +778,7 @@
 
 {{-- ════════════════ Address (Pickup/Dropoff) Modal ════════════════ --}}
 <div class="modal fade" id="addressModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title"><i class="fas fa-map-marker-alt mr-2"></i>Location Details</h5>
@@ -807,12 +807,21 @@
                     </a>
                 </div>
                 <hr>
-                <div>
-                    <div class="font-weight-bold"><i class="fas fa-share-alt mr-1"></i>Tracking Link</div>
-                    <div id="address-tracking-wrap" class="mb-1">
-                        <a id="address-tracking-link" href="#" target="_blank"></a>
+                <div id="address-tracking-wrap">
+                    <div class="font-weight-bold mb-1"><i class="fas fa-share-alt mr-1"></i>Tracking Link</div>
+                    <div class="input-group input-group-sm mb-2">
+                        <input type="text" class="form-control text-monospace" id="address-tracking-input"
+                               readonly style="font-size:.72rem;">
+                        <div class="input-group-append">
+                            <button class="btn btn-outline-secondary" type="button" onclick="copyAddressTrackUrl(this)">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
                     </div>
-                    <small id="address-completed-text" class="text-muted"></small>
+                    <a id="address-tracking-link" href="#" target="_blank" rel="noopener" class="btn btn-sm btn-primary btn-block">
+                        <i class="fas fa-external-link-alt mr-1"></i>Open tracking page
+                    </a>
+                    <small id="address-completed-text" class="text-muted d-block mt-2"></small>
                 </div>
             </div>
             <div class="modal-footer">
@@ -950,18 +959,38 @@ function openAddress(btn) {
     pickupLink.classList.toggle('disabled', pickupLink.href.endsWith('#'));
     dropoffLink.classList.toggle('disabled', dropoffLink.href.endsWith('#'));
 
-    const trackingLink = document.getElementById('address-tracking-link');
+    const trackingWrap  = document.getElementById('address-tracking-wrap');
+    const trackingInput = document.getElementById('address-tracking-input');
+    const trackingLink  = document.getElementById('address-tracking-link');
     if (d.trackingUrl) {
-        trackingLink.href = d.trackingUrl;
-        trackingLink.textContent = d.trackingUrl;
+        trackingWrap.hidden = false;
+        trackingInput.value = d.trackingUrl;
+        trackingLink.href   = d.trackingUrl;
     } else {
-        trackingLink.removeAttribute('href');
-        trackingLink.textContent = '—';
+        trackingWrap.hidden = true;
     }
     document.getElementById('address-completed-text').textContent =
         d.completedAt ? ('Completed at ' + d.completedAt) : '';
 
     $('#addressModal').modal('show');
+}
+
+function copyAddressTrackUrl(btn) {
+    const input = document.getElementById('address-tracking-input');
+    if (! input) return;
+    input.select();
+    const done = () => {
+        const original = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i>';
+        setTimeout(() => btn.innerHTML = original, 1500);
+    };
+    // navigator.clipboard needs HTTPS or localhost — fall back to execCommand.
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(input.value).then(done);
+    } else {
+        document.execCommand('copy');
+        done();
+    }
 }
 
 // ── Create ───────────────────────────────────────────────────────────────────
