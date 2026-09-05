@@ -76,8 +76,7 @@ function rideDistanceKm($r): ?float {
                     <th>#</th>
                     <th>Passenger</th>
                     <th>Driver</th>
-                    <th>Pickup</th>
-                    <th>Dropoff <small class="text-muted font-weight-normal">(click for stops)</small></th>
+                    <th>Address</th>
                     <th>Status</th>
                     <th class="text-right">Dist (km)</th>
                     <th class="text-center">Est. Time</th>
@@ -135,26 +134,16 @@ function rideDistanceKm($r): ?float {
                     <td>
                         @if($r->driver){{ $r->driver->name }}@else<span class="text-muted">Unassigned</span>@endif
                     </td>
+                    {{-- Address — merged pickup + dropoff (+ stops), following the Deliveries page style --}}
                     <td>
-                        <span title="{{ $r->pickup_address }}">{{ \Illuminate\Support\Str::limit($r->pickup_address, 20) }}</span>
-                    </td>
-
-                    {{-- Dropoff — always clickable to show route popup --}}
-                    <td>
-                        <span class="dropoff-trigger text-primary"
-                              style="cursor:pointer;text-decoration:underline dotted;"
-                              data-route="{{ json_encode($routeData) }}"
-                              title="Click to see route">
-                            <i class="fas fa-map-marked-alt mr-1"></i>
-                            @if($r->dropoff_address)
-                                {{ \Illuminate\Support\Str::limit($r->dropoff_address, 20) }}
-                            @else
-                                <em class="text-muted">TBD</em>
-                            @endif
-                            @if($stops->count() > 0)
-                                <span class="badge badge-warning ml-1">{{ $stops->count() + 1 }} stops</span>
-                            @endif
-                        </span>
+                        <button type="button" class="btn btn-xs btn-outline-primary"
+                            data-route="{{ json_encode($routeData) }}"
+                            onclick="showStopsModal(JSON.parse(this.dataset.route))">
+                            <i class="fas fa-map-marker-alt mr-1"></i>View
+                        </button>
+                        @if($stops->count() > 0)
+                            <span class="badge badge-warning ml-1">{{ $stops->count() + 1 }} stops</span>
+                        @endif
                     </td>
 
                     <td>
@@ -231,7 +220,7 @@ function rideDistanceKm($r): ?float {
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="12" class="text-center text-muted py-4">No rides found.</td></tr>
+                <tr><td colspan="11" class="text-center text-muted py-4">No rides found.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -248,7 +237,7 @@ function rideDistanceKm($r): ?float {
         <div class="modal-content">
             <div class="modal-header bg-primary text-white py-2">
                 <h5 class="modal-title mb-0"><i class="fas fa-route mr-2"></i>Route — Ride <span id="stopModalRideId"></span></h5>
-                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+                <button type="button" class="close text-white" onclick="hideModal(this.closest('.modal').id)"><span>&times;</span></button>
             </div>
             <div class="modal-body p-0">
                 <ul class="list-unstyled mb-0" id="stopsList"></ul>
@@ -257,7 +246,7 @@ function rideDistanceKm($r): ?float {
                 <a id="gmapsLink" href="#" target="_blank" class="btn btn-sm btn-outline-primary">
                     <i class="fas fa-map-marked-alt mr-1"></i>Open in Google Maps
                 </a>
-                <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="hideModal(this.closest('.modal').id)">Close</button>
             </div>
         </div>
     </div>
@@ -269,7 +258,7 @@ function rideDistanceKm($r): ?float {
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalTitle">Add Ride</h5>
-                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                <button type="button" class="close" onclick="hideModal(this.closest('.modal').id)"><span>&times;</span></button>
             </div>
             <form id="rideForm" method="POST" action="{{ route('admin.rides.store') }}">
                 @csrf
@@ -330,7 +319,7 @@ function rideDistanceKm($r): ?float {
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-secondary" onclick="hideModal(this.closest('.modal').id)">Cancel</button>
                     <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i> Save</button>
                 </div>
             </form>
@@ -344,18 +333,35 @@ function rideDistanceKm($r): ?float {
 const storeUrl  = '{{ route('admin.rides.store') }}';
 const updateBase = '/admin/rides/';
 
-/* ── Stop route popup ── */
-document.querySelectorAll('.dropoff-trigger').forEach(function(el) {
-    el.addEventListener('click', function() {
-        try {
-            var route = JSON.parse(this.getAttribute('data-route'));
-            showStopsModal(route);
-        } catch(e) {
-            console.error('Stops data parse error:', e, this.getAttribute('data-route'));
-        }
-    });
-});
+// ── Modal show/hide (plain DOM — no jQuery/Bootstrap JS plugin dependency,
+// so these still work even if that CDN bundle fails to load) ──────────────
+function showModal(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.add('show');
+    el.style.display = 'block';
+    el.setAttribute('aria-modal', 'true');
+    document.body.classList.add('modal-open');
+    if (!document.getElementById(id + '-backdrop')) {
+        var backdrop = document.createElement('div');
+        backdrop.className = 'modal-backdrop fade show';
+        backdrop.id = id + '-backdrop';
+        backdrop.onclick = function () { hideModal(id); };
+        document.body.appendChild(backdrop);
+    }
+}
 
+function hideModal(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('show');
+    el.style.display = 'none';
+    document.body.classList.remove('modal-open');
+    var backdrop = document.getElementById(id + '-backdrop');
+    if (backdrop) backdrop.remove();
+}
+
+/* ── Stop route popup ── */
 function showStopsModal(route) {
     document.getElementById('stopModalRideId').textContent = '#' + route.rideId;
 
@@ -410,7 +416,7 @@ function showStopsModal(route) {
         document.getElementById('gmapsLink').style.display = 'none';
     }
 
-    $('#stopsModal').modal('show');
+    showModal('stopsModal');
 }
 
 /* ── Create / Edit ── */
@@ -419,7 +425,7 @@ function openCreate() {
     document.getElementById('rideForm').action = storeUrl;
     document.getElementById('formMethod').value = 'POST';
     document.getElementById('rideForm').reset();
-    $('#formModal').modal('show');
+    showModal('formModal');
 }
 
 function openEdit(d) {
@@ -434,7 +440,7 @@ function openEdit(d) {
     document.getElementById('f-fare').value = d.fare;
     document.getElementById('f-service').value = d.service_type;
     document.getElementById('f-notes').value = d.notes;
-    $('#formModal').modal('show');
+    showModal('formModal');
 }
 </script>
 @endpush
