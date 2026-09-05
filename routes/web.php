@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\AdminController;
 use App\Http\Controllers\Admin\ReportExportController;
 use App\Http\Controllers\Admin\SettlementController;
 use App\Http\Controllers\Seller\SellerController;
+use App\Http\Controllers\PromoShareController;
 use App\Http\Controllers\TrackController;
 use Illuminate\Support\Facades\Route;
 
@@ -12,6 +13,9 @@ use Illuminate\Support\Facades\Route;
 // "delivery_moving" segment is never swallowed by the {token} wildcard.
 Route::get('/track/delivery_moving/{token}', [TrackController::class, 'showDelivery'])->name('track.delivery');
 Route::get('/track/{token}', [TrackController::class, 'show'])->name('track.show');
+
+// Public promo coupon share page (no auth required) — the link passengers forward to friends.
+Route::get('/promo/{code}', [PromoShareController::class, 'show'])->name('promo.show');
 
 Route::get('/', function () {
     return redirect()->route('admin.login');
@@ -116,7 +120,9 @@ Route::prefix('admin')->group(function () {
     // Support
     Route::get('support', [AdminController::class, 'support'])->name('admin.support');
     Route::post('support', [AdminController::class, 'storeSupport'])->name('admin.support.store');
+    Route::get('support/{ticket}', [AdminController::class, 'showSupport'])->name('admin.support.show');
     Route::put('support/{ticket}', [AdminController::class, 'updateSupport'])->name('admin.support.update');
+    Route::post('support/{ticket}/reply', [AdminController::class, 'replySupport'])->name('admin.support.reply');
     Route::delete('support/{ticket}', [AdminController::class, 'destroySupport'])->name('admin.support.destroy');
 
     // Safety
@@ -171,6 +177,12 @@ Route::prefix('admin')->group(function () {
     Route::post('promo-events', [AdminController::class, 'storePromoEvent'])->name('admin.promo-events.store');
     Route::put('promo-events/{event}', [AdminController::class, 'updatePromoEvent'])->name('admin.promo-events.update');
     Route::delete('promo-events/{event}', [AdminController::class, 'destroyPromoEvent'])->name('admin.promo-events.destroy');
+
+    // Promo Coupons (discount codes)
+    Route::get('promo-coupons', [AdminController::class, 'promoCoupons'])->name('admin.promo-coupons');
+    Route::post('promo-coupons', [AdminController::class, 'storePromoCoupon'])->name('admin.promo-coupons.store');
+    Route::put('promo-coupons/{coupon}', [AdminController::class, 'updatePromoCoupon'])->name('admin.promo-coupons.update');
+    Route::delete('promo-coupons/{coupon}', [AdminController::class, 'destroyPromoCoupon'])->name('admin.promo-coupons.destroy');
 
     // Airport Zones
     Route::get('airport-zones', [AdminController::class, 'airportZones'])->name('admin.airport-zones');

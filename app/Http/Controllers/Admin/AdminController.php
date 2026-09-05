@@ -21,6 +21,7 @@ use App\Models\PromoEvent;
 use App\Models\MarketplaceProductImage;
 use App\Models\Ride;
 use App\Models\SafetyIncident;
+use App\Models\SupportMessage;
 use App\Models\SupportTicket;
 use App\Models\SurgeZone;
 use App\Models\TopUpRequest;
@@ -1380,6 +1381,37 @@ class AdminController extends Controller
         return redirect()->route('admin.support')->with('success', 'Support ticket deleted.');
     }
 
+    /**
+     * The conversation thread for one support ticket — where staff actually
+     * read what the passenger/driver wrote and reply to them.
+     */
+    public function showSupport(SupportTicket $ticket)
+    {
+        return view('admin.support-detail', [
+            'ticket'   => $ticket->load(['user', 'messages.sender']),
+            'admins'   => User::where('role', 'admin')->orderBy('name')->get(),
+        ]);
+    }
+
+    public function replySupport(Request $request, SupportTicket $ticket)
+    {
+        $data = $request->validate([
+            'message' => 'required|string|max:2000',
+        ]);
+
+        SupportMessage::create([
+            'ticket_id' => $ticket->id,
+            'sender_id' => Auth::id(),
+            'message'   => $data['message'],
+        ]);
+
+        if ($ticket->status === 'open') {
+            $ticket->update(['status' => 'in_progress']);
+        }
+
+        return redirect()->route('admin.support.show', $ticket)->with('success', 'Reply sent.');
+    }
+
     // ─── Safety ──────────────────────────────────────────────────────────────
 
     public function safety()
@@ -2219,6 +2251,73 @@ class AdminController extends Controller
     {
         $event->delete();
         return redirect()->route('admin.promo-events')->with('success', 'Event deleted.');
+    }
+
+    // ─── Promo Coupons (discount codes) ───────────────────────────────────────
+
+    public function promoCoupons()
+    {
+        $emptyPage = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
+
+        return view('admin.promo-coupons', [
+            'coupons' => rescue(
+                fn () => \App\Models\PromoCode::orderByDesc('created_at')->paginate(10),
+                $emptyPage,
+                false
+            ),
+        ]);
+    }
+
+    protected function promoCouponRules(): array
+    {
+        return [
+            'code'           => 'required|string|max:32',
+            'description'    => 'nullable|string|max:255',
+            'type'           => 'required|in:percent,fixed',
+            'value'          => 'required|integer|min:1',
+            'min_order'      => 'nullable|integer|min:0',
+            'max_discount'   => 'nullable|integer|min:0',
+            'usage_limit'    => 'nullable|integer|min:1',
+            'per_user_limit' => 'required|integer|min:1',
+            'service_type'   => 'required|in:rides,deliveries,moving,all',
+            'active'         => 'boolean',
+            'starts_at'      => 'nullable|date',
+            'expires_at'     => 'nullable|date|after_or_equal:starts_at',
+        ];
+    }
+
+    public function storePromoCoupon(Request $request)
+    {
+        $data = $request->validate(array_merge($this->promoCouponRules(), [
+            'code' => $this->promoCouponRules()['code'] . '|unique:promo_codes,code',
+        ]));
+
+        $data['code']   = strtoupper(trim($data['code']));
+        $data['active'] = $request->boolean('active', true);
+
+        \App\Models\PromoCode::create($data);
+
+        return redirect()->route('admin.promo-coupons')->with('success', "Coupon \"{$data['code']}\" created.");
+    }
+
+    public function updatePromoCoupon(Request $request, \App\Models\PromoCode $coupon)
+    {
+        $data = $request->validate(array_merge($this->promoCouponRules(), [
+            'code' => $this->promoCouponRules()['code'] . '|unique:promo_codes,code,' . $coupon->id,
+        ]));
+
+        $data['code']   = strtoupper(trim($data['code']));
+        $data['active'] = $request->boolean('active');
+
+        $coupon->update($data);
+
+        return redirect()->route('admin.promo-coupons')->with('success', "Coupon \"{$data['code']}\" updated.");
+    }
+
+    public function destroyPromoCoupon(\App\Models\PromoCode $coupon)
+    {
+        $coupon->delete();
+        return redirect()->route('admin.promo-coupons')->with('success', 'Coupon deleted.');
     }
 
     // ─── Airport Zones ────────────────────────────────────────────────────────

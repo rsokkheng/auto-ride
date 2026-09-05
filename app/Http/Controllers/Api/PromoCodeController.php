@@ -16,11 +16,12 @@ class PromoCodeController extends ApiController
         $user = $this->authUser($request);
         if (! $user) return $this->unauthorized();
 
-        $promos = PromoCode::where('is_active', true)
+        $promos = PromoCode::where('active', true)
+            ->where(fn($q) => $q->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
             ->where(fn($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
-            ->where(fn($q) => $q->whereNull('max_uses')->orWhereColumn('used_count', '<', 'max_uses'))
+            ->where(fn($q) => $q->whereNull('usage_limit')->orWhereColumn('used_count', '<', 'usage_limit'))
             ->orderByDesc('created_at')
-            ->get(['id', 'code', 'description', 'type', 'value', 'min_order_amount', 'max_discount', 'expires_at', 'service_type']);
+            ->get(['id', 'code', 'description', 'type', 'value', 'min_order', 'max_discount', 'expires_at', 'service_type']);
 
         return $this->success(['promos' => $promos]);
     }
@@ -72,13 +73,16 @@ class PromoCodeController extends ApiController
         $discount = $promo->calculateDiscount($data['order_amount']);
 
         return $this->success([
-            'promo_code_id'   => $promo->id,
-            'code'            => $promo->code,
-            'description'     => $promo->description,
-            'type'            => $promo->type,
-            'value'           => $promo->value,
-            'discount_amount' => $discount,
-            'final_amount'    => max(0, $data['order_amount'] - $discount),
+            'valid'            => true,
+            'promo_code_id'    => $promo->id,
+            'code'             => $promo->code,
+            'description'      => $promo->description,
+            'type'             => $promo->type,
+            'value'            => $promo->value,
+            'discount_percent' => $promo->type === 'percent' ? $promo->value : null,
+            'discount_amount'  => $discount,
+            'final_amount'     => max(0, $data['order_amount'] - $discount),
+            'share_url'        => url('/promo/' . $promo->code),
         ]);
     }
 }

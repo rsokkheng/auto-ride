@@ -28,7 +28,7 @@
                 @forelse($tickets as $t)
                 <tr>
                     <td>{{ ($tickets->currentPage() - 1) * $tickets->perPage() + $loop->iteration }}</td>
-                    <td>{{ \Illuminate\Support\Str::limit($t->subject, 30) }}</td>
+                    <td><a href="{{ route('admin.support.show', $t) }}">{{ \Illuminate\Support\Str::limit($t->subject, 30) }}</a></td>
                     <td>{{ $t->user?->name ?? '—' }}</td>
                     <td>
                         @php $pc = ['low'=>'secondary','medium'=>'info','high'=>'warning','urgent'=>'danger']; @endphp
@@ -41,6 +41,9 @@
                     <td>{{ optional($admins->firstWhere('id', $t->assigned_to))->name ?? '—' }}</td>
                     <td>{{ $t->created_at->format('Y-m-d') }}</td>
                     <td>
+                        <a href="{{ route('admin.support.show', $t) }}" class="btn btn-xs btn-primary mr-1">
+                            <i class="fas fa-comments"></i>
+                        </a>
                         <button class="btn btn-xs btn-info mr-1" onclick="openEdit({
                             id: {{ $t->id }},
                             user_id: {{ $t->user_id }},
