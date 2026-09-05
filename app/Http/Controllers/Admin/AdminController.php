@@ -337,6 +337,70 @@ class AdminController extends Controller
         return redirect()->route('admin.users')->with('success', 'User deleted.');
     }
 
+    // ─── Roles & Permissions (Spatie) ─────────────────────────────────────────
+
+    public function roles()
+    {
+        return view('admin.roles', [
+            'roles'       => \Spatie\Permission\Models\Role::with('permissions')->orderBy('name')->get(),
+            'permissions' => \Spatie\Permission\Models\Permission::orderBy('name')->get(),
+            'admins'      => User::where('role', 'admin')->with('roles')->orderBy('name')->get(),
+        ]);
+    }
+
+    public function storeRole(Request $request)
+    {
+        $data = $request->validate([
+            'name'          => 'required|string|max:100|unique:roles,name',
+            'permissions'   => 'nullable|array',
+            'permissions.*' => 'string|exists:permissions,name',
+        ]);
+
+        $role = \Spatie\Permission\Models\Role::create(['name' => $data['name'], 'guard_name' => 'web']);
+        $role->syncPermissions($data['permissions'] ?? []);
+
+        return redirect()->route('admin.roles')->with('success', "Role \"{$role->name}\" created.");
+    }
+
+    public function updateRole(Request $request, \Spatie\Permission\Models\Role $role)
+    {
+        $data = $request->validate([
+            'name'          => 'required|string|max:100|unique:roles,name,' . $role->id,
+            'permissions'   => 'nullable|array',
+            'permissions.*' => 'string|exists:permissions,name',
+        ]);
+
+        $role->update(['name' => $data['name']]);
+        $role->syncPermissions($data['permissions'] ?? []);
+
+        return redirect()->route('admin.roles')->with('success', "Role \"{$role->name}\" updated.");
+    }
+
+    public function destroyRole(\Spatie\Permission\Models\Role $role)
+    {
+        if ($role->name === 'Super Admin') {
+            return redirect()->route('admin.roles')->with('error', 'The Super Admin role cannot be deleted.');
+        }
+
+        $role->delete();
+        return redirect()->route('admin.roles')->with('success', 'Role deleted.');
+    }
+
+    public function assignRole(Request $request)
+    {
+        $data = $request->validate([
+            'user_id'  => 'required|exists:users,id',
+            'role_ids' => 'nullable|array',
+            'role_ids.*' => 'integer|exists:roles,id',
+        ]);
+
+        $user  = User::findOrFail($data['user_id']);
+        $roles = \Spatie\Permission\Models\Role::whereIn('id', $data['role_ids'] ?? [])->get();
+        $user->syncRoles($roles);
+
+        return redirect()->route('admin.roles')->with('success', "Roles updated for {$user->name}.");
+    }
+
     // ─── Vehicles ────────────────────────────────────────────────────────────
 
     public function vehicles(Request $request)

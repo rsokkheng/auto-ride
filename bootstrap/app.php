@@ -19,6 +19,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(append: [
             \App\Http\Middleware\SetApiLocale::class,
         ]);
+
+        $middleware->alias([
+            'role'              => \Spatie\Permission\Middleware\RoleMiddleware::class,
+            'permission'        => \Spatie\Permission\Middleware\PermissionMiddleware::class,
+            'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Return clean JSON for API routes when a model is not found
@@ -45,6 +51,18 @@ return Application::configure(basePath: dirname(__DIR__))
                     'success' => false,
                     'message' => 'Resource not found.',
                 ], 404);
+            }
+        });
+
+        // A Spatie permission/role middleware rejection on an admin page should
+        // send staff back to the dashboard with an explanation, not a bare 403.
+        $exceptions->render(function (
+            \Spatie\Permission\Exceptions\UnauthorizedException $e,
+            \Illuminate\Http\Request $request
+        ) {
+            if ($request->is('admin/*') && ! $request->expectsJson()) {
+                return redirect()->route('admin.dashboard')
+                    ->with('error', 'You don\'t have permission to access that section.');
             }
         });
     })->create();

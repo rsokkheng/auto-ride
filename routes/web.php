@@ -36,11 +36,22 @@ Route::prefix('admin')->group(function () {
     Route::delete('drivers/{driver}/penalty', [AdminController::class, 'clearDriverPenalty'])->name('admin.drivers.penalty.clear');
     Route::post('drivers/{driver}/documents/{document}/review', [AdminController::class, 'reviewDocument'])->name('admin.drivers.documents.review');
 
-    // Users
-    Route::get('users', [AdminController::class, 'users'])->name('admin.users');
-    Route::post('users', [AdminController::class, 'storeUser'])->name('admin.users.store');
-    Route::put('users/{user}', [AdminController::class, 'updateUser'])->name('admin.users.update');
-    Route::delete('users/{user}', [AdminController::class, 'destroyUser'])->name('admin.users.destroy');
+    // Users — gated behind the "manage-users" Spatie permission
+    Route::middleware('permission:manage-users')->group(function () {
+        Route::get('users', [AdminController::class, 'users'])->name('admin.users');
+        Route::post('users', [AdminController::class, 'storeUser'])->name('admin.users.store');
+        Route::put('users/{user}', [AdminController::class, 'updateUser'])->name('admin.users.update');
+        Route::delete('users/{user}', [AdminController::class, 'destroyUser'])->name('admin.users.destroy');
+    });
+
+    // Roles & Permissions — gated behind the "manage-roles" permission
+    Route::middleware('permission:manage-roles')->group(function () {
+        Route::get('roles', [AdminController::class, 'roles'])->name('admin.roles');
+        Route::post('roles', [AdminController::class, 'storeRole'])->name('admin.roles.store');
+        Route::put('roles/{role}', [AdminController::class, 'updateRole'])->name('admin.roles.update');
+        Route::delete('roles/{role}', [AdminController::class, 'destroyRole'])->name('admin.roles.destroy');
+        Route::post('roles/assign', [AdminController::class, 'assignRole'])->name('admin.roles.assign');
+    });
 
     // Vehicles
     Route::get('vehicles', [AdminController::class, 'vehicles'])->name('admin.vehicles');

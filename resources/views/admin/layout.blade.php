@@ -196,12 +196,22 @@
                     {{-- ── PEOPLE ── --}}
                     <li class="nav-header" style="font-size:.65rem;color:#475569;letter-spacing:.1em;padding:8px 16px 4px;">PEOPLE</li>
 
+                    @can('manage-users')
                     <li class="nav-item">
                         <a href="{{ route('admin.users') }}" class="nav-link {{ request()->routeIs('admin.users') ? 'active' : '' }}">
                             <i class="nav-icon fas fa-users"></i>
                             <p>Users</p>
                         </a>
                     </li>
+                    @endcan
+                    @can('manage-roles')
+                    <li class="nav-item">
+                        <a href="{{ route('admin.roles') }}" class="nav-link {{ request()->routeIs('admin.roles*') ? 'active' : '' }}">
+                            <i class="nav-icon fas fa-user-shield"></i>
+                            <p>Roles &amp; Permissions</p>
+                        </a>
+                    </li>
+                    @endcan
                     <li class="nav-item">
                         <a href="{{ route('admin.drivers') }}" class="nav-link {{ request()->routeIs('admin.drivers*') ? 'active' : '' }}">
                             <i class="nav-icon fas fa-id-card"></i>

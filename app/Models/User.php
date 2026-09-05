@@ -10,13 +10,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Spatie\Permission\Traits\HasRoles;
 
 #[Fillable(['name', 'username', 'email', 'password', 'phone', 'phone_verified_at', 'avatar', 'role', 'driver_type', 'company_name', 'company_id', 'salary', 'commission_rate', 'api_token', 'refresh_token', 'token_expires_at', 'refresh_token_expires_at', 'available', 'status_note', 'wallet_balance', 'current_latitude', 'current_longitude', 'rating', 'total_ratings', 'approval_status', 'approved_at', 'cancellation_count', 'cancellation_penalty_until', 'penalty_until', 'penalty_reason', 'proxy_phone', 'fcm_token', 'referral_code', 'referred_by', 'city', 'service_zone', 'social_provider', 'social_id', 'current_streak', 'longest_streak', 'last_trip_date', 'current_5star_streak', 'loyalty_points', 'membership_tier_id', 'onboarding_completed_at', 'onboarding_steps', 'accessibility_settings'])]
 #[Hidden(['password', 'remember_token', 'api_token', 'refresh_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasRoles;
 
     /**
      * Get the attributes that should be cast.
