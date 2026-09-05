@@ -14,7 +14,7 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h3 class="card-title mb-0"><i class="fas fa-ticket-alt text-success mr-2"></i> Promo Coupons</h3>
-        <button class="btn btn-sm btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> New Coupon</button>
+        <button class="btn btn-sm btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Create Coupon</button>
     </div>
     <p class="text-muted px-3 pt-3 mb-0" style="font-size:.85rem;">
         Codes customers enter at checkout to get a discount on a ride, delivery, or moving order.
@@ -120,7 +120,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="couponModalTitle">New Coupon</h5>
+                <h5 class="modal-title" id="couponModalTitle">Create Coupon</h5>
                 <button type="button" class="close" data-dismiss="modal">&times;</button>
             </div>
             <form id="couponForm" method="POST" action="{{ route('admin.promo-coupons.store') }}">
@@ -253,7 +253,7 @@ function toggleMaxDiscount() {
 }
 
 function openCreate() {
-    document.getElementById('couponModalTitle').textContent = 'New Coupon';
+    document.getElementById('couponModalTitle').textContent = 'Create Coupon';
     document.getElementById('couponForm').action = cStoreUrl;
     document.getElementById('couponMethod').value = 'POST';
     document.getElementById('couponForm').reset();

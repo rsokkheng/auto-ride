@@ -14,7 +14,7 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h3 class="card-title mb-0"><i class="fas fa-bullhorn text-warning mr-2"></i> Promo Events</h3>
-        <button class="btn btn-sm btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> New Event</button>
+        <button class="btn btn-sm btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Create Event</button>
     </div>
     <p class="text-muted px-3 pt-3 mb-0" style="font-size:.85rem;">
         Creating an active event immediately pushes a notification to the target audience's mobile app.
@@ -97,7 +97,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="eventModalTitle">New Event</h5>
+                <h5 class="modal-title" id="eventModalTitle">Create Event</h5>
                 <button type="button" class="close" data-dismiss="modal">&times;</button>
             </div>
             <form id="eventForm" method="POST" enctype="multipart/form-data"
@@ -164,7 +164,7 @@ const eStoreUrl = '{{ route("admin.promo-events.store") }}';
 const eUpdateBase = '/admin/promo-events/';
 
 function openCreate() {
-    document.getElementById('eventModalTitle').textContent = 'New Event';
+    document.getElementById('eventModalTitle').textContent = 'Create Event';
     document.getElementById('eventForm').action = eStoreUrl;
     document.getElementById('eventMethod').value = 'POST';
     document.getElementById('eventForm').reset();

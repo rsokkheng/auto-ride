@@ -14,7 +14,7 @@
     <div class="card-header d-flex justify-content-between align-items-center">
         <h3 class="card-title mb-0">Vehicle fleet</h3>
         <button class="btn btn-sm btn-primary" onclick="openCreate()">
-            <i class="fas fa-plus mr-1"></i> Add Vehicle
+            <i class="fas fa-plus mr-1"></i> Create Vehicle
         </button>
     </div>
     <div class="card-body table-responsive p-0">
@@ -108,7 +108,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalTitle">Add Vehicle</h5>
+                <h5 class="modal-title" id="modalTitle">Create Vehicle</h5>
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <form id="vehicleForm" method="POST" action="{{ route('admin.vehicles.store') }}" enctype="multipart/form-data">
@@ -260,7 +260,7 @@ function resetImageField() {
 }
 
 function openCreate() {
-    document.getElementById('modalTitle').textContent = 'Add Vehicle';
+    document.getElementById('modalTitle').textContent = 'Create Vehicle';
     document.getElementById('vehicleForm').action = storeUrl;
     document.getElementById('formMethod').value = 'POST';
     document.getElementById('vehicleForm').reset();

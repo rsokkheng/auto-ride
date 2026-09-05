@@ -38,7 +38,7 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h3 class="card-title mb-0"><i class="fas fa-layer-group text-primary mr-2"></i> Plans</h3>
-        <button class="btn btn-sm btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> New Plan</button>
+        <button class="btn btn-sm btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Create Plan</button>
     </div>
     <div class="card-body p-0">
         <table class="table table-hover mb-0">
@@ -120,7 +120,7 @@
             @csrf
             <div class="modal-content">
                 <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title"><i class="fas fa-plus mr-2"></i>New Subscription Plan</h5>
+                    <h5 class="modal-title"><i class="fas fa-plus mr-2"></i>Create Subscription Plan</h5>
                     <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
                 </div>
                 <div class="modal-body">

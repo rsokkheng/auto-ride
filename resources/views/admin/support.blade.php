@@ -20,7 +20,7 @@
             @endif
         </h3>
         <button class="btn btn-sm btn-primary" onclick="openCreate()">
-            <i class="fas fa-plus mr-1"></i> Add Ticket
+            <i class="fas fa-plus mr-1"></i> Create Ticket
         </button>
     </div>
     <div class="card-body table-responsive p-0">
@@ -91,7 +91,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalTitle">Add Ticket</h5>
+                <h5 class="modal-title" id="modalTitle">Create Ticket</h5>
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <form id="ticketForm" method="POST" action="{{ route('admin.support.store') }}">
@@ -157,7 +157,7 @@ const storeUrl = '{{ route('admin.support.store') }}';
 const updateBase = '/admin/support/';
 
 function openCreate() {
-    document.getElementById('modalTitle').textContent = 'Add Ticket';
+    document.getElementById('modalTitle').textContent = 'Create Ticket';
     document.getElementById('ticketForm').action = storeUrl;
     document.getElementById('formMethod').value = 'POST';
     document.getElementById('ticketForm').reset();

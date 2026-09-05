@@ -32,7 +32,7 @@ function rideDistanceKm($r): ?float {
 ])
 
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+    <div class="card-header">
         <ul class="nav nav-tabs card-header-tabs">
             <li class="nav-item">
                 <a class="nav-link {{ ($tab ?? 'all') === 'all' ? 'active' : '' }}" href="{{ route('admin.rides', ['tab' => 'all', 'search' => $search]) }}">
@@ -65,8 +65,11 @@ function rideDistanceKm($r): ?float {
                 </a>
             </li>
         </ul>
-        <button class="btn btn-sm btn-primary mb-2" onclick="openCreate()">
-            <i class="fas fa-plus mr-1"></i> Add Ride
+    </div>
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h3 class="card-title mb-0">Ride Orders</h3>
+        <button class="btn btn-sm btn-primary" onclick="openCreate()">
+            <i class="fas fa-plus mr-1"></i> Create Ride
         </button>
     </div>
     <div class="card-body table-responsive p-0">
@@ -257,7 +260,7 @@ function rideDistanceKm($r): ?float {
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalTitle">Add Ride</h5>
+                <h5 class="modal-title" id="modalTitle">Create Ride</h5>
                 <button type="button" class="close" onclick="hideModal(this.closest('.modal').id)"><span>&times;</span></button>
             </div>
             <form id="rideForm" method="POST" action="{{ route('admin.rides.store') }}">
@@ -421,7 +424,7 @@ function showStopsModal(route) {
 
 /* ── Create / Edit ── */
 function openCreate() {
-    document.getElementById('modalTitle').textContent = 'Add Ride';
+    document.getElementById('modalTitle').textContent = 'Create Ride';
     document.getElementById('rideForm').action = storeUrl;
     document.getElementById('formMethod').value = 'POST';
     document.getElementById('rideForm').reset();

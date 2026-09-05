@@ -7,7 +7,7 @@
     <div class="card-header d-flex justify-content-between align-items-center">
         <h3 class="card-title mb-0"><i class="fas fa-store text-primary mr-2"></i> Marketplace Items</h3>
         <button class="btn btn-sm btn-primary" onclick="openCreate()">
-            <i class="fas fa-plus mr-1"></i> Add Item
+            <i class="fas fa-plus mr-1"></i> Create Item
         </button>
     </div>
     <div class="card-body table-responsive p-0">
@@ -125,7 +125,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-light">
-                <h5 class="modal-title" id="modalTitle">Add Item</h5>
+                <h5 class="modal-title" id="modalTitle">Create Item</h5>
                 <button type="button" class="close" data-dismiss="modal">&times;</button>
             </div>
 
@@ -519,7 +519,7 @@ function resetImageSection() {
 // ── Open modals ──────────────────────────────────────────────────────────────
 
 function openCreate() {
-    document.getElementById('modalTitle').textContent  = 'Add Item';
+    document.getElementById('modalTitle').textContent  = 'Create Item';
     document.getElementById('itemForm').action         = storeUrl;
     document.getElementById('formMethod').value        = 'POST';
     document.getElementById('itemForm').reset();

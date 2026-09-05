@@ -81,7 +81,7 @@
         <button class="btn btn-sm btn-primary"
                 onclick="openCreate('{{ $activeType === 'all' ? 'delivery' : $activeType }}')">
             <i class="fas fa-plus mr-1"></i>
-            Add {{ $activeType === 'moving' ? 'Moving Order' : 'Delivery' }}
+            Create {{ $activeType === 'moving' ? 'Moving Order' : 'Delivery' }}
         </button>
     </div>
 
@@ -375,7 +375,7 @@
         <div class="modal-content">
 
             <div class="modal-header" id="modalHeader">
-                <h5 class="modal-title" id="modalTitle">Add Order</h5>
+                <h5 class="modal-title" id="modalTitle">Create Order</h5>
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
 
@@ -995,7 +995,7 @@ function copyAddressTrackUrl(btn) {
 
 // ── Create ───────────────────────────────────────────────────────────────────
 function openCreate(defaultType) {
-    document.getElementById('modalTitle').textContent = defaultType === 'moving' ? 'Add Moving Order' : 'Add Delivery';
+    document.getElementById('modalTitle').textContent = defaultType === 'moving' ? 'Create Moving Order' : 'Create Delivery';
     document.getElementById('deliveryForm').action    = storeUrl;
     document.getElementById('formMethod').value       = 'POST';
     document.getElementById('deliveryForm').reset();

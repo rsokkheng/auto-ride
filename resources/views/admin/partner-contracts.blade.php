@@ -39,7 +39,7 @@
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h3 class="card-title">All Contracts</h3>
                 <button class="btn btn-sm btn-primary" data-toggle="modal" data-target="#addModal">
-                    <i class="fas fa-plus mr-1"></i>New Contract
+                    <i class="fas fa-plus mr-1"></i>Create Contract
                 </button>
             </div>
             <div class="card-body p-0 table-responsive">
@@ -103,7 +103,7 @@
                         <tr>
                             <td colspan="9" class="text-center text-muted py-5">
                                 <i class="fas fa-file-contract fa-2x mb-2 d-block"></i>
-                                No contracts yet. Click <strong>New Contract</strong> to add one.
+                                No contracts yet. Click <strong>Create Contract</strong> to add one.
                             </td>
                         </tr>
                         @endforelse
@@ -173,7 +173,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-primary">
-                <h5 class="modal-title text-white"><i class="fas fa-file-contract mr-2"></i>New Partner Contract</h5>
+                <h5 class="modal-title text-white"><i class="fas fa-file-contract mr-2"></i>Create Partner Contract</h5>
                 <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <form method="POST" action="{{ route('admin.partner-contracts.store') }}">

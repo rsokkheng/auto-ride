@@ -9,7 +9,7 @@
             <i class="fas fa-bolt text-warning mr-2"></i> Surge Zone Management
         </h3>
         <button class="btn btn-sm btn-primary" onclick="openCreate()">
-            <i class="fas fa-plus mr-1"></i> Add Surge Zone
+            <i class="fas fa-plus mr-1"></i> Create Surge Zone
         </button>
     </div>
     <div class="card-body table-responsive p-0">
@@ -123,7 +123,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalTitle">Add Surge Zone</h5>
+                <h5 class="modal-title" id="modalTitle">Create Surge Zone</h5>
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <form id="surgeForm" method="POST" action="{{ route('admin.surge-zones.store') }}">
@@ -295,7 +295,7 @@ function updateMultiplierLabel(val) {
 }
 
 function openCreate() {
-    document.getElementById('modalTitle').textContent = 'Add Surge Zone';
+    document.getElementById('modalTitle').textContent = 'Create Surge Zone';
     document.getElementById('surgeForm').action       = storeUrl;
     document.getElementById('formMethod').value       = 'POST';
     document.getElementById('surgeForm').reset();

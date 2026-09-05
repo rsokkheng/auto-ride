@@ -14,7 +14,7 @@
     <div class="card-header d-flex justify-content-between align-items-center">
         <h3 class="card-title mb-0">Safety incidents</h3>
         <button class="btn btn-sm btn-primary" onclick="openCreate()">
-            <i class="fas fa-plus mr-1"></i> Add Incident
+            <i class="fas fa-plus mr-1"></i> Create Incident
         </button>
     </div>
     <div class="card-body table-responsive p-0">
@@ -74,7 +74,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalTitle">Add Incident</h5>
+                <h5 class="modal-title" id="modalTitle">Create Incident</h5>
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <form id="incidentForm" method="POST" action="{{ route('admin.safety.store') }}">
@@ -131,7 +131,7 @@ const storeUrl = '{{ route('admin.safety.store') }}';
 const updateBase = '/admin/safety/';
 
 function openCreate() {
-    document.getElementById('modalTitle').textContent = 'Add Incident';
+    document.getElementById('modalTitle').textContent = 'Create Incident';
     document.getElementById('incidentForm').action = storeUrl;
     document.getElementById('formMethod').value = 'POST';
     document.getElementById('incidentForm').reset();

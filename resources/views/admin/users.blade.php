@@ -36,7 +36,7 @@
     <div class="card-header d-flex justify-content-between align-items-center">
         <h3 class="card-title mb-0">User list</h3>
         <button class="btn btn-sm btn-primary" onclick="openCreate()">
-            <i class="fas fa-plus mr-1"></i> Add User
+            <i class="fas fa-plus mr-1"></i> Create User
         </button>
     </div>
     <div class="card-body table-responsive p-0">
@@ -132,7 +132,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalTitle">Add User</h5>
+                <h5 class="modal-title" id="modalTitle">Create User</h5>
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <form id="userForm" method="POST" action="{{ route('admin.users.store') }}" enctype="multipart/form-data">
@@ -272,7 +272,7 @@ function previewAvatar(input) {
 }
 
 function openCreate() {
-    document.getElementById('modalTitle').textContent  = 'Add User';
+    document.getElementById('modalTitle').textContent  = 'Create User';
     document.getElementById('userForm').action         = storeUrl;
     document.getElementById('formMethod').value        = 'POST';
     document.getElementById('pw-label').textContent    = 'Password *';

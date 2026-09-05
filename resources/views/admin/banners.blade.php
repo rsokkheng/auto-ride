@@ -6,7 +6,7 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h3 class="card-title mb-0"><i class="fas fa-images text-warning mr-2"></i> Banners</h3>
-        <button class="btn btn-sm btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Add Banner</button>
+        <button class="btn btn-sm btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Create Banner</button>
     </div>
     <div class="card-body p-0">
         <table class="table table-hover mb-0">
@@ -88,7 +88,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="bannerModalTitle">Add Banner</h5>
+                <h5 class="modal-title" id="bannerModalTitle">Create Banner</h5>
                 <button type="button" class="close" data-dismiss="modal">&times;</button>
             </div>
             <form id="bannerForm" method="POST" enctype="multipart/form-data"
@@ -162,7 +162,7 @@ const storeUrl = '{{ route("admin.banners.store") }}';
 const updateBase = '/admin/banners/';
 
 function openCreate() {
-    document.getElementById('bannerModalTitle').textContent = 'Add Banner';
+    document.getElementById('bannerModalTitle').textContent = 'Create Banner';
     document.getElementById('bannerForm').action = storeUrl;
     document.getElementById('bannerMethod').value = 'POST';
     document.getElementById('bannerForm').reset();

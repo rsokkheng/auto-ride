@@ -6,7 +6,7 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h3 class="card-title mb-0"><i class="fas fa-plane text-primary mr-2"></i> Airport Zones</h3>
-        <button class="btn btn-sm btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Add Zone</button>
+        <button class="btn btn-sm btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Create Zone</button>
     </div>
     <div class="card-body p-0">
         <table class="table table-hover mb-0">
@@ -64,7 +64,7 @@
         <form action="{{ route('admin.airport-zones.store') }}" method="POST">
             @csrf
             <div class="modal-content">
-                <div class="modal-header"><h5 class="modal-title">Add Airport Zone</h5><button type="button" class="close" data-dismiss="modal">&times;</button></div>
+                <div class="modal-header"><h5 class="modal-title">Create Airport Zone</h5><button type="button" class="close" data-dismiss="modal">&times;</button></div>
                 <div class="modal-body">
                     @include('admin._partials.airport-zone-fields')
                 </div>

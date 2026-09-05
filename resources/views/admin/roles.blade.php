@@ -20,7 +20,7 @@
 <div class="card mb-3">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h3 class="card-title mb-0"><i class="fas fa-user-shield text-primary mr-2"></i>Roles</h3>
-        <button class="btn btn-sm btn-primary" onclick="openCreateRole()"><i class="fas fa-plus mr-1"></i> New Role</button>
+        <button class="btn btn-sm btn-primary" onclick="openCreateRole()"><i class="fas fa-plus mr-1"></i> Create Role</button>
     </div>
     <div class="card-body p-0">
         <table class="table table-hover mb-0">
@@ -118,7 +118,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="roleModalTitle">New Role</h5>
+                <h5 class="modal-title" id="roleModalTitle">Create Role</h5>
                 <button type="button" class="close" onclick="hideModal('roleModal')"><span>&times;</span></button>
             </div>
             <form id="roleForm" method="POST" action="{{ route('admin.roles.store') }}">
@@ -216,7 +216,7 @@ const roleStoreUrl = '{{ route("admin.roles.store") }}';
 const roleUpdateBase = '{{ url("admin/roles") }}/';
 
 function openCreateRole() {
-    document.getElementById('roleModalTitle').textContent = 'New Role';
+    document.getElementById('roleModalTitle').textContent = 'Create Role';
     document.getElementById('roleForm').action = roleStoreUrl;
     document.getElementById('roleMethod').value = 'POST';
     document.getElementById('roleForm').reset();

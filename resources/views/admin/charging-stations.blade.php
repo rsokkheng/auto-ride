@@ -7,7 +7,7 @@
     <div class="card-header d-flex justify-content-between align-items-center">
         <h3 class="card-title mb-0">Charging stations</h3>
         <button class="btn btn-sm btn-primary" onclick="openCreate()">
-            <i class="fas fa-plus mr-1"></i> Add Station
+            <i class="fas fa-plus mr-1"></i> Create Station
         </button>
     </div>
     <div class="card-body table-responsive p-0">
@@ -72,7 +72,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalTitle">Add Charging Station</h5>
+                <h5 class="modal-title" id="modalTitle">Create Charging Station</h5>
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <form id="stationForm" method="POST" action="{{ route('admin.charging-stations.store') }}">
@@ -132,7 +132,7 @@ const storeUrl = '{{ route('admin.charging-stations.store') }}';
 const updateBase = '/admin/charging-stations/';
 
 function openCreate() {
-    document.getElementById('modalTitle').textContent = 'Add Charging Station';
+    document.getElementById('modalTitle').textContent = 'Create Charging Station';
     document.getElementById('stationForm').action = storeUrl;
     document.getElementById('formMethod').value = 'POST';
     document.getElementById('stationForm').reset();

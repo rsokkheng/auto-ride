@@ -14,7 +14,7 @@
     <div class="card-header d-flex justify-content-between align-items-center">
         <h3 class="card-title mb-0">Fleet Companies</h3>
         <button class="btn btn-sm btn-primary" onclick="openCreate()">
-            <i class="fas fa-plus mr-1"></i> Add Company
+            <i class="fas fa-plus mr-1"></i> Create Company
         </button>
     </div>
     <div class="card-body table-responsive p-0">
@@ -87,7 +87,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalTitle">Add Company</h5>
+                <h5 class="modal-title" id="modalTitle">Create Company</h5>
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <form id="companyForm" method="POST" action="{{ route('admin.companies.store') }}">
@@ -153,7 +153,7 @@ const storeUrl = '{{ route('admin.companies.store') }}';
 const updateBase = '/admin/companies/';
 
 function openCreate() {
-    document.getElementById('modalTitle').textContent = 'Add Company';
+    document.getElementById('modalTitle').textContent = 'Create Company';
     document.getElementById('companyForm').action = storeUrl;
     document.getElementById('formMethod').value = 'POST';
     document.getElementById('companyForm').reset();

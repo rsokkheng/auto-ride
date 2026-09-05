@@ -221,7 +221,7 @@ class AdminController extends Controller
     public function users(Request $request)
     {
         $search = trim((string) $request->input('search', ''));
-        $role   = $request->input('role', '');
+        $role   = trim((string) $request->input('role', ''));
 
         $query = User::with('company')->orderBy('created_at');
 
