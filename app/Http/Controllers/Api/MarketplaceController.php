@@ -317,7 +317,7 @@ class MarketplaceController extends ApiController
             MarketplaceProductAccessory::create([
                 'product_id' => $product->id,
                 'name_en'    => $item['name_en'],
-                'name_km'    => $item['name_km'],
+                'name_kh'    => $item['name_km'],
                 'price'      => $item['price'],
                 'sort_order' => $i,
             ]);
@@ -359,7 +359,7 @@ class MarketplaceController extends ApiController
                 'order_id'     => $order->id,
                 'accessory_id' => $accessory->id,
                 'name_en'      => $accessory->name_en,
-                'name_km'      => $accessory->name_km,
+                'name_km'      => $accessory->name_kh,
                 'price'        => $accessory->price,
             ]);
         }

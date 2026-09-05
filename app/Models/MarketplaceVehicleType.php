@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalizedName;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class MarketplaceVehicleType extends Model
 {
-    protected $fillable = ['name_km', 'name_en', 'slug', 'sort_order', 'active'];
+    use HasLocalizedName;
+
+    protected $fillable = ['name_kh', 'name_en', 'name_zh', 'slug', 'sort_order', 'active'];
 
     protected $casts = [
         'active'     => 'boolean',

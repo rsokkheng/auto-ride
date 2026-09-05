@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalizedName;
 use Illuminate\Database\Eloquent\Model;
 
 class AirportZone extends Model
 {
+    use HasLocalizedName;
+
     protected $fillable = [
-        'name', 'iata_code', 'latitude', 'longitude',
+        'name', 'name_en', 'name_kh', 'name_zh', 'iata_code', 'latitude', 'longitude',
         'radius_meters', 'surcharge_khr', 'luggage_fee_khr', 'active',
     ];
 

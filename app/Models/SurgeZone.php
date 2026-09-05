@@ -2,13 +2,19 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalizedName;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 
 class SurgeZone extends Model
 {
+    use HasLocalizedName;
+
     protected $fillable = [
         'name',
+        'name_en',
+        'name_kh',
+        'name_zh',
         'description',
         'center_lat',
         'center_lng',

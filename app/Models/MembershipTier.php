@@ -2,13 +2,16 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalizedName;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MembershipTier extends Model
 {
+    use HasLocalizedName;
+
     protected $fillable = [
-        'name', 'slug', 'min_points', 'badge_color', 'icon', 'benefits',
+        'name', 'name_en', 'name_kh', 'name_zh', 'slug', 'min_points', 'badge_color', 'icon', 'benefits',
         'ride_discount_pct', 'delivery_discount_pct', 'points_multiplier',
         'priority_support', 'free_cancellations', 'sort_order',
     ];

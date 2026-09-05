@@ -2,15 +2,19 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalizedName;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MarketplaceProductAccessory extends Model
 {
+    use HasLocalizedName;
+
     protected $fillable = [
         'product_id',
         'name_en',
-        'name_km',
+        'name_kh',
+        'name_zh',
         'price',
         'sort_order',
         'active',

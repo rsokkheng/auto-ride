@@ -2,13 +2,16 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalizedName;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MarketplaceCategory extends Model
 {
-    protected $fillable = ['parent_id', 'name', 'slug', 'icon', 'sort_order', 'active'];
+    use HasLocalizedName;
+
+    protected $fillable = ['parent_id', 'name', 'name_en', 'name_kh', 'name_zh', 'slug', 'icon', 'sort_order', 'active'];
 
     protected $casts = ['active' => 'boolean'];
 

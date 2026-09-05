@@ -2,12 +2,18 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalizedName;
 use Illuminate\Database\Eloquent\Model;
 
 class VehicleType extends Model
 {
+    use HasLocalizedName;
+
     protected $fillable = [
         'name',
+        'name_en',
+        'name_kh',
+        'name_zh',
         'slug',
         'icon',
         'description',

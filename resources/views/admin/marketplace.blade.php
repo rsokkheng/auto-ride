@@ -79,7 +79,7 @@
                     <td>{{ $item->rent_price_per_day ? '$'.number_format($item->rent_price_per_day, 2) : '—' }}</td>
                     <td>
                         @if($item->marketplaceVehicleType)
-                            {{ $item->marketplaceVehicleType->name_km }}
+                            {{ $item->marketplaceVehicleType->name_kh }}
                             <br><small class="text-muted">{{ $item->marketplaceVehicleType->name_en }}</small>
                         @else
                             <span class="text-muted">—</span>
@@ -87,7 +87,7 @@
                     </td>
                     <td>
                         @if($item->marketplaceVehicleColor)
-                            {{ $item->marketplaceVehicleColor->name_km }}
+                            {{ $item->marketplaceVehicleColor->name_kh }}
                             <br><small class="text-muted">{{ $item->marketplaceVehicleColor->name_en }}</small>
                         @else
                             <span class="text-muted">—</span>
@@ -229,7 +229,7 @@
                         <select name="marketplace_vehicle_type_id" id="f-vehicle-type" class="form-control" onchange="refreshVehicleOptions()">
                             <option value="">— None —</option>
                             @foreach($vehicleTypes as $t)
-                                <option value="{{ $t->id }}">{{ $t->name_km }} ({{ $t->name_en }})</option>
+                                <option value="{{ $t->id }}">{{ $t->name_kh }} ({{ $t->name_en }})</option>
                             @endforeach
                         </select>
                     </div>
@@ -362,7 +362,7 @@ const csrf          = document.querySelector('meta[name="csrf-token"]').content;
         return [$t->id => [
             'sizes'      => $t->sizes->map(fn ($s) => ['id' => $s->id, 'label' => $s->label])->values(),
             'categories' => $t->categories->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->values(),
-            'colors'     => $t->colors->map(fn ($c) => ['id' => $c->id, 'name' => $c->name_km . ' (' . $c->name_en . ')'])->values(),
+            'colors'     => $t->colors->map(fn ($c) => ['id' => $c->id, 'name' => $c->name_kh . ' (' . $c->name_en . ')'])->values(),
         ]];
     });
 @endphp

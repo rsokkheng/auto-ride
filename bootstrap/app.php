@@ -15,6 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
         ]);
+
+        $middleware->api(append: [
+            \App\Http\Middleware\SetApiLocale::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Return clean JSON for API routes when a model is not found
