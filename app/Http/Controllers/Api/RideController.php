@@ -778,6 +778,10 @@ class RideController extends ApiController
 
             if (! empty($completionData['dropoff_address'])) {
                 $updates['dropoff_address'] = $completionData['dropoff_address'];
+            } elseif ($dropoffLat && $dropoffLng) {
+                // The driver's app didn't resolve a place name — auto-fill one so the
+                // dropoff is never left blank on the receipt / admin views.
+                $updates['dropoff_address'] = $this->fare->reverseGeocode($dropoffLat, $dropoffLng);
             }
 
             if ($dropoffLat && $dropoffLng) {

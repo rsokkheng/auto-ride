@@ -85,6 +85,40 @@ class FareService
         ];
     }
 
+    /**
+     * Reverse-geocode a coordinate into a human-readable address via Google's
+     * Geocoding API. Falls back to a plain "lat, lng" label (never null) when
+     * no API key is configured or the lookup fails — a booking's dropoff must
+     * always have SOME name, not just raw numbers a passenger can't read.
+     */
+    public function reverseGeocode(float $lat, float $lng): string
+    {
+        $fallback = round($lat, 5) . ', ' . round($lng, 5);
+        $apiKey   = config('services.google_maps.key');
+
+        if (! $apiKey) {
+            return $fallback;
+        }
+
+        try {
+            $res = Http::timeout(6)->get('https://maps.googleapis.com/maps/api/geocode/json', [
+                'latlng' => "{$lat},{$lng}",
+                'key'    => $apiKey,
+            ]);
+
+            if ($res->ok() && $res->json('status') === 'OK') {
+                $address = $res->json('results.0.formatted_address');
+                if (! empty($address)) {
+                    return $address;
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('[FareService] Reverse geocode failed: ' . $e->getMessage());
+        }
+
+        return $fallback;
+    }
+
     // ── Ride Fare ─────────────────────────────────────────────────────────────
 
     /**
