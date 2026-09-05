@@ -187,7 +187,7 @@
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title"><i class="fas fa-check-circle mr-2"></i>Approve Withdrawal</h5>
-                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+                <button type="button" class="close text-white" onclick="hideModal(this.closest('.modal').id)"><span>&times;</span></button>
             </div>
             <form id="approveForm" method="POST">
                 @csrf
@@ -204,7 +204,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-secondary" onclick="hideModal(this.closest('.modal').id)">Cancel</button>
                     <button type="submit" class="btn btn-success"><i class="fas fa-check mr-1"></i>Confirm Approval</button>
                 </div>
             </form>
@@ -218,7 +218,7 @@
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
                 <h5 class="modal-title"><i class="fas fa-times-circle mr-2"></i>Reject Withdrawal</h5>
-                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+                <button type="button" class="close text-white" onclick="hideModal(this.closest('.modal').id)"><span>&times;</span></button>
             </div>
             <form id="rejectForm" method="POST">
                 @csrf
@@ -235,7 +235,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-secondary" onclick="hideModal(this.closest('.modal').id)">Cancel</button>
                     <button type="submit" class="btn btn-danger"><i class="fas fa-times mr-1"></i>Reject &amp; Refund</button>
                 </div>
             </form>
@@ -249,7 +249,7 @@
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title"><i class="fas fa-check-double mr-2"></i>Bulk Approve Withdrawals</h5>
-                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+                <button type="button" class="close text-white" onclick="hideModal(this.closest('.modal').id)"><span>&times;</span></button>
             </div>
             <form id="bulkApproveForm" method="POST" action="{{ route('admin.withdrawals.bulk-approve') }}">
                 @csrf
@@ -263,7 +263,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-secondary" onclick="hideModal(this.closest('.modal').id)">Cancel</button>
                     <button type="submit" class="btn btn-success"><i class="fas fa-check mr-1"></i>Approve All Selected</button>
                 </div>
             </form>
@@ -277,7 +277,7 @@
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
                 <h5 class="modal-title"><i class="fas fa-times-circle mr-2"></i>Bulk Reject Withdrawals</h5>
-                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+                <button type="button" class="close text-white" onclick="hideModal(this.closest('.modal').id)"><span>&times;</span></button>
             </div>
             <form id="bulkRejectForm" method="POST" action="{{ route('admin.withdrawals.bulk-reject') }}">
                 @csrf
@@ -294,7 +294,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-secondary" onclick="hideModal(this.closest('.modal').id)">Cancel</button>
                     <button type="submit" class="btn btn-danger"><i class="fas fa-times mr-1"></i>Reject All Selected</button>
                 </div>
             </form>
@@ -306,19 +306,47 @@
 
 @push('scripts')
 <script>
+// ── Modal show/hide (plain DOM — no jQuery/Bootstrap JS plugin dependency,
+// so these still work even if that CDN bundle fails to load) ──────────────
+function showModal(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.add('show');
+    el.style.display = 'block';
+    el.setAttribute('aria-modal', 'true');
+    document.body.classList.add('modal-open');
+    if (!document.getElementById(id + '-backdrop')) {
+        var backdrop = document.createElement('div');
+        backdrop.className = 'modal-backdrop fade show';
+        backdrop.id = id + '-backdrop';
+        backdrop.onclick = function () { hideModal(id); };
+        document.body.appendChild(backdrop);
+    }
+}
+
+function hideModal(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('show');
+    el.style.display = 'none';
+    document.body.classList.remove('modal-open');
+    var backdrop = document.getElementById(id + '-backdrop');
+    if (backdrop) backdrop.remove();
+}
+
 // ── Single actions ────────────────────────────────────────────────────────
 function openApprove(id, name, amount) {
     document.getElementById('approveForm').action = '/admin/withdrawals/' + id + '/approve';
     document.getElementById('approveText').innerHTML =
         'Approve <strong>' + fmtNum(amount) + ' ៛</strong> withdrawal for <strong>' + name + '</strong>?';
-    $('#approveModal').modal('show');
+    showModal('approveModal');
 }
 
 function openReject(id, name) {
     document.getElementById('rejectForm').action = '/admin/withdrawals/' + id + '/reject';
     document.getElementById('rejectText').innerHTML =
         'Reject withdrawal request from <strong>' + name + '</strong>?';
-    $('#rejectModal').modal('show');
+    showModal('rejectModal');
 }
 
 // ── Checkbox / selection ──────────────────────────────────────────────────
@@ -375,7 +403,7 @@ function openBulkApprove() {
     if (!ids.length) return;
     fillBulkIds('bulkApproveIds', ids);
     document.getElementById('bulkApproveCount').textContent = ids.length;
-    $('#bulkApproveModal').modal('show');
+    showModal('bulkApproveModal');
 }
 
 function openBulkReject() {
@@ -383,7 +411,7 @@ function openBulkReject() {
     if (!ids.length) return;
     fillBulkIds('bulkRejectIds', ids);
     document.getElementById('bulkRejectCount').textContent = ids.length;
-    $('#bulkRejectModal').modal('show');
+    showModal('bulkRejectModal');
 }
 
 function fmtNum(n) {

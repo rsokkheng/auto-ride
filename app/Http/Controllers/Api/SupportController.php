@@ -36,7 +36,7 @@ class SupportController extends ApiController
         $data = $request->validate([
             'subject'     => 'required|string|max:255',
             'message'     => 'required|string|max:1000',
-            'priority'    => 'nullable|in:low,medium,high',
+            'priority'    => 'nullable|in:low,medium,high,urgent',
             'category'    => 'nullable|in:driver_late,overcharged,lost_item,safety,cancel_trip,other',
             'ride_id'     => 'nullable|exists:rides,id',
             'delivery_id' => 'nullable|exists:deliveries,id',
