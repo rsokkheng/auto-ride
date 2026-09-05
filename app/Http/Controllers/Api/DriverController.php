@@ -254,16 +254,89 @@ class DriverController extends ApiController
         ]);
     }
 
+    /**
+     * GET /v1/driver/stats
+     *
+     * Today's performance snapshot for the driver home screen, plus the
+     * peak-hour bonus tracker and 5-star rating streak reward.
+     */
     public function getDriverStats(Request $request)
     {
         $user = $this->authUser($request);
         if (! $user || $user->role !== 'driver') return $this->unauthorized();
 
+        $todayStart = now()->startOfDay();
+
+        // ── Today's accepted / completed ─────────────────────────────────────
+        $acceptedRides = Ride::where('driver_id', $user->id)
+            ->where('accepted_at', '>=', $todayStart)
+            ->count();
+
+        $completedRides = Ride::where('driver_id', $user->id)
+            ->where('status', 'completed')
+            ->where('completed_at', '>=', $todayStart)
+            ->count();
+
+        // ── Hours online today ───────────────────────────────────────────────
+        $sessions = DriverSession::where('driver_id', $user->id)
+            ->where('started_at', '>=', $todayStart)
+            ->get();
+
+        $onlineMinutes = $sessions->sum(function ($s) {
+            return (int) $s->started_at->diffInMinutes($s->ended_at ?? now());
+        });
+
+        $hoursOnline = round($onlineMinutes / 60, 1);
+
+        // ── Acceptance rate today ────────────────────────────────────────────
+        $declinedToday = RideDecline::where('driver_id', $user->id)
+            ->where('created_at', '>=', $todayStart)
+            ->count();
+
+        $totalOffered  = $acceptedRides + $declinedToday;
+        $acceptanceRate = $totalOffered > 0 ? round(($acceptedRides / $totalOffered) * 100, 1) : 100.0;
+
+        // ── Peak hour bonus tracker ──────────────────────────────────────────
+        $peakStart      = PricingSetting::get('peak_hour_start', '18:00:00');
+        $peakEnd        = PricingSetting::get('peak_hour_end', '21:00:00');
+        $peakBonusKhr   = (int) PricingSetting::get('peak_hour_bonus_khr', 2000);
+        $peakTripTarget = (int) PricingSetting::get('peak_hour_trip_target', 5);
+
+        $currentTime = now()->format('H:i:s');
+        $peakActive  = $currentTime >= $peakStart && $currentTime <= $peakEnd;
+
+        $peakTripsToday = Ride::where('driver_id', $user->id)
+            ->where('status', 'completed')
+            ->where('completed_at', '>=', $todayStart)
+            ->whereRaw('TIME(completed_at) BETWEEN ? AND ?', [$peakStart, $peakEnd])
+            ->count();
+
+        // ── 5-star rating streak ─────────────────────────────────────────────
+        $streakTarget = (int) PricingSetting::get('rating_streak_target', 5);
+        $streakBonusKhr = (int) PricingSetting::get('rating_streak_bonus_khr', 20000);
+
         return $this->success([
             'driver_id'       => $user->id,
-            'accepted_rides'  => Ride::where('driver_id', $user->id)->where('status', 'accepted')->count(),
-            'completed_rides' => Ride::where('driver_id', $user->id)->where('status', 'completed')->count(),
+            'accepted_rides'  => $acceptedRides,
+            'completed_rides' => $completedRides,
+            'hours_online'    => $hoursOnline,
+            'acceptance_rate' => $acceptanceRate,
             'available'       => (bool) $user->available,
+            'peak_hour' => [
+                'active'             => $peakActive,
+                'window_start'       => substr($peakStart, 0, 5),
+                'window_end'         => substr($peakEnd, 0, 5),
+                'bonus_per_trip_khr' => $peakBonusKhr,
+                'trips_today'        => $peakTripsToday,
+                'trip_target'        => $peakTripTarget,
+                'earned_today_khr'   => $peakTripsToday * $peakBonusKhr,
+            ],
+            'rating_streak' => [
+                'current'    => (int) $user->current_5star_streak,
+                'target'     => $streakTarget,
+                'bonus_khr'  => $streakBonusKhr,
+                'remaining'  => max(0, $streakTarget - (int) $user->current_5star_streak),
+            ],
         ]);
     }
 

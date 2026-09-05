@@ -924,6 +924,10 @@ class RideController extends ApiController
             return response()->json(['data' => null, 'message' => 'Ride must be completed before rating.'], 422);
         }
 
+        if ($ride->rating !== null) {
+            return response()->json(['data' => null, 'message' => 'Driver already rated for this ride.'], 422);
+        }
+
         $data = $request->validate([
             'rating'  => 'required|numeric|min:1|max:5',
             'comment' => 'nullable|string|max:500',
@@ -933,6 +937,19 @@ class RideController extends ApiController
             'rating'         => $data['rating'],
             'rating_comment' => $data['comment'] ?? null,
         ]);
+
+        // Update driver's overall rating (rolling average) and 5-star streak.
+        $driver = $ride->driver;
+        if ($driver && $user->id === $ride->passenger_id) {
+            $total  = ($driver->total_ratings ?? 0) + 1;
+            $newAvg = (($driver->rating ?? 0) * ($total - 1) + $data['rating']) / $total;
+
+            $driver->update([
+                'rating'                => round($newAvg, 2),
+                'total_ratings'         => $total,
+                'current_5star_streak'  => (int) $data['rating'] === 5 ? $driver->current_5star_streak + 1 : 0,
+            ]);
+        }
 
         return $this->success(['rated' => true, 'ride' => $ride->fresh()]);
     }
