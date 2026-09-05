@@ -479,8 +479,19 @@ class AdminController extends Controller
     public function rides(Request $request)
     {
         $search = trim((string) $request->input('search', ''));
+        $tab    = $request->input('tab', 'all');
+
+        $pendingStatuses = ['requested', 'pending', 'accepted', 'driver_arrived', 'in_progress'];
 
         $query = Ride::with(['passenger', 'driver', 'stops'])->orderByDesc('created_at');
+
+        if ($tab === 'completed') {
+            $query->where('status', 'completed');
+        } elseif ($tab === 'cancelled') {
+            $query->where('status', 'cancelled');
+        } elseif ($tab === 'pending') {
+            $query->whereIn('status', $pendingStatuses);
+        }
 
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
@@ -496,11 +507,18 @@ class AdminController extends Controller
         }
 
         return view('admin.rides', [
-            'rides'         => $query->paginate(15)->appends(['search' => $search]),
+            'rides'         => $query->paginate(15)->appends(['search' => $search, 'tab' => $tab]),
             'passengers'    => User::where('role', 'passenger')->orderBy('name')->get(),
             'drivers'       => User::where('role', 'driver')->orderBy('name')->get(),
             'commissionPct' => (float) \App\Models\PricingSetting::get('driver_commission_pct', 20),
             'search'        => $search,
+            'tab'           => $tab,
+            'counts'        => [
+                'all'       => Ride::count(),
+                'completed' => Ride::where('status', 'completed')->count(),
+                'pending'   => Ride::whereIn('status', $pendingStatuses)->count(),
+                'cancelled' => Ride::where('status', 'cancelled')->count(),
+            ],
         ]);
     }
 

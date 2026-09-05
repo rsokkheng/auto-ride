@@ -32,9 +32,40 @@ function rideDistanceKm($r): ?float {
 ])
 
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0">Ride Orders</h3>
-        <button class="btn btn-sm btn-primary" onclick="openCreate()">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+        <ul class="nav nav-tabs card-header-tabs">
+            <li class="nav-item">
+                <a class="nav-link {{ ($tab ?? 'all') === 'all' ? 'active' : '' }}" href="{{ route('admin.rides', ['tab' => 'all', 'search' => $search]) }}">
+                    All Ride
+                    <span class="badge badge-secondary ml-1">{{ $counts['all'] }}</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {{ ($tab ?? '') === 'completed' ? 'active' : '' }}" href="{{ route('admin.rides', ['tab' => 'completed', 'search' => $search]) }}">
+                    Complete Ride
+                    @if($counts['completed'] > 0)
+                        <span class="badge badge-success ml-1">{{ $counts['completed'] }}</span>
+                    @endif
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {{ ($tab ?? '') === 'pending' ? 'active' : '' }}" href="{{ route('admin.rides', ['tab' => 'pending', 'search' => $search]) }}">
+                    Pending Ride
+                    @if($counts['pending'] > 0)
+                        <span class="badge badge-warning ml-1">{{ $counts['pending'] }}</span>
+                    @endif
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {{ ($tab ?? '') === 'cancelled' ? 'active' : '' }}" href="{{ route('admin.rides', ['tab' => 'cancelled', 'search' => $search]) }}">
+                    Cancelled Ride
+                    @if($counts['cancelled'] > 0)
+                        <span class="badge badge-danger ml-1">{{ $counts['cancelled'] }}</span>
+                    @endif
+                </a>
+            </li>
+        </ul>
+        <button class="btn btn-sm btn-primary mb-2" onclick="openCreate()">
             <i class="fas fa-plus mr-1"></i> Add Ride
         </button>
     </div>
