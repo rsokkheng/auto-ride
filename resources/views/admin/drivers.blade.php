@@ -3,11 +3,26 @@
 @section('page-title', 'Driver Approvals')
 
 @section('content')
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="GET" action="{{ route('admin.drivers') }}" class="form-inline flex-wrap" style="gap:6px">
+            <input type="hidden" name="status" value="{{ $status }}">
+            <input type="text" name="search" class="form-control form-control-sm"
+                   placeholder="Search by name, phone, or email…"
+                   value="{{ $search ?? '' }}" style="min-width:260px">
+            <button class="btn btn-sm btn-primary"><i class="fas fa-search mr-1"></i>Search</button>
+            @if(($search ?? '') !== '')
+                <a href="{{ route('admin.drivers', ['status' => $status]) }}" class="btn btn-sm btn-secondary">Reset</a>
+            @endif
+        </form>
+    </div>
+</div>
+
 <div class="card">
     <div class="card-header">
         <ul class="nav nav-tabs card-header-tabs">
             <li class="nav-item">
-                <a class="nav-link {{ $status === 'pending' ? 'active' : '' }}" href="{{ route('admin.drivers', ['status' => 'pending']) }}">
+                <a class="nav-link {{ $status === 'pending' ? 'active' : '' }}" href="{{ route('admin.drivers', ['status' => 'pending', 'search' => $search]) }}">
                     Pending
                     @if($counts['pending'] > 0)
                         <span class="badge badge-danger ml-1">{{ $counts['pending'] }}</span>
@@ -15,7 +30,7 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link {{ $status === 'approved' ? 'active' : '' }}" href="{{ route('admin.drivers', ['status' => 'approved']) }}">
+                <a class="nav-link {{ $status === 'approved' ? 'active' : '' }}" href="{{ route('admin.drivers', ['status' => 'approved', 'search' => $search]) }}">
                     Approved
                     @if($counts['approved'] > 0)
                         <span class="badge badge-success ml-1">{{ $counts['approved'] }}</span>
@@ -23,7 +38,7 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link {{ $status === 'rejected' ? 'active' : '' }}" href="{{ route('admin.drivers', ['status' => 'rejected']) }}">
+                <a class="nav-link {{ $status === 'rejected' ? 'active' : '' }}" href="{{ route('admin.drivers', ['status' => 'rejected', 'search' => $search]) }}">
                     Rejected
                     @if($counts['rejected'] > 0)
                         <span class="badge badge-secondary ml-1">{{ $counts['rejected'] }}</span>
@@ -91,7 +106,13 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="9" class="text-center text-muted py-4">No {{ $status }} drivers found.</td>
+                        <td colspan="9" class="text-center text-muted py-4">
+                            @if(($search ?? '') !== '')
+                                No {{ $status }} drivers found matching "{{ $search }}".
+                            @else
+                                No {{ $status }} drivers found.
+                            @endif
+                        </td>
                     </tr>
                     @endforelse
                 </tbody>
@@ -100,7 +121,7 @@
     </div>
     @if($drivers->hasPages())
     <div class="card-footer">
-        {{ $drivers->appends(['status' => $status])->links() }}
+        {{ $drivers->appends(['status' => $status, 'search' => $search])->links() }}
     </div>
     @endif
 </div>

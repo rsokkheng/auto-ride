@@ -1756,6 +1756,7 @@ class AdminController extends Controller
     public function drivers(Request $request)
     {
         $status = $request->input('status', 'pending');
+        $search = trim((string) $request->input('search', ''));
 
         $query = User::where('role', 'driver')
             ->withCount('driverDocuments')
@@ -1765,9 +1766,18 @@ class AdminController extends Controller
             $query->where('approval_status', $status);
         }
 
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
         return view('admin.drivers', [
-            'drivers' => $query->paginate(10)->appends(['status' => $status]),
+            'drivers' => $query->paginate(10)->appends(['status' => $status, 'search' => $search]),
             'status' => $status,
+            'search' => $search,
             'counts' => [
                 'pending'  => User::where('role','driver')->where('approval_status','pending')->count(),
                 'approved' => User::where('role','driver')->where('approval_status','approved')->count(),

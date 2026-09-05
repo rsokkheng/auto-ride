@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\Delivery;
 use App\Models\DriverDevice;
 use App\Models\PhoneOtp;
+use App\Models\Ride;
 use App\Models\User;
 use App\Services\SmsService;
 use Illuminate\Http\Request;
@@ -176,8 +178,16 @@ class AuthController extends ApiController
             return $this->unauthorized();
         }
 
+        $totalTrips = $user->role === 'driver'
+            ? Ride::where('driver_id', $user->id)->where('status', 'completed')->count()
+                + Delivery::where('driver_id', $user->id)->where('status', 'completed')->count()
+            : Ride::where('passenger_id', $user->id)->where('status', 'completed')->count();
+
         return $this->success([
-            'user' => array_merge($user->toArray(), ['avatar_url' => $user->avatar_url]),
+            'user' => array_merge($user->toArray(), [
+                'avatar_url'  => $user->avatar_url,
+                'total_trips' => $totalTrips,
+            ]),
         ]);
     }
 
