@@ -1338,8 +1338,18 @@ class AdminController extends Controller
 
     public function support()
     {
+        $tickets = SupportTicket::with(['user', 'messages' => fn ($q) => $q->latest('id')->limit(1)->with('sender:id,role')])
+            ->orderBy('created_at')
+            ->paginate(10);
+
+        $tickets->getCollection()->each(function ($t) {
+            $last = $t->messages->first();
+            $t->needs_reply = in_array($t->status, ['open', 'in_progress'], true)
+                && (! $last || ! $last->sender || $last->sender->role !== 'admin');
+        });
+
         return view('admin.support', [
-            'tickets' => SupportTicket::with('user')->orderBy('created_at')->paginate(10),
+            'tickets' => $tickets,
             'users'   => User::orderBy('name')->get(),
             'admins'  => User::where('role', 'admin')->orderBy('name')->get(),
         ]);

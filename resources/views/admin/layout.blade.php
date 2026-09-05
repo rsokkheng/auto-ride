@@ -121,6 +121,19 @@
                 $pendingTopup      = rescue(fn() => \App\Models\TopUpRequest::where('status','pending')->count(), 0, false);
                 $pendingWithdraw   = rescue(fn() => \App\Models\WithdrawalRequest::where('status','pending')->count(), 0, false);
 
+                // Tickets needing a staff reply: still open/in-progress AND the last
+                // message wasn't already sent by an admin (i.e. not just waiting on the user).
+                $needsReplyCount = rescue(function () {
+                    return \App\Models\SupportTicket::whereIn('status', ['open', 'in_progress'])
+                        ->with(['messages' => fn($q) => $q->latest('id')->limit(1)->with('sender:id,role')])
+                        ->get()
+                        ->filter(function ($t) {
+                            $last = $t->messages->first();
+                            return ! $last || ! $last->sender || $last->sender->role !== 'admin';
+                        })
+                        ->count();
+                }, 0, false);
+
                 $isSettings = request()->routeIs(
                     'admin.ride-pricing', 'admin.fare-management', 'admin.moving-fare', 'admin.delivery-fare',
                     'admin.surge-zones', 'admin.airport-zones*', 'admin.charging-stations',
@@ -344,9 +357,14 @@
                     <li class="nav-header" style="font-size:.65rem;color:#475569;letter-spacing:.1em;padding:8px 16px 4px;">SUPPORT</li>
 
                     <li class="nav-item">
-                        <a href="{{ route('admin.support') }}" class="nav-link {{ request()->routeIs('admin.support') ? 'active' : '' }}">
+                        <a href="{{ route('admin.support') }}" class="nav-link {{ request()->routeIs('admin.support*') ? 'active' : '' }}">
                             <i class="nav-icon fas fa-headset"></i>
-                            <p>Support Tickets</p>
+                            <p>
+                                Support Tickets
+                                @if($needsReplyCount > 0)
+                                    <span class="badge badge-danger right">{{ $needsReplyCount }}</span>
+                                @endif
+                            </p>
                         </a>
                     </li>
                     <li class="nav-item">

@@ -5,7 +5,13 @@
 @section('content')
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0">Support tickets</h3>
+        <h3 class="card-title mb-0">
+            Support tickets
+            @php $needsReplyOnPage = $tickets->getCollection()->where('needs_reply', true)->count(); @endphp
+            @if($needsReplyOnPage > 0)
+                <span class="badge badge-danger ml-1">{{ $needsReplyOnPage }} awaiting reply</span>
+            @endif
+        </h3>
         <button class="btn btn-sm btn-primary" onclick="openCreate()">
             <i class="fas fa-plus mr-1"></i> Add Ticket
         </button>
@@ -26,9 +32,14 @@
             </thead>
             <tbody>
                 @forelse($tickets as $t)
-                <tr>
+                <tr class="{{ $t->needs_reply ? 'table-warning' : '' }}">
                     <td>{{ ($tickets->currentPage() - 1) * $tickets->perPage() + $loop->iteration }}</td>
-                    <td><a href="{{ route('admin.support.show', $t) }}">{{ \Illuminate\Support\Str::limit($t->subject, 30) }}</a></td>
+                    <td>
+                        <a href="{{ route('admin.support.show', $t) }}">{{ \Illuminate\Support\Str::limit($t->subject, 30) }}</a>
+                        @if($t->needs_reply)
+                            <span class="badge badge-danger ml-1" title="Awaiting a staff reply"><i class="fas fa-exclamation"></i></span>
+                        @endif
+                    </td>
                     <td>{{ $t->user?->name ?? '—' }}</td>
                     <td>
                         @php $pc = ['low'=>'secondary','medium'=>'info','high'=>'warning','urgent'=>'danger']; @endphp
