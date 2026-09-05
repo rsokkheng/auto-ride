@@ -73,9 +73,11 @@ function rideDistanceKm($r): ?float {
                     } elseif ($distKm !== null) {
                         $durationMin = (int) ceil(($distKm / 30) * 60); // 30 km/h avg city speed
                     }
-                    // Format: "1 Hr 20 Min" or "45 Min"
+                    // Format: "1 Hr 20 Min" or "45 Min" (or "< 1 Min" for a genuine sub-minute actual duration)
                     $durationLabel = null;
-                    if ($durationMin !== null && $durationMin > 0) {
+                    if ($durationMin !== null && $durationMin === 0 && $durationActual) {
+                        $durationLabel = '< 1 Min';
+                    } elseif ($durationMin !== null && $durationMin > 0) {
                         $hrs  = intdiv($durationMin, 60);
                         $mins = $durationMin % 60;
                         if ($hrs > 0 && $mins > 0)      $durationLabel = "{$hrs} Hr {$mins} Min";
