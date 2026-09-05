@@ -52,7 +52,7 @@
                             details: @json($s->details ?? '')
                         })"><i class="fas fa-edit"></i></button>
                         <form method="POST" action="{{ route('admin.charging-stations.destroy', $s) }}" class="d-inline"
-                              onsubmit="return confirm('Delete station {{ addslashes($s->name) }}?')">
+                              onsubmit="return confirm({{ Illuminate\Support\Js::from('Delete station ' . $s->name . '?') }})">
                             @csrf @method('DELETE')
                             <button class="btn btn-xs btn-danger"><i class="fas fa-trash"></i></button>
                         </form>

@@ -67,7 +67,7 @@
                             ])) }}"
                             onclick="openEdit(this)" title="Edit"><i class="fas fa-edit"></i></button>
                         <form method="POST" action="{{ route('admin.companies.destroy', $c) }}" class="d-inline"
-                              onsubmit="return confirm('Delete company {{ addslashes($c->name) }}?')">
+                              onsubmit="return confirm({{ Illuminate\Support\Js::from('Delete company ' . $c->name . '?') }})">
                             @csrf @method('DELETE')
                             <button class="btn btn-xs btn-danger" title="Delete"><i class="fas fa-trash"></i></button>
                         </form>

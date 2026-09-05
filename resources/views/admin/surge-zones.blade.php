@@ -103,7 +103,7 @@
                         </button>
 
                         <form method="POST" action="{{ route('admin.surge-zones.destroy', $z) }}" class="d-inline"
-                              onsubmit="return confirm('Delete &quot;{{ addslashes($z->name) }}&quot;?')">
+                              onsubmit="return confirm({{ Illuminate\Support\Js::from('Delete "' . $z->name . '"?') }})">
                             @csrf @method('DELETE')
                             <button class="btn btn-xs btn-danger"><i class="fas fa-trash"></i></button>
                         </form>

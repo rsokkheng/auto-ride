@@ -88,7 +88,7 @@
                         </button>
 
                         <form method="POST" action="{{ route('admin.vehicles.destroy', $v) }}" class="d-inline"
-                              onsubmit="return confirm('Delete vehicle {{ addslashes($v->license_plate) }}?')">
+                              onsubmit="return confirm({{ Illuminate\Support\Js::from('Delete vehicle ' . $v->license_plate . '?') }})">
                             @csrf @method('DELETE')
                             <button class="btn btn-xs btn-danger"><i class="fas fa-trash"></i></button>
                         </form>

@@ -48,12 +48,12 @@
                     <td>
                         <form method="POST" action="{{ route('admin.topups.approve', $t) }}" class="d-inline">
                             @csrf
-                            <button class="btn btn-xs btn-success" onclick="return confirm('Approve {{ number_format($t->amount,0) }} ៛ top-up for {{ addslashes($t->user->name) }}?')">
+                            <button class="btn btn-xs btn-success" onclick="return confirm({{ Illuminate\Support\Js::from('Approve ' . number_format($t->amount, 0) . ' ៛ top-up for ' . $t->user->name . '?') }})">
                                 <i class="fas fa-check"></i> Approve
                             </button>
                         </form>
                         <button class="btn btn-xs btn-danger ml-1"
-                            onclick="openReject({{ $t->id }}, '{{ addslashes($t->user->name) }}')">
+                            onclick="openReject({{ $t->id }}, {{ Illuminate\Support\Js::from($t->user->name) }})">
                             <i class="fas fa-times"></i> Reject
                         </button>
                     </td>

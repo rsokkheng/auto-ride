@@ -154,11 +154,11 @@
                     @if($status === 'pending')
                         <td class="text-nowrap">
                             <button class="btn btn-sm btn-success mr-1"
-                                onclick="openApprove({{ $w->id }}, '{{ e($w->driver->name) }}', {{ $w->amount_khr }})">
+                                onclick="openApprove({{ $w->id }}, {{ Illuminate\Support\Js::from($w->driver->name) }}, {{ $w->amount_khr }})">
                                 <i class="fas fa-check mr-1"></i>Approve
                             </button>
                             <button class="btn btn-sm btn-outline-danger"
-                                onclick="openReject({{ $w->id }}, '{{ e($w->driver->name) }}')">
+                                onclick="openReject({{ $w->id }}, {{ Illuminate\Support\Js::from($w->driver->name) }})">
                                 <i class="fas fa-times mr-1"></i>Reject
                             </button>
                         </td>

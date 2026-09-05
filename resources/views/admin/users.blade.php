@@ -90,7 +90,7 @@
                             data-avatar="{{ $user->avatar_url ?? '' }}"
                             onclick="openEdit(this)"><i class="fas fa-edit"></i></button>
                         <form method="POST" action="{{ route('admin.users.destroy', $user) }}" class="d-inline"
-                              onsubmit="return confirm('Delete user {{ addslashes($user->name) }}?')">
+                              onsubmit="return confirm({{ Illuminate\Support\Js::from('Delete user ' . $user->name . '?') }})">
                             @csrf @method('DELETE')
                             <button class="btn btn-xs btn-danger"><i class="fas fa-trash"></i></button>
                         </form>

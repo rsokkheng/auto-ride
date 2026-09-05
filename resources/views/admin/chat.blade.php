@@ -66,7 +66,7 @@
                  data-id="{{ $conv->id }}"
                  data-name="{{ $other?->name ?? 'Unknown' }}"
                  data-role="{{ $other?->role ?? '' }}"
-                 onclick="openConversation({{ $conv->id }}, '{{ addslashes($other?->name ?? 'Unknown') }}', '{{ $other?->role ?? '' }}')">
+                 onclick="openConversation({{ $conv->id }}, {{ Illuminate\Support\Js::from($other?->name ?? 'Unknown') }}, {{ Illuminate\Support\Js::from($other?->role ?? '') }})">
                 <div class="conv-avatar">{{ $initial }}</div>
                 <div class="conv-info">
                     <div class="conv-name">
