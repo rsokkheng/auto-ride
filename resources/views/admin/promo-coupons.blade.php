@@ -190,11 +190,11 @@
                             </select>
                         </div>
                         <div class="form-group col-md-4">
-                            <label>Starts At <small class="text-muted">(optional)</small></label>
+                            <label>Starts At <small class="text-muted">(optional, your local time)</small></label>
                             <input type="datetime-local" name="starts_at" id="c-startsat" class="form-control">
                         </div>
                         <div class="form-group col-md-4">
-                            <label>Expires At <small class="text-muted">(optional)</small></label>
+                            <label>Expires At <small class="text-muted">(optional, your local time)</small></label>
                             <input type="datetime-local" name="expires_at" id="c-expiresat" class="form-control">
                         </div>
                     </div>
@@ -220,6 +220,31 @@
 <script>
 const cStoreUrl  = '{{ route("admin.promo-coupons.store") }}';
 const cUpdateBase = '{{ url("admin/promo-coupons") }}/';
+
+// The server stores/compares starts_at & expires_at in UTC, but admins think in their
+// own local clock — these convert between the two so a "9 AM" typed here really means
+// 9 AM local, not 9 AM UTC (that mismatch previously made freshly-created coupons look
+// "not started yet" for hours after creation).
+function pad(n) { return String(n).padStart(2, '0'); }
+
+function utcStringToLocalInput(utcString) {
+    if (!utcString) return '';
+    const d = new Date(utcString + 'Z');
+    if (isNaN(d.getTime())) return '';
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function localInputToUtcString(localString) {
+    if (!localString) return '';
+    const d = new Date(localString);
+    if (isNaN(d.getTime())) return '';
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:00`;
+}
+
+document.getElementById('couponForm').addEventListener('submit', function () {
+    document.getElementById('c-startsat').value = localInputToUtcString(document.getElementById('c-startsat').value);
+    document.getElementById('c-expiresat').value = localInputToUtcString(document.getElementById('c-expiresat').value);
+});
 
 function toggleMaxDiscount() {
     const isPercent = document.getElementById('c-type').value === 'percent';
@@ -253,8 +278,8 @@ function openEdit(btn) {
     document.getElementById('c-usagelimit').value = c.usage_limit ?? '';
     document.getElementById('c-peruserlimit').value = c.per_user_limit ?? 1;
     document.getElementById('c-servicetype').value = c.service_type;
-    document.getElementById('c-startsat').value = c.starts_at || '';
-    document.getElementById('c-expiresat').value = c.expires_at || '';
+    document.getElementById('c-startsat').value = utcStringToLocalInput(c.starts_at);
+    document.getElementById('c-expiresat').value = utcStringToLocalInput(c.expires_at);
     document.getElementById('c-active').checked = !!c.active;
     toggleMaxDiscount();
     $('#couponModal').modal('show');

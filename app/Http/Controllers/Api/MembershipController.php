@@ -41,6 +41,6 @@ class MembershipController extends ApiController
     public function tiers(Request $request)
     {
         $tiers = MembershipTier::orderBy('sort_order')->get();
-        return $this->success($tiers);
+        return $this->success($tiers->toArray());
     }
 }
