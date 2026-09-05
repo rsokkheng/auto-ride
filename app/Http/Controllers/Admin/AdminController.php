@@ -221,8 +221,13 @@ class AdminController extends Controller
     public function users(Request $request)
     {
         $search = trim((string) $request->input('search', ''));
+        $role   = $request->input('role', '');
 
         $query = User::with('company')->orderBy('created_at');
+
+        if ($role !== '') {
+            $query->where('role', $role);
+        }
 
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
@@ -233,9 +238,11 @@ class AdminController extends Controller
         }
 
         return view('admin.users', [
-            'users'     => $query->paginate(10)->appends(['search' => $search]),
+            'users'     => $query->paginate(10)->appends(['search' => $search, 'role' => $role]),
             'companies' => Company::where('active', true)->orderBy('name')->get(),
             'search'    => $search,
+            'role'      => $role,
+            'roleCounts' => User::selectRaw('role, count(*) as c')->groupBy('role')->pluck('c', 'role'),
         ]);
     }
 

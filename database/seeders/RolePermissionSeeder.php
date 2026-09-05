@@ -27,6 +27,16 @@ class RolePermissionSeeder extends Seeder
         'manage-roles',       // The Roles & Permissions admin page itself
     ];
 
+    /**
+     * Non-admin staff roles and the permissions each one gets. Only assigned
+     * to users explicitly given the role afterwards — never auto-applied to
+     * existing admins (unlike Super Admin, which everyone keeps).
+     */
+    public const ROLES = [
+        'Dispatcher' => ['manage-rides', 'manage-drivers'],
+        'Support'    => ['manage-support'],
+    ];
+
     public function run(): void
     {
         foreach (self::PERMISSIONS as $name) {
@@ -43,5 +53,10 @@ class RolePermissionSeeder extends Seeder
                 $user->assignRole($superAdmin);
             }
         });
+
+        foreach (self::ROLES as $roleName => $permissions) {
+            $role = Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
+            $role->syncPermissions($permissions);
+        }
     }
 }

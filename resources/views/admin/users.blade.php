@@ -8,9 +8,31 @@
     'route' => route('admin.users'),
     'search' => $search ?? '',
     'placeholder' => 'Search by name, phone, or email…',
+    'extra' => ['role' => $role ?? ''],
 ])
 
 <div class="card">
+    <div class="card-header">
+        <ul class="nav nav-tabs card-header-tabs">
+            @foreach([
+                ''         => 'All',
+                'admin'    => 'Admin',
+                'driver'   => 'Driver',
+                'passenger'=> 'Passenger',
+                'partner'  => 'Partner',
+            ] as $val => $label)
+            <li class="nav-item">
+                <a class="nav-link {{ ($role ?? '') === $val ? 'active' : '' }}"
+                   href="{{ route('admin.users', ['role' => $val, 'search' => $search]) }}">
+                    {{ $label }}
+                    @if($val !== '' && ($roleCounts[$val] ?? 0) > 0)
+                        <span class="badge badge-secondary ml-1">{{ $roleCounts[$val] }}</span>
+                    @endif
+                </a>
+            </li>
+            @endforeach
+        </ul>
+    </div>
     <div class="card-header d-flex justify-content-between align-items-center">
         <h3 class="card-title mb-0">User list</h3>
         <button class="btn btn-sm btn-primary" onclick="openCreate()">
