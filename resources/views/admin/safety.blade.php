@@ -46,6 +46,9 @@
                     </td>
                     <td>{{ $i->created_at->format('Y-m-d') }}</td>
                     <td>
+                        <a href="{{ route('admin.safety.show', $i) }}" class="btn btn-xs btn-primary mr-1">
+                            <i class="fas fa-eye"></i>
+                        </a>
                         <button class="btn btn-xs btn-info mr-1" onclick="openEdit({
                             id: {{ $i->id }},
                             user_id: {{ $i->user_id }},

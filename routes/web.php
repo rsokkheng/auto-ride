@@ -141,7 +141,9 @@ Route::prefix('admin')->group(function () {
     // Safety
     Route::get('safety', [AdminController::class, 'safety'])->name('admin.safety');
     Route::post('safety', [AdminController::class, 'storeSafety'])->name('admin.safety.store');
+    Route::get('safety/{incident}', [AdminController::class, 'showSafety'])->name('admin.safety.show');
     Route::put('safety/{incident}', [AdminController::class, 'updateSafety'])->name('admin.safety.update');
+    Route::post('safety/{incident}/resolution', [AdminController::class, 'updateSafetyResolution'])->name('admin.safety.resolution');
     Route::delete('safety/{incident}', [AdminController::class, 'destroySafety'])->name('admin.safety.destroy');
 
     // Transactions

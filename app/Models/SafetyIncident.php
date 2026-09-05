@@ -29,4 +29,14 @@ class SafetyIncident extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function ride(): BelongsTo
+    {
+        return $this->belongsTo(Ride::class);
+    }
+
+    public function delivery(): BelongsTo
+    {
+        return $this->belongsTo(Delivery::class);
+    }
 }

@@ -1672,6 +1672,35 @@ class AdminController extends Controller
         return redirect()->route('admin.safety')->with('success', 'Safety incident deleted.');
     }
 
+    /**
+     * Full detail view for one safety incident — the reporter's info, and
+     * both parties (passenger + driver) on the related ride/delivery, so an
+     * admin doesn't just see "who filed this" but the whole picture.
+     */
+    public function showSafety(SafetyIncident $incident)
+    {
+        $incident->load([
+            'user',
+            'ride.passenger',
+            'ride.driver',
+            'delivery.driver',
+        ]);
+
+        return view('admin.safety-detail', ['incident' => $incident]);
+    }
+
+    public function updateSafetyResolution(Request $request, SafetyIncident $incident)
+    {
+        $data = $request->validate([
+            'status'     => 'required|in:reported,investigating,resolved,closed',
+            'resolution' => 'nullable|string|max:2000',
+        ]);
+
+        $incident->update($data);
+
+        return redirect()->route('admin.safety.show', $incident)->with('success', 'Incident updated.');
+    }
+
     // ─── Transaction Records ─────────────────────────────────────────────────
 
     public function transactions(Request $request)
