@@ -37,6 +37,7 @@ class DriverMatchingService
 
         $drivers = User::where('role', 'driver')
             ->where('available', true)
+            ->where(fn ($q) => $q->whereNull('penalty_until')->orWhere('penalty_until', '<=', now()))
             ->whereNotNull('current_latitude')
             ->whereNotNull('current_longitude')
             ->with(['vehicles' => fn($q) => $q->where('status', 'active')->latest()->limit(1)])

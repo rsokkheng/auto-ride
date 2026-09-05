@@ -32,6 +32,8 @@ Route::prefix('admin')->group(function () {
     Route::get('drivers', [AdminController::class, 'drivers'])->name('admin.drivers');
     Route::get('drivers/{driver}', [AdminController::class, 'showDriver'])->name('admin.drivers.show');
     Route::post('drivers/{driver}/approve', [AdminController::class, 'approveDriver'])->name('admin.drivers.approve');
+    Route::post('drivers/{driver}/penalize', [AdminController::class, 'penalizeDriver'])->name('admin.drivers.penalize');
+    Route::delete('drivers/{driver}/penalty', [AdminController::class, 'clearDriverPenalty'])->name('admin.drivers.penalty.clear');
     Route::post('drivers/{driver}/documents/{document}/review', [AdminController::class, 'reviewDocument'])->name('admin.drivers.documents.review');
 
     // Users

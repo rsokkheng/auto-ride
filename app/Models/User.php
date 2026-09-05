@@ -11,7 +11,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['name', 'username', 'email', 'password', 'phone', 'phone_verified_at', 'avatar', 'role', 'driver_type', 'company_name', 'company_id', 'salary', 'commission_rate', 'api_token', 'refresh_token', 'token_expires_at', 'refresh_token_expires_at', 'available', 'status_note', 'wallet_balance', 'current_latitude', 'current_longitude', 'rating', 'total_ratings', 'approval_status', 'approved_at', 'cancellation_count', 'cancellation_penalty_until', 'proxy_phone', 'fcm_token', 'referral_code', 'referred_by', 'city', 'service_zone', 'social_provider', 'social_id', 'current_streak', 'longest_streak', 'last_trip_date', 'current_5star_streak', 'loyalty_points', 'membership_tier_id', 'onboarding_completed_at', 'onboarding_steps', 'accessibility_settings'])]
+#[Fillable(['name', 'username', 'email', 'password', 'phone', 'phone_verified_at', 'avatar', 'role', 'driver_type', 'company_name', 'company_id', 'salary', 'commission_rate', 'api_token', 'refresh_token', 'token_expires_at', 'refresh_token_expires_at', 'available', 'status_note', 'wallet_balance', 'current_latitude', 'current_longitude', 'rating', 'total_ratings', 'approval_status', 'approved_at', 'cancellation_count', 'cancellation_penalty_until', 'penalty_until', 'penalty_reason', 'proxy_phone', 'fcm_token', 'referral_code', 'referred_by', 'city', 'service_zone', 'social_provider', 'social_id', 'current_streak', 'longest_streak', 'last_trip_date', 'current_5star_streak', 'loyalty_points', 'membership_tier_id', 'onboarding_completed_at', 'onboarding_steps', 'accessibility_settings'])]
 #[Hidden(['password', 'remember_token', 'api_token', 'refresh_token'])]
 class User extends Authenticatable
 {
@@ -36,6 +36,7 @@ class User extends Authenticatable
             'phone_verified_at'           => 'datetime',
             'approved_at'                 => 'datetime',
             'cancellation_penalty_until'  => 'datetime',
+            'penalty_until'               => 'datetime',
             'cancellation_count'          => 'integer',
             'current_streak'              => 'integer',
             'longest_streak'              => 'integer',
@@ -121,6 +122,12 @@ class User extends Authenticatable
     public function assignedSupportTickets(): HasMany
     {
         return $this->hasMany(SupportTicket::class, 'assigned_to');
+    }
+
+    /** Whether an admin-imposed penalty (e.g. from a customer complaint) is currently active. */
+    public function isPenalized(): bool
+    {
+        return $this->penalty_until !== null && now()->lt($this->penalty_until);
     }
 
     public function sosAlerts(): HasMany

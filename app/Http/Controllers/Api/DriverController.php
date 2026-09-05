@@ -147,6 +147,18 @@ class DriverController extends ApiController
         $user = $this->authUser($request);
         if (! $user || $user->role !== 'driver') return $this->unauthorized();
 
+        if ($user->isPenalized()) {
+            return response()->json([
+                'success'        => false,
+                'message'        => 'You are temporarily suspended and cannot go online until '
+                    . $user->penalty_until->format('d M Y, g:i A') . '.'
+                    . ($user->penalty_reason ? ' Reason: ' . $user->penalty_reason : ''),
+                'can_go_online'  => false,
+                'penalty_until'  => $user->penalty_until->toIso8601String(),
+                'penalty_reason' => $user->penalty_reason,
+            ], 403);
+        }
+
         $minBalance = (int) PricingSetting::get('driver_min_balance_khr', 50000);
         if ($user->wallet_balance < $minBalance) {
             return response()->json([

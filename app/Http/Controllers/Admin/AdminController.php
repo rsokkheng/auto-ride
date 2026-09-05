@@ -2052,6 +2052,38 @@ class AdminController extends Controller
             ->with('success', "Driver {$driver->name} has been {$label}.");
     }
 
+    /**
+     * Suspend a driver from receiving ride requests for a fixed window —
+     * e.g. after a customer complaint. Enforced in DriverMatchingService
+     * (excluded from ride offers) and DriverController::goOnline (blocked
+     * from going online while penalized).
+     */
+    public function penalizeDriver(Request $request, User $driver)
+    {
+        if ($driver->role !== 'driver') {
+            return back()->with('error', 'Only drivers can be penalized.');
+        }
+
+        $data = $request->validate([
+            'hours'  => 'required|numeric|min:0.5|max:8760', // up to 1 year
+            'reason' => 'nullable|string|max:255',
+        ]);
+
+        $driver->update([
+            'penalty_until'  => now()->addMinutes((int) round($data['hours'] * 60)),
+            'penalty_reason' => $data['reason'] ?? null,
+            'available'      => false,
+        ]);
+
+        return back()->with('success', "Driver {$driver->name} penalized until {$driver->fresh()->penalty_until->format('d M Y, g:i A')}.");
+    }
+
+    public function clearDriverPenalty(User $driver)
+    {
+        $driver->update(['penalty_until' => null, 'penalty_reason' => null]);
+        return back()->with('success', "Penalty cleared for {$driver->name}.");
+    }
+
     public function reviewDocument(Request $request, User $_driver, \App\Models\DriverDocument $document)
     {
         $data = $request->validate([
