@@ -4,6 +4,12 @@
 
 @section('content')
 
+@include('admin.partials.search-box', [
+    'route' => route('admin.topups'),
+    'search' => $search ?? '',
+    'placeholder' => 'Search by name, phone, or email…',
+])
+
 {{-- Pending --}}
 <div class="card mb-3">
     <div class="card-header">

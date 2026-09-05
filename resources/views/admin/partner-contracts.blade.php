@@ -26,6 +26,12 @@
     </div>
 @endif
 
+@include('admin.partials.search-box', [
+    'route' => route('admin.partner-contracts'),
+    'search' => $search ?? '',
+    'placeholder' => 'Search by partner name, phone, or email…',
+])
+
 <div class="row">
     {{-- Contract List --}}
     <div class="col-md-8">

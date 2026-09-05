@@ -218,11 +218,24 @@ class AdminController extends Controller
 
     // ─── Users ───────────────────────────────────────────────────────────────
 
-    public function users()
+    public function users(Request $request)
     {
+        $search = trim((string) $request->input('search', ''));
+
+        $query = User::with('company')->orderBy('created_at');
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
         return view('admin.users', [
-            'users'     => User::with('company')->orderBy('created_at')->paginate(10),
+            'users'     => $query->paginate(10)->appends(['search' => $search]),
             'companies' => Company::where('active', true)->orderBy('name')->get(),
+            'search'    => $search,
         ]);
     }
 
@@ -326,11 +339,27 @@ class AdminController extends Controller
 
     // ─── Vehicles ────────────────────────────────────────────────────────────
 
-    public function vehicles()
+    public function vehicles(Request $request)
     {
+        $search = trim((string) $request->input('search', ''));
+
+        $query = Vehicle::with('driver')->orderBy('created_at');
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('license_plate', 'like', "%{$search}%")
+                  ->orWhereHas('driver', function ($dq) use ($search) {
+                      $dq->where('name', 'like', "%{$search}%")
+                         ->orWhere('phone', 'like', "%{$search}%")
+                         ->orWhere('email', 'like', "%{$search}%");
+                  });
+            });
+        }
+
         return view('admin.vehicles', [
-            'vehicles' => Vehicle::with('driver')->orderBy('created_at')->paginate(10),
+            'vehicles' => $query->paginate(10)->appends(['search' => $search]),
             'drivers'  => User::where('role', 'driver')->orderBy('name')->get(),
+            'search'   => $search,
         ]);
     }
 
@@ -447,13 +476,31 @@ class AdminController extends Controller
 
     // ─── Rides ───────────────────────────────────────────────────────────────
 
-    public function rides()
+    public function rides(Request $request)
     {
+        $search = trim((string) $request->input('search', ''));
+
+        $query = Ride::with(['passenger', 'driver', 'stops'])->orderByDesc('created_at');
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                if (ctype_digit($search)) {
+                    $q->orWhere('id', $search);
+                }
+                $q->orWhereHas('passenger', function ($uq) use ($search) {
+                    $uq->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%");
+                })->orWhereHas('driver', function ($uq) use ($search) {
+                    $uq->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%");
+                });
+            });
+        }
+
         return view('admin.rides', [
-            'rides'         => Ride::with(['passenger', 'driver', 'stops'])->orderByDesc('created_at')->paginate(15),
+            'rides'         => $query->paginate(15)->appends(['search' => $search]),
             'passengers'    => User::where('role', 'passenger')->orderBy('name')->get(),
             'drivers'       => User::where('role', 'driver')->orderBy('name')->get(),
             'commissionPct' => (float) \App\Models\PricingSetting::get('driver_commission_pct', 20),
+            'search'        => $search,
         ]);
     }
 
@@ -939,6 +986,8 @@ class AdminController extends Controller
 
     public function marketplaceOrders(Request $request)
     {
+        $search = trim((string) $request->input('search', ''));
+
         $query = \App\Models\MarketplaceOrder::with(['product', 'buyer', 'seller'])
             ->latest();
 
@@ -948,9 +997,26 @@ class AdminController extends Controller
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                if (ctype_digit($search)) {
+                    $q->orWhere('id', $search);
+                }
+                $q->orWhereHas('buyer', function ($uq) use ($search) {
+                    $uq->where('name', 'like', "%{$search}%")
+                       ->orWhere('phone', 'like', "%{$search}%")
+                       ->orWhere('email', 'like', "%{$search}%");
+                })->orWhereHas('seller', function ($uq) use ($search) {
+                    $uq->where('name', 'like', "%{$search}%")
+                       ->orWhere('phone', 'like', "%{$search}%")
+                       ->orWhere('email', 'like', "%{$search}%");
+                });
+            });
+        }
 
         return view('admin.marketplace-orders', [
             'orders' => $query->paginate(10)->appends($request->query()),
+            'search' => $search,
         ]);
     }
 
@@ -990,6 +1056,8 @@ class AdminController extends Controller
 
     public function carRentals(Request $request)
     {
+        $search = trim((string) $request->input('search', ''));
+
         $query = \App\Models\CarRental::with(['user', 'marketplaceProduct.images'])->latest();
 
         if ($request->filled('status')) {
@@ -998,9 +1066,22 @@ class AdminController extends Controller
         if ($request->filled('vehicle_type')) {
             $query->where('vehicle_type', $request->vehicle_type);
         }
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                if (ctype_digit($search)) {
+                    $q->orWhere('id', $search);
+                }
+                $q->orWhereHas('user', function ($uq) use ($search) {
+                    $uq->where('name', 'like', "%{$search}%")
+                       ->orWhere('phone', 'like', "%{$search}%")
+                       ->orWhere('email', 'like', "%{$search}%");
+                });
+            });
+        }
 
         return view('admin.car-rentals', [
             'rentals' => $query->paginate(10)->appends($request->query()),
+            'search'  => $search,
         ]);
     }
 
@@ -1336,11 +1417,28 @@ class AdminController extends Controller
 
     // ─── Support ─────────────────────────────────────────────────────────────
 
-    public function support()
+    public function support(Request $request)
     {
-        $tickets = SupportTicket::with(['user', 'messages' => fn ($q) => $q->latest('id')->limit(1)->with('sender:id,role')])
-            ->orderBy('created_at')
-            ->paginate(10);
+        $search = trim((string) $request->input('search', ''));
+
+        $query = SupportTicket::with(['user', 'messages' => fn ($q) => $q->latest('id')->limit(1)->with('sender:id,role')])
+            ->orderBy('created_at');
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                if (ctype_digit($search)) {
+                    $q->orWhere('id', $search);
+                }
+                $q->orWhere('subject', 'like', "%{$search}%")
+                  ->orWhereHas('user', function ($uq) use ($search) {
+                      $uq->where('name', 'like', "%{$search}%")
+                         ->orWhere('phone', 'like', "%{$search}%")
+                         ->orWhere('email', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        $tickets = $query->paginate(10)->appends(['search' => $search]);
 
         $tickets->getCollection()->each(function ($t) {
             $last = $t->messages->first();
@@ -1352,6 +1450,7 @@ class AdminController extends Controller
             'tickets' => $tickets,
             'users'   => User::orderBy('name')->get(),
             'admins'  => User::where('role', 'admin')->orderBy('name')->get(),
+            'search'  => $search,
         ]);
     }
 
@@ -1424,11 +1523,29 @@ class AdminController extends Controller
 
     // ─── Safety ──────────────────────────────────────────────────────────────
 
-    public function safety()
+    public function safety(Request $request)
     {
+        $search = trim((string) $request->input('search', ''));
+
+        $query = SafetyIncident::with('user')->orderBy('created_at');
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                if (ctype_digit($search)) {
+                    $q->orWhere('id', $search);
+                }
+                $q->orWhereHas('user', function ($uq) use ($search) {
+                    $uq->where('name', 'like', "%{$search}%")
+                       ->orWhere('phone', 'like', "%{$search}%")
+                       ->orWhere('email', 'like', "%{$search}%");
+                });
+            });
+        }
+
         return view('admin.safety', [
-            'incidents' => SafetyIncident::with('user')->orderBy('created_at')->paginate(10),
+            'incidents' => $query->paginate(10)->appends(['search' => $search]),
             'users'     => User::orderBy('name')->get(),
+            'search'    => $search,
         ]);
     }
 
@@ -1470,6 +1587,8 @@ class AdminController extends Controller
 
     public function transactions(Request $request)
     {
+        $search = trim((string) $request->input('search', ''));
+
         $query = TransactionRecord::with(['payer', 'payee', 'processedBy', 'reference'])
             ->orderByDesc('id');
 
@@ -1482,6 +1601,22 @@ class AdminController extends Controller
         if ($request->filled('type')) {
             $query->where('type', $request->type);
         }
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                if (ctype_digit($search)) {
+                    $q->orWhere('id', $search);
+                }
+                $q->orWhereHas('payer', function ($uq) use ($search) {
+                    $uq->where('name', 'like', "%{$search}%")
+                       ->orWhere('phone', 'like', "%{$search}%")
+                       ->orWhere('email', 'like', "%{$search}%");
+                })->orWhereHas('payee', function ($uq) use ($search) {
+                    $uq->where('name', 'like', "%{$search}%")
+                       ->orWhere('phone', 'like', "%{$search}%")
+                       ->orWhere('email', 'like', "%{$search}%");
+                });
+            });
+        }
 
         return view('admin.transactions', [
             'transactions' => $query->paginate(10)->withQueryString(),
@@ -1489,6 +1624,7 @@ class AdminController extends Controller
                 ->where('payment_method', 'cash')->count(),
             'pending_online' => TransactionRecord::where('status', 'pending')
                 ->whereIn('payment_method', ['aba', 'wing', 'other_online'])->count(),
+            'search' => $search,
         ]);
     }
 
@@ -1542,10 +1678,23 @@ class AdminController extends Controller
 
     // ─── Companies ────────────────────────────────────────────────────────────
 
-    public function companies()
+    public function companies(Request $request)
     {
+        $search = trim((string) $request->input('search', ''));
+
+        $query = Company::withCount('drivers')->orderBy('created_at');
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
         return view('admin.companies', [
-            'companies' => Company::withCount('drivers')->orderBy('created_at')->paginate(10),
+            'companies' => $query->paginate(10)->appends(['search' => $search]),
+            'search'    => $search,
         ]);
     }
 
@@ -1646,11 +1795,31 @@ class AdminController extends Controller
 
     // ─── Top-up Requests ─────────────────────────────────────────────────────
 
-    public function topups()
+    public function topups(Request $request)
     {
+        $search = trim((string) $request->input('search', ''));
+
+        $matchesSearch = function ($query) use ($search) {
+            if ($search === '') return;
+            $query->where(function ($q) use ($search) {
+                $q->orWhereHas('user', function ($uq) use ($search) {
+                    $uq->where('name', 'like', "%{$search}%")
+                       ->orWhere('phone', 'like', "%{$search}%")
+                       ->orWhere('email', 'like', "%{$search}%");
+                });
+            });
+        };
+
+        $pendingQuery = TopUpRequest::with('user')->where('status', 'pending')->orderBy('created_at');
+        $matchesSearch($pendingQuery);
+
+        $historyQuery = TopUpRequest::with(['user', 'approvedBy'])->whereIn('status', ['approved', 'rejected'])->orderBy('updated_at');
+        $matchesSearch($historyQuery);
+
         return view('admin.topups', [
-            'pending'  => TopUpRequest::with('user')->where('status', 'pending')->orderBy('created_at')->get(),
-            'history'  => TopUpRequest::with(['user', 'approvedBy'])->whereIn('status', ['approved', 'rejected'])->orderBy('updated_at')->paginate(10),
+            'pending' => $pendingQuery->get(),
+            'history' => $historyQuery->paginate(10)->appends(['search' => $search]),
+            'search'  => $search,
         ]);
     }
 
@@ -2382,14 +2551,34 @@ class AdminController extends Controller
 
     // ─── Business Accounts ────────────────────────────────────────────────────
 
-    public function businessAccounts()
+    public function businessAccounts(Request $request)
     {
+        $search = trim((string) $request->input('search', ''));
         $emptyPage = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
+
         return view('admin.business-accounts', [
-            'accounts' => rescue(fn () => BusinessAccount::with('owner:id,name,email')
-                ->withCount('members')
-                ->orderByDesc('created_at')
-                ->paginate(10), $emptyPage, false),
+            'accounts' => rescue(function () use ($search) {
+                $query = BusinessAccount::with('owner:id,name,email,phone')
+                    ->withCount('members')
+                    ->orderByDesc('created_at');
+
+                if ($search !== '') {
+                    $query->where(function ($q) use ($search) {
+                        $q->where('name', 'like', "%{$search}%")
+                          ->orWhere('contact_name', 'like', "%{$search}%")
+                          ->orWhere('contact_phone', 'like', "%{$search}%")
+                          ->orWhere('billing_email', 'like', "%{$search}%")
+                          ->orWhereHas('owner', function ($uq) use ($search) {
+                              $uq->where('name', 'like', "%{$search}%")
+                                 ->orWhere('phone', 'like', "%{$search}%")
+                                 ->orWhere('email', 'like', "%{$search}%");
+                          });
+                    });
+                }
+
+                return $query->paginate(10)->appends(['search' => $search]);
+            }, $emptyPage, false),
+            'search' => $search,
         ]);
     }
 
@@ -2516,27 +2705,51 @@ class AdminController extends Controller
         return redirect()->route('admin.subscription-plans')->with('success', 'Plan deactivated.');
     }
 
-    public function subscriptionSubscribers(SubscriptionPlan $plan)
+    public function subscriptionSubscribers(Request $request, SubscriptionPlan $plan)
     {
+        $search = trim((string) $request->input('search', ''));
+
         $subscribers = rescue(
-            fn () => UserSubscription::with('user:id,name,email,phone')
-                ->where('subscription_plan_id', $plan->id)
-                ->orderByDesc('created_at')
-                ->paginate(10),
+            function () use ($plan, $search) {
+                $query = UserSubscription::with('user:id,name,email,phone')
+                    ->where('subscription_plan_id', $plan->id)
+                    ->orderByDesc('created_at');
+
+                if ($search !== '') {
+                    $query->whereHas('user', function ($uq) use ($search) {
+                        $uq->where('name', 'like', "%{$search}%")
+                           ->orWhere('phone', 'like', "%{$search}%")
+                           ->orWhere('email', 'like', "%{$search}%");
+                    });
+                }
+
+                return $query->paginate(10)->appends(['search' => $search]);
+            },
             new \Illuminate\Pagination\LengthAwarePaginator([], 0, 30),
             false
         );
 
-        return view('admin.subscription-subscribers', compact('plan', 'subscribers'));
+        return view('admin.subscription-subscribers', compact('plan', 'subscribers', 'search'));
     }
 
     // ── Partner Contracts ─────────────────────────────────────────────────────
 
-    public function partnerContracts()
+    public function partnerContracts(Request $request)
     {
-        $contracts = PartnerContract::with('partner:id,name,phone,email')
-            ->orderByDesc('id')
-            ->paginate(20);
+        $search = trim((string) $request->input('search', ''));
+
+        $query = PartnerContract::with('partner:id,name,phone,email')
+            ->orderByDesc('id');
+
+        if ($search !== '') {
+            $query->whereHas('partner', function ($uq) use ($search) {
+                $uq->where('name', 'like', "%{$search}%")
+                   ->orWhere('phone', 'like', "%{$search}%")
+                   ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        $contracts = $query->paginate(20)->appends(['search' => $search]);
 
         $partners = User::where('role', 'partner')->orderBy('name')->get(['id', 'name', 'phone', 'email']);
 
@@ -2547,7 +2760,7 @@ class AdminController extends Controller
             'surcharge_extra_large' => (int) PricingSetting::get('partner_surcharge_extra_large', 5000),
         ];
 
-        return view('admin.partner-contracts', compact('contracts', 'partners', 'defaults'));
+        return view('admin.partner-contracts', compact('contracts', 'partners', 'defaults', 'search'));
     }
 
     public function storePartnerContract(Request $request)

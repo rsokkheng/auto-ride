@@ -24,6 +24,13 @@ function rideDistanceKm($r): ?float {
 @endphp
 
 @section('content')
+
+@include('admin.partials.search-box', [
+    'route' => route('admin.rides'),
+    'search' => $search ?? '',
+    'placeholder' => 'Search by ride #, passenger, or driver name/phone…',
+])
+
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h3 class="card-title mb-0">Ride Orders</h3>

@@ -3,6 +3,13 @@
 @section('page-title', 'Safety Incidents')
 
 @section('content')
+
+@include('admin.partials.search-box', [
+    'route' => route('admin.safety'),
+    'search' => $search ?? '',
+    'placeholder' => 'Search by incident #, reporter name, phone, or email…',
+])
+
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h3 class="card-title mb-0">Safety incidents</h3>

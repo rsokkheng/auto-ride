@@ -22,7 +22,10 @@
 {{-- Filters --}}
 <div class="card mb-3">
     <div class="card-body py-2">
-        <form method="GET" action="{{ route('admin.transactions') }}" class="form-inline">
+        <form method="GET" action="{{ route('admin.transactions') }}" class="form-inline flex-wrap">
+            <input type="text" name="search" class="form-control form-control-sm mr-2 mb-1"
+                   placeholder="Search by transaction #, name, phone, or email…"
+                   value="{{ $search ?? '' }}" style="min-width:260px">
             <select name="method" class="form-control form-control-sm mr-2">
                 <option value="">All Methods</option>
                 @foreach(\App\Models\TransactionRecord::$methodLabels as $val => $label)

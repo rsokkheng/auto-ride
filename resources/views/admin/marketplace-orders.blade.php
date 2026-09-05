@@ -21,6 +21,9 @@
 <div class="card mb-3">
     <div class="card-body py-2">
         <form method="GET" action="{{ route('admin.marketplace-orders') }}" class="form-inline flex-wrap">
+            <input type="text" name="search" class="form-control form-control-sm mr-2 mb-1"
+                   placeholder="Search by order #, buyer/seller name, phone, or email…"
+                   value="{{ $search ?? '' }}" style="min-width:260px">
             <select name="order_type" class="form-control form-control-sm mr-2 mb-1">
                 <option value="">All Types</option>
                 <option value="purchase" {{ request('order_type') == 'purchase' ? 'selected' : '' }}>Sale</option>

@@ -3,6 +3,13 @@
 @section('page-title', 'Business Accounts')
 
 @section('content')
+
+@include('admin.partials.search-box', [
+    'route' => route('admin.business-accounts'),
+    'search' => $search ?? '',
+    'placeholder' => 'Search by account name, contact name/phone/email…',
+])
+
 <div class="card">
     <div class="card-header">
         <h3 class="card-title mb-0"><i class="fas fa-building text-info mr-2"></i> Business Accounts</h3>

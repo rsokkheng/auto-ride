@@ -3,6 +3,13 @@
 @section('page-title', 'Users')
 
 @section('content')
+
+@include('admin.partials.search-box', [
+    'route' => route('admin.users'),
+    'search' => $search ?? '',
+    'placeholder' => 'Search by name, phone, or email…',
+])
+
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h3 class="card-title mb-0">User list</h3>
