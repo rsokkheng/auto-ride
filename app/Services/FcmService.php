@@ -424,7 +424,7 @@ class FcmService
 
     private function credentialsPath(): ?string
     {
-        $path = env('FIREBASE_CREDENTIALS');
+        $path = config('firebase.projects.app.credentials');
         if ($path && file_exists($path)) return $path;
 
         $storage = storage_path('app/auto-ride-supperapp-firebase.json');

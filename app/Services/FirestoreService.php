@@ -289,7 +289,7 @@ class FirestoreService
 
     private function credentialsPath(): ?string
     {
-        $path = env('FIREBASE_CREDENTIALS');
+       $path = config('firebase.projects.app.credentials');
         if ($path && file_exists($path)) {
             return $path;
         }
