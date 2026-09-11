@@ -41,6 +41,8 @@ class WalletTransaction extends Model
         'withdrawal_rejected' => 'Withdrawal Refund',
         'bonus'               => 'Bonus',
         'adjustment'          => 'Adjustment',
+        'referral_reward'     => 'Referral Reward',
+        'welcome_bonus'       => 'Welcome Bonus',
     ];
 
     public function user(): BelongsTo

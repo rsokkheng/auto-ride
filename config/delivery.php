@@ -64,6 +64,17 @@ return [
     'match_rating_weight'   => env('DRIVER_MATCH_RATING_WEIGHT', 4),
 
     /*
+    |----------------------------------------------------------------------
+    | Driver Matching — Google Distance Matrix Cap
+    |----------------------------------------------------------------------
+    | Only the closest N candidates (by Redis GEO distance) are sent to the
+    | Google Distance Matrix API for road-distance refinement; the rest are
+    | scored using the Redis GEO (straight-line) distance instead. Keeps API
+    | usage bounded regardless of how many drivers are nearby.
+    */
+    'match_google_candidates' => env('DRIVER_MATCH_GOOGLE_CANDIDATES', 15),
+
+    /*
     |------------------------------------------------------------------
     | Express service multiplier
     |------------------------------------------------------------------

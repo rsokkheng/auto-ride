@@ -15,6 +15,7 @@
         "laravel/socialite": "^5.27",
         "laravel/tinker": "^3.0",
         "maatwebsite/excel": "^3.1",
+        "mateusjunges/laravel-kafka": "^2.11",
         "spatie/laravel-permission": "^8.3"
     },
     "require-dev": {

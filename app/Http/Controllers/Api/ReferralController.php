@@ -2,15 +2,13 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\PricingSetting;
 use App\Models\Referral;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 class ReferralController extends ApiController
 {
-    // KHR bonus awarded to referrer when referee completes their first trip
-    const REFERRAL_BONUS_KHR = 5000;
-
     /**
      * GET /v1/referrals
      * Returns the user's referral code, stats, and list of referred users.
@@ -32,33 +30,42 @@ class ReferralController extends ApiController
             $user->update(['referral_code' => $code]);
         }
 
+        $referralBonusKhr = (int) PricingSetting::get('referral_bonus_khr', 4000);
+
         $referrals = Referral::where('referrer_id', $user->id)
             ->with('referee:id,name,avatar,created_at')
             ->latest()
             ->get()
             ->map(fn($r) => [
-                'id'           => $r->id,
-                'name'         => $r->referee?->name,
-                'avatar_url'   => $r->referee?->avatar_url,
-                'status'       => $r->status,
-                'bonus_khr'    => $r->bonus_khr,
-                'joined_at'    => $r->referee?->created_at?->toDateString(),
-                'completed_at' => $r->completed_at?->toDateString(),
+                'id'             => $r->id,
+                'name'           => $r->referee?->name,
+                'avatar_url'     => $r->referee?->avatar_url,
+                'status'         => $r->status,
+                'bonus_khr'      => $r->bonus_khr,
+                // Kept for older app builds still reading this key; same value as bonus_khr.
+                'points_awarded' => $r->bonus_khr,
+                'joined_at'      => $r->referee?->created_at?->toDateString(),
+                'created_at'     => $r->referee?->created_at?->toDateString(),
+                'completed_at'   => $r->completed_at?->toDateString(),
             ]);
 
-        $totalBonus    = Referral::where('referrer_id', $user->id)->where('status', 'completed')->sum('bonus_khr');
+        $totalBonus     = Referral::where('referrer_id', $user->id)->where('status', 'completed')->sum('bonus_khr');
         $completedCount = Referral::where('referrer_id', $user->id)->where('status', 'completed')->count();
         $pendingCount   = Referral::where('referrer_id', $user->id)->where('status', 'pending')->count();
 
         return $this->success([
             'referral_code'   => $user->referral_code,
+            // Aliases for the current app build, which reads these top-level names.
+            'code'            => $user->referral_code,
+            'referred_count'  => $referrals->count(),
+            'points_earned'   => (int) $totalBonus,
             'share_message'   => "Join Auto-Ride with my code {$user->referral_code} and get a discount on your first trip!",
-            'bonus_per_referral_khr' => self::REFERRAL_BONUS_KHR,
+            'bonus_per_referral_khr' => $referralBonusKhr,
             'stats' => [
-                'total_referrals'   => $referrals->count(),
-                'completed'         => $completedCount,
-                'pending'           => $pendingCount,
-                'total_earned_khr'  => (int) $totalBonus,
+                'total_referrals'  => $referrals->count(),
+                'completed'        => $completedCount,
+                'pending'          => $pendingCount,
+                'total_earned_khr' => (int) $totalBonus,
             ],
             'referrals' => $referrals,
         ]);

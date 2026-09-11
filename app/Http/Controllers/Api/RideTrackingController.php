@@ -3,15 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Events\RideLocationUpdated;
+use App\Jobs\SyncFirestore;
 use App\Models\Ride;
 use App\Models\RideLocation;
-use App\Services\FirestoreService;
 use Illuminate\Http\Request;
 
 class RideTrackingController extends ApiController
 {
-    public function __construct(private FirestoreService $firestore) {}
-
     public function show(Request $request, Ride $ride)
     {
         $user = $this->authUser($request);
@@ -48,13 +46,15 @@ class RideTrackingController extends ApiController
         event(new RideLocationUpdated($ride, $location));
 
         // Patch driver location in the Firestore booking document so Flutter
-        // real-time listeners receive the update without polling.
-        $this->firestore->updateRideDriverLocation(
+        // real-time listeners receive the update without polling. Queued —
+        // this fires on every GPS tick, so the response must not block on
+        // Firestore's network latency.
+        SyncFirestore::dispatch('updateRideDriverLocation', [
             $ride->id,
             (float) $data['latitude'],
             (float) $data['longitude'],
             isset($data['heading']) ? (float) $data['heading'] : null,
-        );
+        ]);
 
         return $this->success(['location' => $location], 201);
     }

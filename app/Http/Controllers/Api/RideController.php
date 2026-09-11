@@ -15,6 +15,8 @@ use App\Services\FirestoreService;
 use App\Services\PaymentService;
 use App\Services\RideDispatchService;
 use App\Services\WalletService;
+use App\Kafka\Producers\RideCreatedProducer;
+use App\Kafka\Producers\RideAcceptedProducer;
 use App\Mail\TripReceipt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -28,6 +30,9 @@ class RideController extends ApiController
         private FcmService $fcm,
         private WalletService $wallet,
         private RideDispatchService $dispatcher,
+        private \App\Services\ReferralService $referrals,
+        private RideCreatedProducer $rideCreatedProducer,
+        private RideAcceptedProducer $rideAcceptedProducer,
     ) {}
 
     // ── List / History ────────────────────────────────────────────────────────
@@ -510,8 +515,18 @@ class RideController extends ApiController
         $ride->load('driver', 'vehicle', 'stops');
         $this->firestore->syncRide($ride);
 
+        // Dispatch (finding nearby drivers and offering the ride) happens asynchronously:
+        // this publish is picked up by the ride-created Kafka consumer, which queues
+        // ProcessRideCreated to run RideDispatchService::start().
         try {
-            $this->dispatcher->start($ride->fresh());
+            $this->rideCreatedProducer->publish([
+                'ride_id'     => $ride->id,
+                'customer_id' => $ride->passenger_id,
+                'driver_id'   => $ride->driver_id,
+                'pickup'      => $ride->pickup_address,
+                'destination' => $ride->dropoff_address,
+                'status'      => $ride->status,
+            ]);
         } catch (\Throwable $e) {
             report($e);
         }
@@ -574,6 +589,11 @@ class RideController extends ApiController
             return response()->json(['data' => null, 'message' => 'Ride already claimed or no longer available.'], 422);
         }
 
+        // Take this driver out of matching for the duration of the trip —
+        // User::booted() removes them from the Redis GEO index in response.
+        // Without this, an on-trip driver stays matchable for new rides.
+        $user->update(['available' => false]);
+
         $isSelfServe = ! in_array($user->id, $ride->dispatch_queue ?? [], true) || $ride->self_serve_expires_at;
         if ($isSelfServe) {
             Log::info('self_serve_accepted', ['ride_id' => $ride->id, 'driver_id' => $user->id]);
@@ -585,6 +605,19 @@ class RideController extends ApiController
         // Notify passenger: driver is on the way
         if ($fresh->passenger) {
             $this->fcm->rideAccepted($fresh->passenger, $fresh->id, $fresh->driver->name ?? 'Your driver');
+        }
+
+        try {
+            $this->rideAcceptedProducer->publish([
+                'ride_id'     => $fresh->id,
+                'customer_id' => $fresh->passenger_id,
+                'driver_id'   => $fresh->driver_id,
+                'pickup'      => $fresh->pickup_address,
+                'destination' => $fresh->dropoff_address,
+                'status'      => $fresh->status,
+            ]);
+        } catch (\Throwable $e) {
+            report($e);
         }
 
         return $this->success([
@@ -652,9 +685,17 @@ class RideController extends ApiController
             ], 422);
         }
 
+        // Starts the no-show clock automatically — previously pickup_timeout_at
+        // was only ever set by the opt-in setPickupTimeout() endpoint, so
+        // AutoCancelTimedOutRides had nothing to find unless the app called
+        // that separately. This is what lets a driver-arrived, busy driver
+        // (available=false since accept()) actually get freed on no-show.
+        $timeoutMinutes = (int) config('ride.pickup_timeout_minutes', 5);
+
         $ride->update([
             'status'            => Ride::STATUS_DRIVER_ARRIVED,
             'driver_arrived_at' => now(),
+            'pickup_timeout_at' => now()->addMinutes($timeoutMinutes),
         ]);
 
         $fresh = $ride->fresh()->load('passenger', 'driver', 'vehicle');
@@ -807,12 +848,19 @@ class RideController extends ApiController
 
         $ride->update($updates);
 
+        // Trip is over — make this driver matchable for new rides again.
+        // User::booted() re-adds them to the Redis GEO index in response.
+        $user->update(['available' => true]);
+
         $fresh = $ride->fresh()->load('passenger', 'driver', 'vehicle');
 
         $transaction = null;
         if ($fresh->fare > 0) {
             $transaction = app(PaymentService::class)->processRide($fresh);
         }
+
+        $this->referrals->creditFirstRideReward($fresh);
+
         $this->firestore->syncRide($fresh);
 
         // Notify passenger: trip completed with fare
@@ -878,16 +926,24 @@ class RideController extends ApiController
             }
         }
 
-        // Track driver cancellations
-        if (! $isByPassenger && $ride->driver_id) {
+        // Free up the assigned driver — cancelling out of ACCEPTED/DRIVER_ARRIVED/
+        // IN_PROGRESS must make them matchable again (User::booted() re-adds them
+        // to the Redis GEO index), whichever side cancelled.
+        if ($ride->driver_id) {
             $driver = User::find($ride->driver_id);
+
             if ($driver) {
-                $newCount = $driver->cancellation_count + 1;
-                $updates  = ['cancellation_count' => $newCount];
-                if ($newCount >= (int) PricingSetting::get('driver_cancellation_limit', 5)) {
-                    $updates['cancellation_penalty_until'] = now()->addHours(24);
+                $driverUpdates = ['available' => true];
+
+                if (! $isByPassenger) {
+                    $newCount = $driver->cancellation_count + 1;
+                    $driverUpdates['cancellation_count'] = $newCount;
+                    if ($newCount >= (int) PricingSetting::get('driver_cancellation_limit', 5)) {
+                        $driverUpdates['cancellation_penalty_until'] = now()->addHours(24);
+                    }
                 }
-                $driver->update($updates);
+
+                $driver->update($driverUpdates);
             }
         }
 

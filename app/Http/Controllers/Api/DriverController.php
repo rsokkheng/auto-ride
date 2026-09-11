@@ -9,6 +9,7 @@ use App\Models\Ride;
 use App\Models\RideDecline;
 use App\Models\RideLocation;
 use App\Models\Vehicle;
+use App\Jobs\SyncFirestore;
 use App\Services\DriverMatchingService;
 use App\Services\FirestoreService;
 use App\Services\SurgeZoneService;
@@ -137,7 +138,7 @@ class DriverController extends ApiController
             'status_note' => $data['status_note'] ?? null,
         ]);
 
-        $this->firestore->syncDriver($user->fresh());
+        SyncFirestore::dispatch('syncDriver', [$user->fresh()]);
 
         return $this->success(['available' => $user->available, 'status_note' => $user->status_note]);
     }
@@ -198,9 +199,13 @@ class DriverController extends ApiController
 
         RideDecline::create(['driver_id' => $user->id, 'ride_id' => $ride->id]);
 
-        if ($ride->driver_id === $user->id) {
+        // Only un-target a driver who hasn't accepted yet (e.g. a ride created
+        // targeting their vehicle_id directly). Once accepted, the driver is
+        // already marked busy (available=false) — declining must go through
+        // cancel() instead, so that step is the only place that restores them.
+        if ($ride->driver_id === $user->id && $ride->status === Ride::STATUS_REQUESTED) {
             $ride->update(['status' => 'requested', 'driver_id' => null]);
-            $this->firestore->syncRide($ride->fresh());
+            SyncFirestore::dispatch('syncRide', [$ride->fresh()]);
         }
 
         return $this->success(['message' => 'Ride declined.']);
@@ -232,7 +237,8 @@ class DriverController extends ApiController
         $speed   = isset($data['speed'])   ? (float) $data['speed']   : null;
         $heading = isset($data['heading']) ? (float) $data['heading'] : null;
 
-        // 1. Persist to MySQL.
+        // 1. Persist to MySQL. The User::booted() saved-hook keeps the Redis
+        // GEO index (used for ride matching) in sync automatically.
         $user->update(['current_latitude' => $lat, 'current_longitude' => $lng]);
 
         $location = null;
@@ -248,16 +254,18 @@ class DriverController extends ApiController
         }
 
         // 2. Push to drivers_live (raw GPS tick for smooth map animation).
-        $this->firestore->syncDriverLive($user, $lat, $lng, $speed, $heading);
+        // Queued — this fires on every GPS tick from every driver, so the
+        // response must not block on Firestore's network latency.
+        SyncFirestore::dispatch('syncDriverLive', [$user, $lat, $lng, $speed, $heading]);
 
         // 3. Patch driver location inside active ride booking document.
         if (! empty($data['ride_id'])) {
-            $this->firestore->updateRideDriverLocation((int) $data['ride_id'], $lat, $lng, $heading);
+            SyncFirestore::dispatch('updateRideDriverLocation', [(int) $data['ride_id'], $lat, $lng, $heading]);
         }
 
         // 4. Patch driver location inside active delivery booking document.
         if (! empty($data['delivery_id'])) {
-            $this->firestore->updateDeliveryDriverLocation((int) $data['delivery_id'], $lat, $lng, $heading);
+            SyncFirestore::dispatch('updateDeliveryDriverLocation', [(int) $data['delivery_id'], $lat, $lng, $heading]);
         }
 
         return $this->success([

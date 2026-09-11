@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Ride;
+use App\Models\User;
 use App\Services\FirestoreService;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -26,6 +27,13 @@ class AutoCancelTimedOutRides extends Command
                 'cancellation_reason' => 'passenger_no_show_timeout',
                 'cancellation_fee'    => (int) config('ride.cancellation_fee', 2000),
             ]);
+
+            // Ride reached DRIVER_ARRIVED, so the driver was marked busy at
+            // accept() and was never freed by this bypass of cancel() — free
+            // them now (User::booted() re-adds them to Redis GEO).
+            if ($ride->driver_id) {
+                User::find($ride->driver_id)?->update(['available' => true]);
+            }
 
             $firestore->syncRide($ride->fresh()->load('driver', 'vehicle'));
         }

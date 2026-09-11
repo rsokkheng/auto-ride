@@ -67,7 +67,10 @@ class AuthController extends ApiController
                     'referrer_id' => $referrer->id,
                     'referee_id'  => $user->id,
                     'status'      => 'pending',
-                    'bonus_khr'   => \App\Http\Controllers\Api\ReferralController::REFERRAL_BONUS_KHR,
+                    // Estimate shown until the referee's first ride actually
+                    // credits both wallets (see ReferralService), at which
+                    // point this is overwritten with the rate applied then.
+                    'bonus_khr'   => (int) \App\Models\PricingSetting::get('referral_bonus_khr', 4000),
                 ]);
                 $user->update(['referred_by' => $referrer->id]);
             }

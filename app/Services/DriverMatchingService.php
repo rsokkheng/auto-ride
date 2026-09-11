@@ -14,14 +14,17 @@ class DriverMatchingService
     private float $distanceWeight;
     private float $etaWeight;
     private float $ratingWeight;
+    private int $googleCandidates;
 
-    public function __construct()
-    {
+    public function __construct(
+        private DriverGeoService $geo,
+    ) {
         // Admin-managed via PricingSetting (Admin > Pricing Settings), falls back to config/.env.
-        $this->radiusKm       = (float) PricingSetting::get('delivery_match_radius_km', config('delivery.match_radius_km', 30));
-        $this->distanceWeight = (float) PricingSetting::get('driver_match_distance_weight', config('delivery.match_distance_weight', 6));
-        $this->etaWeight      = (float) PricingSetting::get('driver_match_eta_weight', config('delivery.match_eta_weight', 1.5));
-        $this->ratingWeight   = (float) PricingSetting::get('driver_match_rating_weight', config('delivery.match_rating_weight', 4));
+        $this->radiusKm        = (float) PricingSetting::get('delivery_match_radius_km', config('delivery.match_radius_km', 30));
+        $this->distanceWeight  = (float) PricingSetting::get('driver_match_distance_weight', config('delivery.match_distance_weight', 6));
+        $this->etaWeight       = (float) PricingSetting::get('driver_match_eta_weight', config('delivery.match_eta_weight', 1.5));
+        $this->ratingWeight    = (float) PricingSetting::get('driver_match_rating_weight', config('delivery.match_rating_weight', 4));
+        $this->googleCandidates = (int) config('delivery.match_google_candidates', 15);
     }
 
     /**
@@ -35,11 +38,21 @@ class DriverMatchingService
     {
         $radius = $radiusKm ?? $this->radiusKm;
 
-        $drivers = User::where('role', 'driver')
+        // Redis GEO does the radius search + distance calc, so we only ever
+        // hydrate the drivers that are actually in range from MySQL (instead
+        // of scanning every available driver row on every dispatch attempt).
+        // Over-fetch a bit before ranking, since penalty/rating filtering
+        // below can drop some of these candidates.
+        $nearby = $this->geo->nearby($pickupLat, $pickupLng, $radius, $limit * 3);
+
+        if (empty($nearby)) {
+            return collect();
+        }
+
+        $drivers = User::whereIn('id', array_keys($nearby))
+            ->where('role', 'driver')
             ->where('available', true)
             ->where(fn ($q) => $q->whereNull('penalty_until')->orWhere('penalty_until', '<=', now()))
-            ->whereNotNull('current_latitude')
-            ->whereNotNull('current_longitude')
             ->with(['vehicles' => fn($q) => $q->where('status', 'active')->latest()->limit(1)])
             ->get();
 
@@ -47,17 +60,18 @@ class DriverMatchingService
             return collect();
         }
 
-        $googleDistances = $this->fetchGoogleDistances($drivers, $pickupLat, $pickupLng);
+        // Only refine the closest candidates via Google — beyond that, extra API
+        // calls rarely change who ranks in the top $limit, so cap regardless of
+        // how many drivers Redis GEO returned in range.
+        $googleCandidates = $drivers
+            ->sortBy(fn (User $d) => $nearby[$d->id])
+            ->take($this->googleCandidates);
+
+        $googleDistances = $this->fetchGoogleDistances($googleCandidates, $pickupLat, $pickupLng);
 
         return $drivers
-            ->map(function (User $driver) use ($pickupLat, $pickupLng, $googleDistances) {
-                $distanceKm = $googleDistances[$driver->id]
-                    ?? $this->haversineDistance(
-                        (float) $driver->current_latitude,
-                        (float) $driver->current_longitude,
-                        $pickupLat,
-                        $pickupLng
-                    );
+            ->map(function (User $driver) use ($nearby, $googleDistances) {
+                $distanceKm = $googleDistances[$driver->id] ?? $nearby[$driver->id];
 
                 $etaMinutes = (int) ceil(($distanceKm / 30) * 60); // avg 30 km/h city speed
 
@@ -69,11 +83,10 @@ class DriverMatchingService
                 $driver->distance_km     = round($distanceKm, 2);
                 $driver->eta_minutes     = $etaMinutes;
                 $driver->score           = (int) round(max(0, min(100, $rawScore)));
-                $driver->distance_source = isset($googleDistances[$driver->id]) ? 'google_maps' : 'haversine';
+                $driver->distance_source = isset($googleDistances[$driver->id]) ? 'google_maps' : 'redis_geo';
 
                 return $driver;
             })
-            ->filter(fn(User $d) => $d->distance_km <= $radius)
             ->sortByDesc('score')
             ->take($limit)
             ->values();

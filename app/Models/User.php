@@ -53,6 +53,43 @@ class User extends Authenticatable
 
     protected $appends = ['avatar_url', 'photo_url'];
 
+    /**
+     * Keep the Redis GEO driver index (used by DriverMatchingService for nearby
+     * search) in sync with every write path — controllers, admin actions, and
+     * factories/seeders alike — rather than hooking each call site individually.
+     */
+    protected static function booted(): void
+    {
+        static::saved(function (User $user) {
+            if ($user->role !== 'driver') {
+                return;
+            }
+
+            if (! $user->wasChanged(['role', 'available', 'current_latitude', 'current_longitude', 'penalty_until'])) {
+                return;
+            }
+
+            $geo = app(\App\Services\DriverGeoService::class);
+
+            $isReachable = $user->available
+                && ! $user->isPenalized()
+                && $user->current_latitude !== null
+                && $user->current_longitude !== null;
+
+            if ($isReachable) {
+                $geo->add($user->id, (float) $user->current_latitude, (float) $user->current_longitude);
+            } else {
+                $geo->remove($user->id);
+            }
+        });
+
+        static::deleted(function (User $user) {
+            if ($user->role === 'driver') {
+                app(\App\Services\DriverGeoService::class)->remove($user->id);
+            }
+        });
+    }
+
     /** Full public URL for the profile avatar, or null if not set. */
     public function getAvatarUrlAttribute(): ?string
     {

@@ -30,4 +30,14 @@ return [
     */
     'self_serve_window_seconds' => env('RIDE_SELF_SERVE_TIMEOUT', 60),
 
+    /*
+    |------------------------------------------------------------------
+    | Pickup No-Show Timeout
+    |------------------------------------------------------------------
+    | Set on arrive() — if the passenger hasn't boarded within this many
+    | minutes, AutoCancelTimedOutRides (rides:auto-cancel-timed-out) cancels
+    | the ride and frees the driver (available=true) again.
+    */
+    'pickup_timeout_minutes' => env('RIDE_PICKUP_TIMEOUT_MINUTES', 5),
+
 ];
