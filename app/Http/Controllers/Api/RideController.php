@@ -572,6 +572,20 @@ class RideController extends ApiController
 
         $vehicle = $user->vehicles()->where('status', 'active')->latest()->first();
 
+        // Atomic: claim the DRIVER first. This is the guard the ride-only
+        // atomic UPDATE below doesn't provide — without it, the same driver
+        // can be the top candidate on two different concurrent ride requests
+        // and accept() both, ending up with two simultaneous active rides,
+        // since the ride-side guard only checks that ride's own row.
+        // User::booted() removes them from the Redis GEO index in response.
+        $driverClaimed = User::where('id', $user->id)
+            ->where('available', true)
+            ->update(['available' => false]);
+
+        if ($driverClaimed === 0) {
+            return response()->json(['data' => null, 'message' => 'You already have an active ride.'], 422);
+        }
+
         // Atomic: the open-status + unclaimed guard is enforced in the same UPDATE
         // statement (not a separate read-then-write) so this can never race against
         // CancelUnclaimedRide cancelling the ride in the same instant — only one wins.
@@ -586,13 +600,13 @@ class RideController extends ApiController
             ]);
 
         if ($affected === 0) {
+            // Lost the race for the RIDE (someone else claimed it, or it was
+            // cancelled) — release the driver claim above so they aren't left
+            // stranded "busy" with no ride to show for it.
+            $user->update(['available' => true]);
+
             return response()->json(['data' => null, 'message' => 'Ride already claimed or no longer available.'], 422);
         }
-
-        // Take this driver out of matching for the duration of the trip —
-        // User::booted() removes them from the Redis GEO index in response.
-        // Without this, an on-trip driver stays matchable for new rides.
-        $user->update(['available' => false]);
 
         // Make drivers_live authoritative server-side too — the Flutter app
         // sets this optimistically on its own accept-button tap, but a

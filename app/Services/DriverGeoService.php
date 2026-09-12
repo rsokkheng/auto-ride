@@ -31,34 +31,48 @@ class DriverGeoService
     /**
      * Nearby available drivers within $radiusKm, nearest first.
      * Returns [driver_id => distance_km].
+     *
+     * Uses GEORADIUS, not GEOSEARCH — GEOSEARCH needs Redis >= 6.2 and
+     * production runs 6.0.16, where it's an unknown command. phpredis
+     * returns `false` for an unknown command rather than throwing, which
+     * used to reach the foreach below and crash every dispatch job with
+     * zero candidates ever found (self-serve, then auto-cancel, every time).
+     * GEORADIUS is deprecated upstream but Redis keeps it working for
+     * exactly this reason; switch to GEOSEARCH once the server is upgraded.
+     *
+     * Response shape differs from GEOSEARCH too: phpredis returns a plain
+     * indexed list of [memberId, distance] pairs here, not an associative
+     * memberId => [distance] map.
      */
     public function nearby(float $lat, float $lng, float $radiusKm, int $limit): array
     {
         try {
-            $rows = Redis::geosearch(
+            $rows = Redis::georadius(
                 self::KEY,
-                [$lng, $lat],
+                $lng,
+                $lat,
                 $radiusKm,
                 'km',
-                ['WITHDIST', 'ASC', 'COUNT' => $limit],
+                ['withdist', 'asc', 'count' => $limit],
             );
         } catch (Throwable $e) {
-            Log::error('DriverGeoService::nearby geosearch failed', ['error' => $e->getMessage()]);
+            Log::error('DriverGeoService::nearby georadius failed', ['error' => $e->getMessage()]);
             return [];
         }
 
-        // A Redis error/timeout can surface as `false` here instead of an
-        // exception (the empty-key case returns [], not false — this is
-        // specifically a connection/command failure). A bare foreach over
-        // that crashed every dispatch job with no nearby drivers ever found.
+        // A Redis error (e.g. an unsupported command on an older server) can
+        // surface as `false` here instead of an exception (the empty-key
+        // case returns [], not false). A bare foreach over that crashed
+        // every dispatch job with no nearby drivers ever found.
         if (! is_array($rows)) {
-            Log::error('DriverGeoService::nearby geosearch returned non-array', ['result' => $rows]);
+            Log::error('DriverGeoService::nearby georadius returned non-array', ['result' => $rows]);
             return [];
         }
 
         $result = [];
-        foreach ($rows as $driverId => $data) {
-            $result[(int) $driverId] = (float) $data[0];
+        foreach ($rows as $row) {
+            [$driverId, $distance] = $row;
+            $result[(int) $driverId] = (float) $distance;
         }
 
         return $result;
