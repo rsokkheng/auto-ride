@@ -33,6 +33,7 @@ class AutoCancelTimedOutRides extends Command
             // them now (User::booted() re-adds them to Redis GEO).
             if ($ride->driver_id) {
                 User::find($ride->driver_id)?->update(['available' => true]);
+                $firestore->updateDriverLiveStatus($ride->driver_id, 'online');
             }
 
             $firestore->syncRide($ride->fresh()->load('driver', 'vehicle'));

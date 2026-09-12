@@ -86,10 +86,17 @@ class FirestoreService
      * drivers_live/{driverId}
      * Raw GPS tick — Flutter uses this for smooth map marker animation.
      * Only write fields that change on every tick.
+     *
+     * Uses patch() (updateMask), not set() — the Flutter app writes its own
+     * fields to this same document directly from the device (status, online,
+     * vehicle_type, mode_ride/delivery/rental — see LocationService). A plain
+     * set() has no updateMask, so Firestore replaces the whole document and
+     * silently deletes anything this call doesn't list. Every GPS tick was
+     * wiping those client-written fields moments after the client set them.
      */
     public function syncDriverLive(User $driver, float $lat, float $lng, ?float $speed = null, ?float $heading = null): void
     {
-        $this->set(self::C_DRIVERS_LIVE, (string) $driver->id, [
+        $this->patch(self::C_DRIVERS_LIVE, (string) $driver->id, [
             'driver_id'  => $driver->id,
             'name'       => $driver->name,
             'available'  => (bool) $driver->available,
@@ -97,6 +104,27 @@ class FirestoreService
             'lng'        => $lng,
             'speed'      => $speed,
             'heading'    => $heading,
+            'updated_at' => now()->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * drivers_live/{driverId} — status/online transition, server-authoritative.
+     *
+     * Mirrors LocationService.updateDriverStatus() on the Flutter client,
+     * using the same field names/values ('online'|'busy'|'offline', and a
+     * boolean `online`) so either side can write this document without the
+     * two disagreeing. The client sets this optimistically when the driver
+     * accepts/finishes a trip; this call makes it authoritative from the
+     * backend too, so a killed app or dropped connection right after
+     * accept()/complete()/cancel() doesn't leave the document stuck on the
+     * wrong status.
+     */
+    public function updateDriverLiveStatus(int $driverId, string $status): void
+    {
+        $this->patch(self::C_DRIVERS_LIVE, (string) $driverId, [
+            'status'     => $status,
+            'online'     => $status !== 'offline',
             'updated_at' => now()->toIso8601String(),
         ]);
     }

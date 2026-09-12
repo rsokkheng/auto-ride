@@ -594,6 +594,12 @@ class RideController extends ApiController
         // Without this, an on-trip driver stays matchable for new rides.
         $user->update(['available' => false]);
 
+        // Make drivers_live authoritative server-side too — the Flutter app
+        // sets this optimistically on its own accept-button tap, but a
+        // killed app or dropped connection right after this call would
+        // otherwise leave the document stuck on "online" indefinitely.
+        $this->firestore->updateDriverLiveStatus($user->id, 'busy');
+
         $isSelfServe = ! in_array($user->id, $ride->dispatch_queue ?? [], true) || $ride->self_serve_expires_at;
         if ($isSelfServe) {
             Log::info('self_serve_accepted', ['ride_id' => $ride->id, 'driver_id' => $user->id]);
@@ -851,6 +857,7 @@ class RideController extends ApiController
         // Trip is over — make this driver matchable for new rides again.
         // User::booted() re-adds them to the Redis GEO index in response.
         $user->update(['available' => true]);
+        $this->firestore->updateDriverLiveStatus($user->id, 'online');
 
         $fresh = $ride->fresh()->load('passenger', 'driver', 'vehicle');
 
@@ -944,6 +951,7 @@ class RideController extends ApiController
                 }
 
                 $driver->update($driverUpdates);
+                $this->firestore->updateDriverLiveStatus($driver->id, 'online');
             }
         }
 
