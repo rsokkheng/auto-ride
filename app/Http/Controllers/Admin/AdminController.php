@@ -7,6 +7,7 @@ use App\Models\ChatConversation;
 use App\Models\ChatMessage;
 use App\Models\ChargingStation;
 use App\Models\PricingSetting;
+use App\Models\HolidayPricing;
 use App\Models\RidePricing;
 use App\Services\FareService;
 use App\Models\Company;
@@ -1205,6 +1206,7 @@ class AdminController extends Controller
         return view('admin.ride-pricing', [
             'pricing'  => RidePricing::orderBy('id')->get(),
             'settings' => PricingSetting::orderBy('key')->get()->keyBy('key'),
+            'holidays' => HolidayPricing::orderBy('date')->get(),
         ]);
     }
 
@@ -1235,6 +1237,8 @@ class AdminController extends Controller
     {
         $data = $request->validate([
             'night_surcharge_rate'              => 'sometimes|numeric|min:0|max:1',
+            'weekend_surcharge_rate'            => 'sometimes|numeric|min:0|max:1',
+            'delivery_weekend_surcharge_rate'   => 'sometimes|numeric|min:0|max:1',
             'delivery_night_surcharge_rate'     => 'sometimes|numeric|min:0|max:1',
             'delivery_express_multiplier'       => 'sometimes|numeric|min:1|max:10',
             'avg_city_speed_kmh'                => 'sometimes|integer|min:5|max:120',
@@ -1262,6 +1266,37 @@ class AdminController extends Controller
 
         return redirect()->route('admin.ride-pricing')
             ->with('success', 'Global pricing settings saved.');
+    }
+
+    /**
+     * POST /admin/ride-pricing/holidays
+     */
+    public function storeHolidayPricing(Request $request)
+    {
+        $data = $request->validate([
+            'date'           => 'required|date|unique:holiday_pricing,date',
+            'label'          => 'required|string|max:100',
+            'surcharge_rate' => 'required|numeric|min:0|max:1',
+        ]);
+
+        $data['active'] = true;
+        HolidayPricing::create($data);
+
+        FareService::clearCache();
+
+        return redirect()->route('admin.ride-pricing')->with('success', 'Holiday pricing added.');
+    }
+
+    /**
+     * DELETE /admin/ride-pricing/holidays/{holiday}
+     */
+    public function destroyHolidayPricing(HolidayPricing $holiday)
+    {
+        $holiday->delete();
+
+        FareService::clearCache();
+
+        return redirect()->route('admin.ride-pricing')->with('success', 'Holiday pricing removed.');
     }
 
     // ─── Admin Chat ──────────────────────────────────────────────────────────

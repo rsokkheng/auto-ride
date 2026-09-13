@@ -100,6 +100,8 @@ Route::prefix('admin')->group(function () {
     Route::get('ride-pricing', [AdminController::class, 'ridePricing'])->name('admin.ride-pricing');
     Route::put('ride-pricing/{pricing}', [AdminController::class, 'updateRidePricing'])->name('admin.ride-pricing.update');
     Route::post('ride-pricing/settings', [AdminController::class, 'updatePricingSettings'])->name('admin.ride-pricing.settings');
+    Route::post('ride-pricing/holidays', [AdminController::class, 'storeHolidayPricing'])->name('admin.ride-pricing.holidays.store');
+    Route::delete('ride-pricing/holidays/{holiday}', [AdminController::class, 'destroyHolidayPricing'])->name('admin.ride-pricing.holidays.destroy');
 
     // Moving Fare Pricing
     Route::get('moving-fare', [AdminController::class, 'movingFare'])->name('admin.moving-fare');

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\HolidayPricing;
 use App\Models\PricingSetting;
 use App\Models\RidePricing;
 use Illuminate\Support\Facades\Cache;
@@ -162,6 +163,17 @@ class FareService
         $nightSurcharge  = $isNight ? (int) ceil($subtotal * $nightRate) : 0;
         $subtotalWithNight = $subtotal + $nightSurcharge;
 
+        // ── Weekend surcharge (Saturday & Sunday) ────────────────────────────
+        $isWeekend        = now()->isWeekend();
+        $weekendRate      = (float) $this->setting('weekend_surcharge_rate', 0);
+        $weekendSurcharge = $isWeekend ? (int) ceil($subtotalWithNight * $weekendRate) : 0;
+        $subtotalWithWeekend = $subtotalWithNight + $weekendSurcharge;
+
+        // ── Holiday surcharge (specific dates) ───────────────────────────────
+        $holiday           = $this->holidayToday();
+        $holidaySurcharge  = $holiday ? (int) ceil($subtotalWithWeekend * $holiday->surcharge_rate) : 0;
+        $subtotalWithHoliday = $subtotalWithWeekend + $holidaySurcharge;
+
         // ── Surge pricing ────────────────────────────────────────────────────
         $surgeZone       = null;
         $surgeMultiplier = 1.0;
@@ -171,14 +183,14 @@ class FareService
             $surgeMultiplier = $surgeZone ? (float) $surgeZone->multiplier : 1.0;
         }
 
-        $raw   = (int) round($subtotalWithNight * $surgeMultiplier);
+        $raw   = (int) round($subtotalWithHoliday * $surgeMultiplier);
         $total = (int) (ceil($raw / 100) * 100);
 
         // ── Minimum fare ─────────────────────────────────────────────────────
         $minimum = (int) $p['minimum'];
         $total   = max($total, $minimum);
 
-        $surgeAmount = max(0, $total - $subtotalWithNight);
+        $surgeAmount = max(0, $total - $subtotalWithHoliday);
 
         return [
             'service_type'     => $serviceType,
@@ -190,12 +202,14 @@ class FareService
             'duration_text'    => $route['duration_text'],
             'route_source'     => $route['source'],
             'breakdown'        => [
-                'booking_fee'     => $bookingFee,
-                'base_fare'       => $baseFare,
-                'distance_fare'   => $distanceFare,
-                'time_fare'       => $timeFare,
-                'night_surcharge' => $nightSurcharge,
-                'surge_amount'    => (int) $surgeAmount,
+                'booking_fee'       => $bookingFee,
+                'base_fare'         => $baseFare,
+                'distance_fare'     => $distanceFare,
+                'time_fare'         => $timeFare,
+                'night_surcharge'   => $nightSurcharge,
+                'weekend_surcharge' => $weekendSurcharge,
+                'holiday_surcharge' => $holidaySurcharge,
+                'surge_amount'      => (int) $surgeAmount,
             ],
             'subtotal'         => $subtotal,
             'surge_multiplier' => $surgeMultiplier,
@@ -204,6 +218,8 @@ class FareService
                 ? ['id' => $surgeZone->id, 'name' => $surgeZone->name]
                 : null,
             'night_rate'       => $isNight,
+            'weekend_rate'     => $isWeekend,
+            'holiday'          => $holiday ? ['label' => $holiday->label, 'rate' => $holiday->surcharge_rate] : null,
             'total'            => $total,
             'minimum_fare'     => $minimum,
             'currency'         => 'KHR',
@@ -265,6 +281,17 @@ class FareService
         $nightSurcharge = $isNight ? (int) ceil($subtotal * $nightRate) : 0;
         $subtotalWithNight = $subtotal + $nightSurcharge;
 
+        // Weekend surcharge (Saturday & Sunday).
+        $isWeekend        = now()->isWeekend();
+        $weekendRate      = (float) $this->setting('delivery_weekend_surcharge_rate', 0);
+        $weekendSurcharge = $isWeekend ? (int) ceil($subtotalWithNight * $weekendRate) : 0;
+        $subtotalWithWeekend = $subtotalWithNight + $weekendSurcharge;
+
+        // Holiday surcharge (specific dates).
+        $holiday           = $this->holidayToday();
+        $holidaySurcharge  = $holiday ? (int) ceil($subtotalWithWeekend * $holiday->surcharge_rate) : 0;
+        $subtotalWithHoliday = $subtotalWithWeekend + $holidaySurcharge;
+
         // Surge pricing.
         $surgeZone       = null;
         $surgeMultiplier = 1.0;
@@ -274,10 +301,10 @@ class FareService
             $surgeMultiplier = $surgeZone ? (float) $surgeZone->multiplier : 1.0;
         }
 
-        $raw   = (int) round($subtotalWithNight * $surgeMultiplier);
+        $raw   = (int) round($subtotalWithHoliday * $surgeMultiplier);
         $total = (int) (ceil($raw / 100) * 100);
 
-        $surgeAmount = max(0, $total - $subtotalWithNight);
+        $surgeAmount = max(0, $total - $subtotalWithHoliday);
 
         return [
             'package_size'     => $packageSize,
@@ -287,12 +314,14 @@ class FareService
             'duration_text'    => $route['duration_text'],
             'route_source'     => $route['source'],
             'breakdown'        => [
-                'booking_fee'      => $bookingFee,
-                'base_fare'        => $baseFare,
-                'distance_fare'    => $distanceFare,
-                'package_surcharge'=> $pkgSurcharge,
-                'night_surcharge'  => $nightSurcharge,
-                'surge_amount'     => (int) $surgeAmount,
+                'booking_fee'       => $bookingFee,
+                'base_fare'         => $baseFare,
+                'distance_fare'     => $distanceFare,
+                'package_surcharge' => $pkgSurcharge,
+                'night_surcharge'   => $nightSurcharge,
+                'weekend_surcharge' => $weekendSurcharge,
+                'holiday_surcharge' => $holidaySurcharge,
+                'surge_amount'      => (int) $surgeAmount,
             ],
             'subtotal'         => $subtotal,
             'surge_multiplier' => $surgeMultiplier,
@@ -301,6 +330,8 @@ class FareService
                 ? ['id' => $surgeZone->id, 'name' => $surgeZone->name]
                 : null,
             'night_rate'       => $isNight,
+            'weekend_rate'     => $isWeekend,
+            'holiday'          => $holiday ? ['label' => $holiday->label, 'rate' => $holiday->surcharge_rate] : null,
             'total'            => $total,
             'currency'         => 'KHR',
         ];
@@ -350,12 +381,26 @@ class FareService
         });
     }
 
+    /** Active holiday pricing row for today, if any (cached for the day). */
+    private function holidayToday(): ?HolidayPricing
+    {
+        return Cache::remember('holiday_pricing_' . now()->toDateString(), 3600, function () {
+            try {
+                return HolidayPricing::forDate();
+            } catch (\Throwable) {
+                return null;
+            }
+        });
+    }
+
     /** Clear the pricing cache — call after admin updates pricing. */
     public static function clearCache(): void
     {
         Cache::forget('ride_pricing_all');
+        Cache::forget('holiday_pricing_' . now()->toDateString());
         foreach ([
             'night_surcharge_rate','avg_city_speed_kmh','traffic_speed_threshold_kmh',
+            'weekend_surcharge_rate','delivery_weekend_surcharge_rate',
             'delivery_night_surcharge_rate','delivery_express_multiplier',
             'delivery_fee_base','delivery_fee_per_km',
             'delivery_fee_surcharge_small','delivery_fee_surcharge_medium','delivery_fee_surcharge_large','delivery_fee_surcharge_extra_large',

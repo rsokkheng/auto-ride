@@ -281,6 +281,26 @@ $colors = [
                     <small class="text-muted">e.g. 0.15 = +15%</small>
                 </div>
                 <div class="col-md-3 mb-3">
+                    <label class="field-label"><i class="fas fa-calendar-week mr-1 text-success"></i>Weekend Surcharge (Rides)</label>
+                    <div class="input-group">
+                        <input type="number" name="weekend_surcharge_rate" class="form-control"
+                               value="{{ $settings['weekend_surcharge_rate']->value ?? 0 }}"
+                               step="0.01" min="0" max="1" required>
+                        <div class="input-group-append"><span class="input-group-text">× rate</span></div>
+                    </div>
+                    <small class="text-muted">e.g. 0.15 = +15% on Saturday &amp; Sunday</small>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="field-label"><i class="fas fa-calendar-week mr-1 text-success"></i>Weekend Surcharge (Delivery)</label>
+                    <div class="input-group">
+                        <input type="number" name="delivery_weekend_surcharge_rate" class="form-control"
+                               value="{{ $settings['delivery_weekend_surcharge_rate']->value ?? 0 }}"
+                               step="0.01" min="0" max="1" required>
+                        <div class="input-group-append"><span class="input-group-text">× rate</span></div>
+                    </div>
+                    <small class="text-muted">e.g. 0.15 = +15% on Saturday &amp; Sunday</small>
+                </div>
+                <div class="col-md-3 mb-3">
                     <label class="field-label">Express Multiplier (Delivery)</label>
                     <div class="input-group">
                         <input type="number" name="delivery_express_multiplier" class="form-control"
@@ -327,6 +347,89 @@ $colors = [
             <button type="submit" class="btn btn-primary">
                 <i class="fas fa-save mr-1"></i> Save Global Settings
             </button>
+        </form>
+    </div>
+</div>
+
+{{-- ── Holiday Pricing (own CRUD — specific dates) ──────────────────────── --}}
+<div class="card mt-2" style="border-left:4px solid #eab308">
+    <div class="card-header">
+        <h3 class="card-title mb-0">
+            <i class="fas fa-calendar-day mr-2" style="color:#eab308"></i> Holiday Pricing
+        </h3>
+        <div class="card-tools">
+            <small class="text-muted">Extra % surcharge on top of the fare for specific dates (e.g. Khmer New Year)</small>
+        </div>
+    </div>
+    <div class="card-body">
+        @if($holidays->isEmpty())
+            <p class="text-muted mb-3">No holiday pricing configured yet.</p>
+        @else
+        <div class="table-responsive mb-3">
+            <table class="table table-sm table-bordered align-middle mb-0">
+                <thead class="thead-light">
+                    <tr>
+                        <th>Date</th>
+                        <th>Label</th>
+                        <th>Surcharge</th>
+                        <th style="width:60px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($holidays as $holiday)
+                    <tr>
+                        <td>{{ $holiday->date->format('Y-m-d (D)') }}</td>
+                        <td>{{ $holiday->label }}</td>
+                        <td>+{{ round($holiday->surcharge_rate * 100) }}%</td>
+                        <td>
+                            <form method="POST" action="{{ route('admin.ride-pricing.holidays.destroy', $holiday) }}"
+                                  onsubmit="return confirm('Remove holiday pricing for {{ $holiday->date->format('Y-m-d') }}?');">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+        @endif
+
+        {{-- Add new holiday --}}
+        <form method="POST" action="{{ route('admin.ride-pricing.holidays.store') }}" class="pt-3 border-top">
+            @csrf
+            <div class="field-label">Add Holiday</div>
+            <div class="row align-items-end">
+                <div class="col-md-3 mb-2">
+                    <label class="tier-sub d-block mb-1">Date</label>
+                    <input type="date" name="date" class="form-control" value="{{ old('date') }}" required>
+                </div>
+                <div class="col-md-4 mb-2">
+                    <label class="tier-sub d-block mb-1">Label</label>
+                    <input type="text" name="label" class="form-control" placeholder="e.g. Khmer New Year" value="{{ old('label') }}" required>
+                </div>
+                <div class="col-md-3 mb-2">
+                    <label class="tier-sub d-block mb-1">Surcharge</label>
+                    <div class="input-group">
+                        <input type="number" name="surcharge_rate" class="form-control" step="0.01" min="0" max="1" placeholder="0.30" value="{{ old('surcharge_rate') }}" required>
+                        <div class="input-group-append"><span class="input-group-text">× rate</span></div>
+                    </div>
+                </div>
+                <div class="col-md-2 mb-2">
+                    <button type="submit" class="btn btn-outline-warning btn-block">
+                        <i class="fas fa-plus mr-1"></i> Add
+                    </button>
+                </div>
+            </div>
+            @if ($errors->has('date') || $errors->has('label') || $errors->has('surcharge_rate'))
+                <small class="text-danger d-block mt-2">
+                    {{ $errors->first('date') ?: $errors->first('label') ?: $errors->first('surcharge_rate') }}
+                </small>
+            @endif
+            <small class="text-muted d-block mt-2">e.g. 0.30 = +30%, added on top of the fare (after night/weekend surcharge, before surge)</small>
         </form>
     </div>
 </div>
@@ -433,6 +536,8 @@ $colors = [
                     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; + (per_km × distance_km)<br>
                     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; + (per_min × minutes)  <span style="color:#94a3b8;">← if speed &lt; threshold</span><br>
                     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; + night_surcharge  <span style="color:#94a3b8;">← 22:00–05:00</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; + weekend_surcharge  <span style="color:#94a3b8;">← Sat / Sun</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; + holiday_surcharge  <span style="color:#94a3b8;">← configured dates</span><br>
                     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; × surge_multiplier<br>
                     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; rounded up to 100 ៛<br>
                     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; max(result, minimum_fare)

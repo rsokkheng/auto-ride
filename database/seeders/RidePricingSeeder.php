@@ -109,6 +109,18 @@ class RidePricingSeeder extends Seeder
                 'description' => 'Per-minute surcharge applied when avg speed is below this',
             ],
             [
+                'key'         => 'weekend_surcharge_rate',
+                'value'       => '0',
+                'label'       => 'Weekend Surcharge Rate (Rides)',
+                'description' => 'Extra % added to fare on Saturday & Sunday (e.g. 0.15 = +15%)',
+            ],
+            [
+                'key'         => 'delivery_weekend_surcharge_rate',
+                'value'       => '0',
+                'label'       => 'Weekend Surcharge Rate (Delivery)',
+                'description' => 'Extra % on delivery fee on Saturday & Sunday',
+            ],
+            [
                 'key'         => 'delivery_night_surcharge_rate',
                 'value'       => '0.15',
                 'label'       => 'Delivery Night Surcharge Rate',
