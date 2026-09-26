@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\RideDispatchService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Redis;
 use Tests\TestCase;
 
 class RideDispatchTest extends TestCase
@@ -26,6 +27,10 @@ class RideDispatchTest extends TestCase
         // or "still mid-cascade" states. Faking the queue lets each test control
         // exactly when a timeout/expiry job actually runs.
         Queue::fake();
+
+        // RefreshDatabase resets MySQL but not Redis — drop driver positions
+        // left in the geo index by earlier tests (their ids get reused).
+        Redis::del('drivers:geo');
     }
 
     private function makeDriver(array $overrides = []): User
@@ -38,6 +43,12 @@ class RideDispatchTest extends TestCase
             'rating'            => 5.0,
             'api_token'         => 'test-token-' . uniqid(),
         ], $overrides));
+    }
+
+    /** Available, but ~16 km from the pickup — beyond every radius tier (max 8 km). */
+    private function makeFarAwayDriver(): User
+    {
+        return $this->makeDriver(['current_latitude' => 11.7000]);
     }
 
     private function makePassenger(array $overrides = []): User
@@ -242,9 +253,10 @@ class RideDispatchTest extends TestCase
 
     public function test_race_condition_accept_wins_over_concurrent_auto_cancel(): void
     {
-        // Kept out of the ranked pool (available=false) so start() exhausts the queue
-        // immediately and opens the self-serve window — this driver then self-serves it.
-        $driver    = $this->makeDriver(['available' => false]);
+        // Kept out of the ranked pool (farther than the widest radius tier) so start()
+        // exhausts the queue immediately and opens the self-serve window — this driver
+        // then self-serves it. Must stay available: accept() only claims free drivers.
+        $driver    = $this->makeFarAwayDriver();
         $passenger = $this->makePassenger();
         $ride      = $this->makeRide($passenger);
 
@@ -269,7 +281,7 @@ class RideDispatchTest extends TestCase
 
     public function test_race_condition_expired_ride_cannot_be_accepted_after_cancellation(): void
     {
-        $driver    = $this->makeDriver(['available' => false]);
+        $driver    = $this->makeFarAwayDriver();
         $passenger = $this->makePassenger();
         $ride      = $this->makeRide($passenger);
 

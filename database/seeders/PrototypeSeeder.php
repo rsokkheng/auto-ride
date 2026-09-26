@@ -98,8 +98,8 @@ class PrototypeSeeder extends Seeder
             'title' => 'Ford Transit Delivery Van',
             'description' => 'Available for rent or purchase with flexible leasing.',
             'type' => 'rent',
-            'price' => 180_000_000, // ~$44,000 USD in KHR (approx 4,100 KHR/USD)
-            'rent_rate' => 620_000,  // ~$150 USD/day in KHR
+            'price' => 44_000,   // USD (marketplace prices are USD since 2026_06_27 migration)
+            'rent_rate' => 150,  // USD/day
             'available' => true,
             'condition' => 'excellent',
         ]);

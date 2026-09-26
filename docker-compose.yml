@@ -1,5 +1,29 @@
 services:
 
+  # Local development database — keeps `php artisan` and tests on this machine
+  # instead of a shared/production server. Data lives in the mysql-data volume.
+  mysql:
+    image: mysql:8.0
+    container_name: roteh-api-mysql
+
+    ports:
+      - "127.0.0.1:3307:3306"   # 3306 is taken by a system MySQL on this Mac
+
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: auto_ride_db
+      MYSQL_USER: auto_ride
+      MYSQL_PASSWORD: secret
+
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./deploy/docker/mysql-init.sql:/docker-entrypoint-initdb.d/01-testing-db.sql:ro
+
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      retries: 20
+
   redis:
     image: redis:7-alpine
     container_name: roteh-api-redis
@@ -37,3 +61,6 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
 
       KAFKA_NUM_PARTITIONS: 3
+
+volumes:
+  mysql-data:

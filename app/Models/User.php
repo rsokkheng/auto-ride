@@ -65,7 +65,10 @@ class User extends Authenticatable
                 return;
             }
 
-            if (! $user->wasChanged(['role', 'available', 'current_latitude', 'current_longitude', 'penalty_until'])) {
+            // wasChanged() is always false right after an INSERT, so a driver
+            // created already available + located must be indexed explicitly.
+            if (! $user->wasRecentlyCreated
+                && ! $user->wasChanged(['role', 'available', 'current_latitude', 'current_longitude', 'penalty_until'])) {
                 return;
             }
 

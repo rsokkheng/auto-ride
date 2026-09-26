@@ -29,6 +29,9 @@
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
+        <!-- Own Redis DBs, so tests never read or wipe dev data (e.g. the drivers:geo index). -->
+        <env name="REDIS_DB" value="14"/>
+        <env name="REDIS_CACHE_DB" value="15"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>

@@ -13,10 +13,10 @@ class MarketplaceVehicleColorSeeder extends Seeder
     public function run(): void
     {
         $colors = [
-            ['name_en' => 'Black', 'name_km' => 'ខ្មៅ',   'code' => 'black'],
-            ['name_en' => 'Red',   'name_km' => 'ក្រហម',  'code' => 'red'],
-            ['name_en' => 'Blue',  'name_km' => 'ខៀវ',    'code' => 'blue'],
-            ['name_en' => 'Gray',  'name_km' => 'ប្រផេះ', 'code' => 'gray'],
+            ['name_en' => 'Black', 'name_kh' => 'ខ្មៅ',   'code' => 'black'],
+            ['name_en' => 'Red',   'name_kh' => 'ក្រហម',  'code' => 'red'],
+            ['name_en' => 'Blue',  'name_kh' => 'ខៀវ',    'code' => 'blue'],
+            ['name_en' => 'Gray',  'name_kh' => 'ប្រផេះ', 'code' => 'gray'],
         ];
 
         foreach ($colors as $i => $color) {
@@ -24,7 +24,7 @@ class MarketplaceVehicleColorSeeder extends Seeder
                 ['code' => $color['code']],
                 [
                     'name_en'    => $color['name_en'],
-                    'name_km'    => $color['name_km'],
+                    'name_kh'    => $color['name_kh'],
                     'sort_order' => $i + 1,
                     'active'     => true,
                 ]
