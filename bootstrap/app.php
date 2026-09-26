@@ -24,6 +24,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->api(append: [
             \App\Http\Middleware\SetApiLocale::class,
+            // No-op unless the request sends an Idempotency-Key header.
+            \App\Http\Middleware\EnsureIdempotency::class,
         ]);
 
         // Uses the 'api' limiter defined in AppServiceProvider.
