@@ -33,7 +33,7 @@ class SurgeZoneService
         return $this->candidateZones($type, $now)
             ->filter(fn($zone) =>
                 $this->distanceKm($lat, $lng, $zone->center_lat, $zone->center_lng) <= $zone->radius_km
-                && $zone->isActiveNow($now)
+                && $zone->isActiveNow($now->copy()->setTimezone(config('ride.local_timezone', 'Asia/Phnom_Penh')))
             )
             ->sortByDesc('multiplier')
             ->values();
@@ -59,7 +59,7 @@ class SurgeZoneService
         $now = now();
 
         return $this->candidateZones($type, $now)
-            ->filter(fn($zone) => $zone->isActiveNow($now))
+            ->filter(fn($zone) => $zone->isActiveNow($now->copy()->setTimezone(config('ride.local_timezone', 'Asia/Phnom_Penh'))))
             ->sortByDesc('multiplier')
             ->values();
     }

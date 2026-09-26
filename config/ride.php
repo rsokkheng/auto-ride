@@ -40,4 +40,14 @@ return [
     */
     'pickup_timeout_minutes' => env('RIDE_PICKUP_TIMEOUT_MINUTES', 5),
 
+    /*
+    |------------------------------------------------------------------
+    | Local Business Timezone
+    |------------------------------------------------------------------
+    | Anything that depends on the local wall clock — night/weekend/
+    | holiday surcharges and recurring surge schedules — uses this
+    | explicitly, so it stays correct regardless of app.timezone.
+    */
+    'local_timezone' => env('APP_LOCAL_TIMEZONE', 'Asia/Phnom_Penh'),
+
 ];

@@ -8,14 +8,17 @@ use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Broadcasting\ShouldBroadcast;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class RideLocationUpdated implements ShouldBroadcastNow
+// Queued so a slow/unreachable Reverb server never fails the driver's location POST.
+class RideLocationUpdated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
+
+    /** Own queue + worker so long jobs on `default` (e.g. promo pushes) never delay realtime. */
+    public string $broadcastQueue = 'broadcasts';
 
     public Ride $ride;
     public RideLocation $location;

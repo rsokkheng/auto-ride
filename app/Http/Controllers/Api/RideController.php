@@ -246,6 +246,24 @@ class RideController extends ApiController
             ->orderBy('created_at')
             ->paginate(10);
 
+        // Plus the ride currently being offered to *this* driver by ranked
+        // dispatch — otherwise the offer only ever reached them as a push
+        // notification and never showed up on their dashboard to accept.
+        if ($rides->currentPage() === 1) {
+            $offered = Ride::with(['passenger', 'vehicle'])
+                ->where('status', Ride::STATUS_REQUESTED)
+                ->whereNull('driver_id')
+                ->whereNull('self_serve_expires_at')
+                ->whereJsonContains('dispatch_queue', $user->id)
+                ->get()
+                ->filter(fn (Ride $r) => (int) (($r->dispatch_queue ?? [])[$r->dispatch_position] ?? 0) === $user->id)
+                ->values();
+
+            if ($offered->isNotEmpty()) {
+                $rides->setCollection($offered->concat($rides->getCollection()));
+            }
+        }
+
         return $this->success(['rides' => $rides]);
     }
 

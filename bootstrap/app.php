@@ -11,6 +11,12 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    // POST /api/v1/broadcasting/auth — the app authorizes private Reverb
+    // channels with its normal bearer api_token.
+    ->withBroadcasting(
+        __DIR__.'/../routes/channels.php',
+        ['prefix' => 'api/v1', 'middleware' => ['api', \App\Http\Middleware\AuthenticateApiToken::class]],
+    )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
             \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
@@ -19,6 +25,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(append: [
             \App\Http\Middleware\SetApiLocale::class,
         ]);
+
+        // Uses the 'api' limiter defined in AppServiceProvider.
+        $middleware->throttleApi();
 
         $middleware->alias([
             'role'              => \Spatie\Permission\Middleware\RoleMiddleware::class,

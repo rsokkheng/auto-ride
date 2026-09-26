@@ -51,16 +51,17 @@ Route::get('/user', function (Request $request) {
 })->middleware('auth:sanctum');
 
 Route::prefix('v1')->group(function () {
-    Route::post('auth/register', [AuthController::class, 'register']);
-    Route::post('auth/login', [AuthController::class, 'login']);
+    Route::post('auth/register', [AuthController::class, 'register'])->middleware('throttle:login');
+    Route::post('auth/login', [AuthController::class, 'login'])->middleware('throttle:login');
     Route::post('auth/logout', [AuthController::class, 'logout']);
     Route::post('auth/refresh', [AuthController::class, 'refreshToken']);
     Route::get('auth/me', [AuthController::class, 'me']);
     Route::get('auth/avatar', [AuthController::class, 'getAvatar']);
     Route::put('auth/profile', [AuthController::class, 'updateProfile']);
-    Route::post('auth/otp/send',    [AuthController::class, 'sendOTP']);
-    Route::post('auth/otp/verify',  [AuthController::class, 'verifyOTP']);
+    Route::post('auth/otp/send',    [AuthController::class, 'sendOTP'])->middleware('throttle:otp-send');
+    Route::post('auth/otp/verify',  [AuthController::class, 'verifyOTP'])->middleware('throttle:otp-verify');
     Route::post('auth/phone/verify',[AuthController::class, 'verifyPhone']);
+    Route::post('auth/firebase-token', [AuthController::class, 'firebaseToken']);
     Route::get('auth/fcm-token',       [AuthController::class, 'getFcmToken']);
     Route::post('auth/fcm-token',      [AuthController::class, 'saveFcmToken']);
     Route::get('driver/device-token',  [AuthController::class, 'getDeviceTokens']);

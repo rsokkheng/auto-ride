@@ -59,6 +59,10 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
+            // Session time zone = app.timezone, so MySQL NOW()/CURRENT_TIMESTAMP
+            // defaults and TIMESTAMP-column conversion agree with PHP's now().
+            // See migration 2026_09_26_000001_shift_timestamps_to_phnom_penh.
+            'timezone' => env('DB_TIMEZONE', '+07:00'),
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
             ]) : [],

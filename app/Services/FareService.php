@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\HolidayPricing;
+use Carbon\Carbon;
 use App\Models\PricingSetting;
 use App\Models\RidePricing;
 use Illuminate\Support\Facades\Cache;
@@ -157,20 +158,21 @@ class FareService
         $subtotal = $baseFare + $bookingFee + $distanceFare + $timeFare;
 
         // ── Night surcharge ──────────────────────────────────────────────────
-        $hour            = (int) now()->format('H');
+        $localNow        = self::localNow();
+        $hour            = (int) $localNow->format('H');
         $isNight         = $hour >= 22 || $hour < 5;
         $nightRate       = (float) $this->setting('night_surcharge_rate', 0.20);
         $nightSurcharge  = $isNight ? (int) ceil($subtotal * $nightRate) : 0;
         $subtotalWithNight = $subtotal + $nightSurcharge;
 
         // ── Weekend surcharge (Saturday & Sunday) ────────────────────────────
-        $isWeekend        = now()->isWeekend();
+        $isWeekend        = $localNow->isWeekend();
         $weekendRate      = (float) $this->setting('weekend_surcharge_rate', 0);
         $weekendSurcharge = $isWeekend ? (int) ceil($subtotalWithNight * $weekendRate) : 0;
         $subtotalWithWeekend = $subtotalWithNight + $weekendSurcharge;
 
         // ── Holiday surcharge (specific dates) ───────────────────────────────
-        $holiday           = $this->holidayToday();
+        $holiday           = $this->holidayOn($localNow);
         $holidaySurcharge  = $holiday ? (int) ceil($subtotalWithWeekend * $holiday->surcharge_rate) : 0;
         $subtotalWithHoliday = $subtotalWithWeekend + $holidaySurcharge;
 
@@ -275,20 +277,21 @@ class FareService
         $subtotal       = $bookingFee + $baseFare + $distanceFare + $pkgSurcharge;
 
         // Night surcharge.
-        $hour           = (int) now()->format('H');
+        $localNow       = self::localNow();
+        $hour           = (int) $localNow->format('H');
         $isNight        = $hour >= 22 || $hour < 5;
         $nightRate      = (float) $this->setting('delivery_night_surcharge_rate', 0.15);
         $nightSurcharge = $isNight ? (int) ceil($subtotal * $nightRate) : 0;
         $subtotalWithNight = $subtotal + $nightSurcharge;
 
         // Weekend surcharge (Saturday & Sunday).
-        $isWeekend        = now()->isWeekend();
+        $isWeekend        = $localNow->isWeekend();
         $weekendRate      = (float) $this->setting('delivery_weekend_surcharge_rate', 0);
         $weekendSurcharge = $isWeekend ? (int) ceil($subtotalWithNight * $weekendRate) : 0;
         $subtotalWithWeekend = $subtotalWithNight + $weekendSurcharge;
 
         // Holiday surcharge (specific dates).
-        $holiday           = $this->holidayToday();
+        $holiday           = $this->holidayOn($localNow);
         $holidaySurcharge  = $holiday ? (int) ceil($subtotalWithWeekend * $holiday->surcharge_rate) : 0;
         $subtotalWithHoliday = $subtotalWithWeekend + $holidaySurcharge;
 
@@ -381,23 +384,41 @@ class FareService
         });
     }
 
-    /** Active holiday pricing row for today, if any (cached for the day). */
-    private function holidayToday(): ?HolidayPricing
+    /** Current wall-clock time in the local business timezone, independent of app.timezone. */
+    public static function localNow(): Carbon
     {
-        return Cache::remember('holiday_pricing_' . now()->toDateString(), 3600, function () {
-            try {
-                return HolidayPricing::forDate();
-            } catch (\Throwable) {
-                return null;
-            }
-        });
+        return now(config('ride.local_timezone', 'Asia/Phnom_Penh'));
+    }
+
+    /**
+     * Active holiday pricing row for the given local date, if any (cached for an hour).
+     * Stored as an array (or false for "no holiday") because Cache::remember()
+     * never caches null — which would otherwise hit the DB on every fare quote.
+     */
+    private function holidayOn(Carbon $localNow): ?HolidayPricing
+    {
+        // try/catch outside remember() so a DB error isn't cached as "no holiday".
+        try {
+            $row = Cache::remember(self::holidayCacheKey($localNow), 3600, fn () =>
+                HolidayPricing::forDate($localNow)?->only(['id', 'label', 'surcharge_rate']) ?? false
+            );
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $row ? (new HolidayPricing)->forceFill($row) : null;
+    }
+
+    private static function holidayCacheKey(Carbon $localNow): string
+    {
+        return 'holiday_pricing_v2_' . $localNow->toDateString();
     }
 
     /** Clear the pricing cache — call after admin updates pricing. */
     public static function clearCache(): void
     {
         Cache::forget('ride_pricing_all');
-        Cache::forget('holiday_pricing_' . now()->toDateString());
+        Cache::forget(self::holidayCacheKey(self::localNow()));
         foreach ([
             'night_surcharge_rate','avg_city_speed_kmh','traffic_speed_threshold_kmh',
             'weekend_surcharge_rate','delivery_weekend_surcharge_rate',

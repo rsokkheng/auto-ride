@@ -22,11 +22,11 @@ class HolidayPricing extends Model
         'active'         => 'boolean',
     ];
 
-    /** The active holiday row for the given date, if any (today by default). */
+    /** The active holiday row for the given date, if any (today in the local business timezone by default). */
     public static function forDate(?Carbon $date = null): ?self
     {
         return static::where('active', true)
-            ->whereDate('date', ($date ?? now())->toDateString())
+            ->whereDate('date', ($date ?? now(config('ride.local_timezone', 'Asia/Phnom_Penh')))->toDateString())
             ->first();
     }
 }

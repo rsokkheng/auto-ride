@@ -23,6 +23,10 @@ class AuthController extends ApiController
     protected const ACCESS_TTL  = 1440;
     // Refresh token TTL: 30 days
     protected const REFRESH_TTL = 43200;
+    // Seconds before the same phone can request another OTP
+    protected const OTP_RESEND_COOLDOWN = 60;
+    // Wrong codes allowed per OTP before a new one must be requested
+    protected const OTP_MAX_ATTEMPTS = 5;
 
     public function register(Request $request)
     {
@@ -288,7 +292,19 @@ class AuthController extends ApiController
 
         try {
             $phone = $this->normalizePhone($data['phone']);
-            $code  = rand(100000, 999999);
+
+            // Per-phone resend cooldown — also caps verify attempts per minute,
+            // since each new OTP resets the attempt counter.
+            $last = PhoneOtp::where('phone', $phone)->latest('last_sent_at')->value('last_sent_at');
+            if ($last && now()->diffInSeconds($last, true) < self::OTP_RESEND_COOLDOWN) {
+                $retryAfter = self::OTP_RESEND_COOLDOWN - (int) now()->diffInSeconds($last, true);
+                return response()->json([
+                    'message'     => "Please wait {$retryAfter}s before requesting another OTP.",
+                    'retry_after' => $retryAfter,
+                ], 429);
+            }
+
+            $code = random_int(100000, 999999);
 
             PhoneOtp::where('phone', $phone)->delete();
 
@@ -305,14 +321,22 @@ class AuthController extends ApiController
                 "Your ROTEH OTP is: {$code}. Valid for 3 minutes."
             );
 
+            // Never hand the code back outside debug mode — doing so when SMS
+            // failed let anyone log in as any phone number during an outage.
+            if (! $sent && ! config('app.debug')) {
+                PhoneOtp::where('phone', $phone)->delete();
+                return response()->json([
+                    'message' => 'Could not send SMS right now. Please try again shortly.',
+                ], 503);
+            }
+
             $response = [
-                'message'  => $sent ? 'OTP sent successfully' : 'OTP created. SMS delivery failed, use code below.',
+                'message'  => 'OTP sent successfully',
                 'phone'    => $phone,
                 'sms_sent' => $sent,
             ];
 
-            // Always return code if SMS failed, or in debug mode
-            if (! $sent || config('app.debug')) {
+            if (config('app.debug')) {
                 $response['code'] = $code;
             }
 
@@ -344,7 +368,16 @@ class AuthController extends ApiController
             ->latest()
             ->first();
 
-        if (! $record || ! Hash::check($data['code'], $record->otp_hash)) {
+        if (! $record) {
+            return response()->json(['message' => 'Invalid or expired OTP'], 422);
+        }
+
+        if ($record->attempts >= self::OTP_MAX_ATTEMPTS) {
+            return response()->json(['message' => 'Too many incorrect attempts. Please request a new OTP.'], 429);
+        }
+
+        if (! Hash::check($data['code'], $record->otp_hash)) {
+            $record->increment('attempts');
             return response()->json(['message' => 'Invalid or expired OTP'], 422);
         }
 
@@ -399,6 +432,35 @@ class AuthController extends ApiController
             'refresh_token'            => Str::random(120),
             'token_expires_at'         => now()->addMinutes(self::ACCESS_TTL),
             'refresh_token_expires_at' => now()->addMinutes(self::REFRESH_TTL),
+        ]);
+    }
+
+    /**
+     * POST /v1/auth/firebase-token
+     *
+     * Firebase custom token for the app to sign in to Firebase as *this*
+     * user (replacing anonymous auth). Firestore/Storage rules key off the
+     * `app_uid` / `role` claims, so a client can only write its own
+     * drivers_live doc and read chats/bookings it is a participant in.
+     */
+    public function firebaseToken(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
+        try {
+            $token = app(FirebaseAuth::class)->createCustomToken('user_' . $user->id, [
+                'app_uid' => $user->id,
+                'role'    => $user->role,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('[firebaseToken] ' . $e->getMessage());
+            return response()->json(['message' => 'Could not issue Firebase token.'], 503);
+        }
+
+        return $this->success([
+            'firebase_token' => $token->toString(),
+            'firebase_uid'   => 'user_' . $user->id,
         ]);
     }
 

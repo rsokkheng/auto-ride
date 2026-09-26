@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Events\RealtimeUpdate;
 use App\Jobs\AdvanceRideDispatch;
 use App\Jobs\CancelUnclaimedRide;
 use App\Models\PricingSetting;
@@ -130,6 +131,13 @@ class RideDispatchService
                 );
 
                 $timeoutSeconds = (int) PricingSetting::get('ride_offer_timeout_seconds', config('ride.offer_timeout_seconds', 15));
+
+                // Instant in-app delivery for a driver with the app open; FCM above
+                // covers a backgrounded app.
+                RealtimeUpdate::toDriver($driver->id, 'ride.offered', [
+                    'ride_id'    => $ride->id,
+                    'expires_in' => $timeoutSeconds,
+                ]);
 
                 AdvanceRideDispatch::dispatch($ride->id, $position)
                     ->delay(now()->addSeconds($timeoutSeconds));
