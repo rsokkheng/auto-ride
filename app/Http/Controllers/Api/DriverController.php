@@ -14,6 +14,7 @@ use App\Services\DriverMatchingService;
 use App\Services\FirestoreService;
 use App\Services\SurgeZoneService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class DriverController extends ApiController
 {
@@ -54,45 +55,52 @@ class DriverController extends ApiController
         $radius = isset($data['radius']) ? (float) $data['radius'] : null;
         $limit  = (int) ($data['limit'] ?? 20);
 
-        // Check if pickup location is in a surge zone.
-        $surgeZone       = $this->surge->getActiveZone($lat, $lng, $type === 'both' ? 'both' : $type);
-        $surgeMultiplier = $surgeZone ? $surgeZone->multiplier : 1.0;
+        // Every passenger on the booking screen polls this, so the answer is
+        // shared per ~110 m grid cell for 10 s — nearby passengers get the same
+        // markers from one computation. The response therefore carries nothing
+        // user-specific, and no driver PII (name/phone/plate): it's a map layer.
+        $cacheKey = sprintf('drivers:nearby:%.3f,%.3f:%s:%s:%d', $lat, $lng, $type, $radius ?? '-', $limit);
 
-        $drivers = $this->matcher->findDrivers($lat, $lng, $limit, $radius);
+        $payload = Cache::remember($cacheKey, 10, function () use ($lat, $lng, $type, $radius, $limit) {
+            $surgeZone       = $this->surge->getActiveZone($lat, $lng, $type === 'both' ? 'both' : $type);
+            $surgeMultiplier = $surgeZone ? $surgeZone->multiplier : 1.0;
 
-        $result = $drivers->map(fn($driver) => [
-            'id'              => $driver->id,
-            'name'            => $driver->name,
-            'phone'           => $driver->phone,
-            'avatar_url'      => $driver->avatar_url,
-            'rating'          => round((float) $driver->rating, 1),
-            'total_ratings'   => (int) $driver->total_ratings,
-            'distance_km'     => $driver->distance_km,
-            'eta_minutes'     => $driver->eta_minutes,
-            'distance_source' => $driver->distance_source,
-            'lat'             => $driver->current_latitude  ? (float) $driver->current_latitude  : null,
-            'lng'             => $driver->current_longitude ? (float) $driver->current_longitude : null,
-            'vehicle'         => $driver->vehicles->first() ? [
-                'id'            => $driver->vehicles->first()->id,
-                'make'          => $driver->vehicles->first()->make,
-                'model'         => $driver->vehicles->first()->model,
-                'year'          => $driver->vehicles->first()->year,
-                'type'          => $driver->vehicles->first()->type,
-                'license_plate' => $driver->vehicles->first()->license_plate,
-                'primary_image' => $driver->vehicles->first()->primary_image_url,
-            ] : null,
-        ]);
+            // Straight-line distances only — road distances (Google, billed per
+            // element) are for actual dispatch, not a map that refreshes constantly.
+            $drivers = $this->matcher->findDrivers($lat, $lng, $limit, $radius, roadDistances: false);
 
-        return $this->success([
-            'drivers'          => $result,
-            'total'            => $result->count(),
-            'search_radius_km' => $radius ?? config('delivery.match_radius_km', 30),
-            'surge'            => [
-                'active'     => $surgeMultiplier > 1.0,
-                'multiplier' => $surgeMultiplier,
-                'zone'       => $surgeZone ? ['id' => $surgeZone->id, 'name' => $surgeZone->name] : null,
-            ],
-        ]);
+            $result = $drivers->map(fn($driver) => [
+                'id'              => $driver->id,
+                'rating'          => round((float) $driver->rating, 1),
+                'total_ratings'   => (int) $driver->total_ratings,
+                'distance_km'     => $driver->distance_km,
+                'eta_minutes'     => $driver->eta_minutes,
+                'distance_source' => $driver->distance_source,
+                'lat'             => $driver->current_latitude  ? (float) $driver->current_latitude  : null,
+                'lng'             => $driver->current_longitude ? (float) $driver->current_longitude : null,
+                'vehicle'         => $driver->vehicles->first() ? [
+                    'id'            => $driver->vehicles->first()->id,
+                    'make'          => $driver->vehicles->first()->make,
+                    'model'         => $driver->vehicles->first()->model,
+                    'year'          => $driver->vehicles->first()->year,
+                    'type'          => $driver->vehicles->first()->type,
+                    'primary_image' => $driver->vehicles->first()->primary_image_url,
+                ] : null,
+            ])->values()->all();
+
+            return [
+                'drivers'          => $result,
+                'total'            => count($result),
+                'search_radius_km' => $radius ?? config('delivery.match_radius_km', 30),
+                'surge'            => [
+                    'active'     => $surgeMultiplier > 1.0,
+                    'multiplier' => $surgeMultiplier,
+                    'zone'       => $surgeZone ? ['id' => $surgeZone->id, 'name' => $surgeZone->name] : null,
+                ],
+            ];
+        });
+
+        return $this->success($payload);
     }
 
     public function status(Request $request)

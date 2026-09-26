@@ -33,8 +33,12 @@ class DriverMatchingService
      * Score = 100 - (distance_km * distanceWeight) - (eta_minutes * etaWeight)
      *             - ((5.0 - rating) * ratingWeight), clamped to [0, 100].
      * Higher score = better match (Grab-style: 0-100, best driver first).
+     *
+     * $roadDistances: refine the closest candidates with Google Distance Matrix
+     * (billed per element). Worth it when actually dispatching a ride; pass false
+     * for display-only lookups like the passenger's map, which polls constantly.
      */
-    public function findDrivers(float $pickupLat, float $pickupLng, int $limit = 10, ?float $radiusKm = null): Collection
+    public function findDrivers(float $pickupLat, float $pickupLng, int $limit = 10, ?float $radiusKm = null, bool $roadDistances = true): Collection
     {
         $radius = $radiusKm ?? $this->radiusKm;
 
@@ -67,7 +71,9 @@ class DriverMatchingService
             ->sortBy(fn (User $d) => $nearby[$d->id])
             ->take($this->googleCandidates);
 
-        $googleDistances = $this->fetchGoogleDistances($googleCandidates, $pickupLat, $pickupLng);
+        $googleDistances = $roadDistances
+            ? $this->fetchGoogleDistances($googleCandidates, $pickupLat, $pickupLng)
+            : [];
 
         return $drivers
             ->map(function (User $driver) use ($nearby, $googleDistances) {
