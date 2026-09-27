@@ -122,8 +122,8 @@ Route::prefix('v1')->group(function () {
     Route::get('rides/scheduled',           [RideFeaturesController::class, 'scheduled']);
     Route::patch('rides/{ride}/schedule',   [RideFeaturesController::class, 'modifyScheduled']);
     Route::get('rides/reorder-last', [RideFeaturesController::class, 'reorderLast']);
-    Route::post('rides/estimate', [RideController::class, 'estimate']);
-    Route::post('rides', [RideController::class, 'store']);
+    Route::post('rides/estimate', [RideController::class, 'estimate'])->middleware('service-area');
+    Route::post('rides', [RideController::class, 'store'])->middleware('service-area');
 
     // Parameterised ride routes.
     Route::get('rides/{ride}', [RideController::class, 'show']);
@@ -145,10 +145,10 @@ Route::prefix('v1')->group(function () {
     Route::get('deliveries/available', [DeliveryController::class, 'available']);
     Route::get('deliveries/nearby-drivers', [DeliveryController::class, 'nearbyDrivers']);
     Route::get('deliveries/history', [DeliveryController::class, 'history']);
-    Route::post('deliveries/estimate', [DeliveryController::class, 'estimate']);
+    Route::post('deliveries/estimate', [DeliveryController::class, 'estimate'])->middleware('service-area');
 
     Route::get('deliveries', [DeliveryController::class, 'index']);
-    Route::post('deliveries', [DeliveryController::class, 'store']);
+    Route::post('deliveries', [DeliveryController::class, 'store'])->middleware('service-area');
     Route::get('deliveries/{delivery}', [DeliveryController::class, 'show']);
     Route::put('deliveries/{delivery}', [DeliveryController::class, 'update']);
     Route::patch('deliveries/{delivery}', [DeliveryController::class, 'update']);
@@ -163,9 +163,9 @@ Route::prefix('v1')->group(function () {
     Route::delete('deliveries/{delivery}/share', [DeliveryController::class, 'deactivateShare']);
 
     // Aliases for Moving service using the same delivery controller logic.
-    Route::post('movings/estimate', [DeliveryController::class, 'estimateMoving']);
+    Route::post('movings/estimate', [DeliveryController::class, 'estimateMoving'])->middleware('service-area');
     Route::get('movings', [DeliveryController::class, 'indexMoving']);
-    Route::post('movings', [DeliveryController::class, 'storeMoving']);
+    Route::post('movings', [DeliveryController::class, 'storeMoving'])->middleware('service-area');
     Route::get('movings/{delivery}', [DeliveryController::class, 'show']);
     Route::put('movings/{delivery}', [DeliveryController::class, 'update']);
     Route::patch('movings/{delivery}', [DeliveryController::class, 'update']);
