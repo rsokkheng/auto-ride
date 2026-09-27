@@ -34,15 +34,32 @@ class FareService
 
     // ── Route ─────────────────────────────────────────────────────────────────
 
+    /** Google route results are reused for this long (duration includes live traffic). */
+    private const ROUTE_CACHE_SECONDS = 1200;
+
+    /** Place names barely change — reuse reverse-geocode results for 30 days. */
+    private const GEOCODE_CACHE_SECONDS = 2592000;
+
     /**
      * Get route info between two coordinates.
      * Returns distance_km, duration_min, and the data source used.
+     *
+     * Google results are cached per ~110 m cell at each end (3 decimals), so a
+     * passenger nudging the pin, or many passengers going between the same
+     * places, don't each cost a billed Directions call. The rounding shifts the
+     * distance by at most ~0.2 km. The haversine fallback is never cached, so
+     * a transient Google failure is retried on the next request.
      */
     public function getRoute(float $oLat, float $oLng, float $dLat, float $dLng): array
     {
         $apiKey = config('services.google_maps.key');
 
         if ($apiKey) {
+            $cacheKey = sprintf('gmaps:route:%.3f,%.3f:%.3f,%.3f', $oLat, $oLng, $dLat, $dLng);
+            if ($cached = Cache::get($cacheKey)) {
+                return $cached;
+            }
+
             try {
                 $res = Http::timeout(6)->get('https://maps.googleapis.com/maps/api/directions/json', [
                     'origin'               => "{$oLat},{$oLng}",
@@ -60,13 +77,16 @@ class FareService
                     $durationSec = $leg['duration_in_traffic']['value']
                                 ?? $leg['duration']['value'];
 
-                    return [
+                    $route = [
                         'distance_km'   => round($leg['distance']['value'] / 1000, 2),
                         'duration_min'  => (int) ceil($durationSec / 60),
                         'distance_text' => $leg['distance']['text'],
                         'duration_text' => $leg['duration_in_traffic']['text'] ?? $leg['duration']['text'],
                         'source'        => 'google_maps',
                     ];
+                    Cache::put($cacheKey, $route, self::ROUTE_CACHE_SECONDS);
+
+                    return $route;
                 }
             } catch (\Throwable $e) {
                 Log::warning('[FareService] Google Maps Directions failed: ' . $e->getMessage());
@@ -102,6 +122,12 @@ class FareService
             return $fallback;
         }
 
+        // ~11 m cell; only real place names are cached, never the fallback.
+        $cacheKey = sprintf('gmaps:geocode:%.4f,%.4f', $lat, $lng);
+        if ($cached = Cache::get($cacheKey)) {
+            return $cached;
+        }
+
         try {
             $res = Http::timeout(6)->get('https://maps.googleapis.com/maps/api/geocode/json', [
                 'latlng' => "{$lat},{$lng}",
@@ -111,6 +137,7 @@ class FareService
             if ($res->ok() && $res->json('status') === 'OK') {
                 $address = $res->json('results.0.formatted_address');
                 if (! empty($address)) {
+                    Cache::put($cacheKey, $address, self::GEOCODE_CACHE_SECONDS);
                     return $address;
                 }
             }
