@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\RealtimeUpdate;
 use App\Models\Delivery;
+use App\Models\PricingSetting;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\DriverGeoService;
 use App\Services\DriverMatchingService;
 use App\Services\FareService;
 use App\Services\FcmService;
@@ -13,6 +16,7 @@ use App\Services\MovingFareService;
 use App\Services\PaymentService;
 use App\Mail\TripReceipt;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -394,13 +398,19 @@ class DeliveryController extends ApiController
         $this->firestore->syncDelivery($delivery);
 
         try {
-            $nearbyDrivers = User::where('role', 'driver')
-                ->where('available', true)
-                ->whereNotNull('fcm_token')
-                ->get();
+            $nearbyDrivers = $this->driversToOffer($delivery);
+
+            // Instant in-app offer for drivers with the app open (FCM below
+            // covers a backgrounded app). Remember who was told, so they can be
+            // told again the moment it's taken or cancelled (RealtimeHooks).
+            foreach ($nearbyDrivers as $driver) {
+                RealtimeUpdate::toDriver($driver->id, 'delivery.offered', ['delivery_id' => $delivery->id]);
+            }
+            Cache::put(self::offeredCacheKey($delivery->id), $nearbyDrivers->pluck('id')->all(), 7200);
+
             $dropoffLabel = $delivery->dropoff_address ?? 'Destination TBD';
             $this->fcm->sendToUsers(
-                $nearbyDrivers->all(),
+                $nearbyDrivers->whereNotNull('fcm_token')->all(),
                 '📦 New Delivery Request',
                 "{$delivery->pickup_address} → {$dropoffLabel}",
                 ['type' => 'delivery_requested', 'delivery_id' => (string) $delivery->id]
@@ -414,6 +424,31 @@ class DeliveryController extends ApiController
             'share_token'  => $delivery->share_token,
             'tracking_url' => $delivery->tracking_url,
         ], 201);
+    }
+
+    /** Drivers told about a new delivery — see RealtimeHooks for the follow-up. */
+    public static function offeredCacheKey(int $deliveryId): string
+    {
+        return "delivery:{$deliveryId}:offered";
+    }
+
+    /**
+     * Available drivers near the pickup (Redis GEO, nearest first, capped) —
+     * previously every available driver in the country got a push for every
+     * delivery. Without pickup coordinates, falls back to that old broadcast.
+     */
+    private function driversToOffer(Delivery $delivery): \Illuminate\Support\Collection
+    {
+        if ($delivery->pickup_lat === null || $delivery->pickup_lng === null) {
+            return User::where('role', 'driver')->where('available', true)->whereNotNull('fcm_token')->get();
+        }
+
+        $radiusKm = (float) PricingSetting::get('delivery_match_radius_km', config('delivery.match_radius_km', 30));
+        $nearby   = app(DriverGeoService::class)->nearby((float) $delivery->pickup_lat, (float) $delivery->pickup_lng, $radiusKm, 50);
+
+        return $nearby === []
+            ? collect()
+            : User::whereIn('id', array_keys($nearby))->where('role', 'driver')->where('available', true)->get();
     }
 
     // ── Share tracking link ─────────────────────────────────────────────────

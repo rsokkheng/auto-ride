@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Events\RealtimeUpdate;
+use App\Http\Controllers\Api\DeliveryController;
 use App\Models\ChatMessage;
 use App\Models\Delivery;
 use App\Models\QrPayment;
@@ -10,6 +11,7 @@ use App\Models\Ride;
 use App\Models\SupportMessage;
 use App\Models\SupportTicket;
 use App\Models\TopUpRequest;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Every "push a realtime signal to the app" trigger, in one place.
@@ -51,6 +53,19 @@ class RealtimeHooks
                 'status'      => $delivery->status,
                 'driver_id'   => $delivery->driver_id,
             ]);
+
+            // No longer open (taken by someone, cancelled) — make it vanish from
+            // every other driver it was offered to, instead of on their next poll.
+            $open = ['requested', 'pending'];
+            if (in_array($delivery->getOriginal('status'), $open, true)
+                && ! in_array($delivery->status, $open, true)) {
+                $key = DeliveryController::offeredCacheKey($delivery->id);
+                foreach (Cache::pull($key, []) as $driverId) {
+                    if ((int) $driverId !== (int) $delivery->driver_id) {
+                        RealtimeUpdate::toDriver((int) $driverId, 'delivery.offer_withdrawn', ['delivery_id' => $delivery->id]);
+                    }
+                }
+            }
         });
 
         ChatMessage::created(function (ChatMessage $message) {
