@@ -123,7 +123,7 @@ class FareService
         }
 
         // ~11 m cell; only real place names are cached, never the fallback.
-        $cacheKey = sprintf('gmaps:geocode:%.4f,%.4f', $lat, $lng);
+        $cacheKey = sprintf('gmaps:geocode:v2:%.4f,%.4f', $lat, $lng);
         if ($cached = Cache::get($cacheKey)) {
             return $cached;
         }
@@ -135,7 +135,12 @@ class FareService
             ]);
 
             if ($res->ok() && $res->json('status') === 'OK') {
-                $address = $res->json('results.0.formatted_address');
+                // Google often lists a Plus Code ("GRWV+FH Phnom Penh") first —
+                // prefer the first result that is a real address or place.
+                $results = collect($res->json('results', []));
+                $best    = $results->first(fn ($r) => ! in_array('plus_code', $r['types'] ?? [], true))
+                        ?? $results->first();
+                $address = $best['formatted_address'] ?? null;
                 if (! empty($address)) {
                     Cache::put($cacheKey, $address, self::GEOCODE_CACHE_SECONDS);
                     return $address;

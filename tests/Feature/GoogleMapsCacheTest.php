@@ -65,6 +65,25 @@ class GoogleMapsCacheTest extends TestCase
         $this->assertSame('google_maps', $fare->getRoute(11.5564, 104.9282, 11.5462, 104.8440)['source']);
     }
 
+    public function test_plus_code_is_skipped_for_a_real_place_name(): void
+    {
+        Http::fake(['maps.googleapis.com/maps/api/geocode/*' => Http::response(['status' => 'OK', 'results' => [
+            ['formatted_address' => 'GRWV+FH Phnom Penh, Cambodia', 'types' => ['plus_code']],
+            ['formatted_address' => 'Phnom Penh International Airport, Phnom Penh', 'types' => ['airport', 'point_of_interest']],
+        ]])]);
+
+        $this->assertSame('Phnom Penh International Airport, Phnom Penh', app(FareService::class)->reverseGeocode(11.5462, 104.8440));
+    }
+
+    public function test_only_a_plus_code_is_still_better_than_coordinates(): void
+    {
+        Http::fake(['maps.googleapis.com/maps/api/geocode/*' => Http::response(['status' => 'OK', 'results' => [
+            ['formatted_address' => 'GRWV+FH Phnom Penh, Cambodia', 'types' => ['plus_code']],
+        ]])]);
+
+        $this->assertSame('GRWV+FH Phnom Penh, Cambodia', app(FareService::class)->reverseGeocode(11.5462, 104.8440));
+    }
+
     public function test_place_names_are_cached_and_fallback_is_not(): void
     {
         Http::fakeSequence('maps.googleapis.com/maps/api/geocode/*')
