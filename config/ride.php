@@ -50,4 +50,19 @@ return [
     */
     'local_timezone' => env('APP_LOCAL_TIMEZONE', 'Asia/Phnom_Penh'),
 
+    /*
+    |------------------------------------------------------------------
+    | Service Area (bounding box)
+    |------------------------------------------------------------------
+    | Coordinates outside this box are treated as bad GPS (a simulator's
+    | default location, a stale cached fix) and never stored as a trip
+    | point or priced. Default: Cambodia — same box as the driver app.
+    */
+    'service_area' => [
+        'min_lat' => (float) env('SERVICE_AREA_MIN_LAT', 10.4),
+        'max_lat' => (float) env('SERVICE_AREA_MAX_LAT', 14.7),
+        'min_lng' => (float) env('SERVICE_AREA_MIN_LNG', 102.3),
+        'max_lng' => (float) env('SERVICE_AREA_MAX_LNG', 107.6),
+    ],
+
 ];

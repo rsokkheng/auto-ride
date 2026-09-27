@@ -131,6 +131,7 @@ Route::prefix('v1')->group(function () {
     Route::post('rides/{ride}/reject', [RideController::class, 'reject']);
     Route::post('rides/{ride}/arrive', [RideController::class, 'arrive']);
     Route::post('rides/{ride}/start', [RideController::class, 'start']);
+    Route::get('rides/{ride}/meter', [RideController::class, 'meter']);
     Route::post('rides/{ride}/complete', [RideController::class, 'complete']);
     Route::post('rides/{ride}/cancel', [RideController::class, 'cancel']);
     Route::post('rides/{ride}/rate', [RideController::class, 'rate']);

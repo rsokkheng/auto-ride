@@ -384,6 +384,15 @@ class FareService
         });
     }
 
+    /** Whether a coordinate lies inside the configured service area (config ride.service_area). */
+    public static function inServiceArea(float $lat, float $lng): bool
+    {
+        $a = config('ride.service_area');
+
+        return $lat >= $a['min_lat'] && $lat <= $a['max_lat']
+            && $lng >= $a['min_lng'] && $lng <= $a['max_lng'];
+    }
+
     /** Current wall-clock time in the local business timezone, independent of app.timezone. */
     public static function localNow(): Carbon
     {

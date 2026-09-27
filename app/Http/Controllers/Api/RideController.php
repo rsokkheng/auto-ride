@@ -10,6 +10,7 @@ use App\Models\PromoCode;
 use App\Models\PromoCodeUsage;
 use App\Models\PricingSetting;
 use App\Services\FareService;
+use App\Services\TripMeterService;
 use App\Services\FcmService;
 use App\Services\FirestoreService;
 use App\Services\PaymentService;
@@ -813,6 +814,49 @@ class RideController extends ApiController
      * POST /v1/rides/{ride}/complete
      * Driver completes the trip. Triggers payment processing.
      */
+    /**
+     * GET /v1/rides/{ride}/meter?lat=&lng=
+     * Live meter for a metered ("book without destination") trip in progress:
+     * distance/duration from the GPS track so far + the fare they price to.
+     * The driver app shows this for confirmation before completing.
+     */
+    public function meter(Request $request, Ride $ride)
+    {
+        $user = $this->authUser($request);
+        if (! $user || $user->role !== 'driver' || $ride->driver_id !== $user->id) {
+            return $this->unauthorized();
+        }
+
+        if ($ride->status !== Ride::STATUS_IN_PROGRESS || ! is_null($ride->dropoff_address)) {
+            return response()->json(['data' => null, 'message' => 'Meter is only available for a metered trip in progress.'], 422);
+        }
+
+        $data = $request->validate([
+            'lat' => 'nullable|numeric|between:-90,90',
+            'lng' => 'nullable|numeric|between:-180,180',
+        ]);
+
+        $meter = app(TripMeterService::class)->measure(
+            $ride,
+            isset($data['lat']) ? (float) $data['lat'] : null,
+            isset($data['lng']) ? (float) $data['lng'] : null,
+        );
+
+        $fare = $this->fare->calculateRideFare(
+            $ride->service_type, $meter,
+            (float) $ride->pickup_lat, (float) $ride->pickup_lng,
+        );
+
+        return $this->success([
+            'distance_km'  => $meter['distance_km'],
+            'duration_min' => $meter['duration_min'],
+            'fare'         => $fare['total'],
+            'breakdown'    => $fare['breakdown'],
+            'currency'     => $fare['currency'],
+            'source'       => $meter['source'],
+        ]);
+    }
+
     public function complete(Request $request, Ride $ride)
     {
         $user = $this->authUser($request);
@@ -855,6 +899,16 @@ class RideController extends ApiController
                 ? (float) $completionData['dropoff_lng']
                 : ((float) $user->current_longitude ?: null);
 
+            // A position outside the service area is bad GPS (e.g. an iOS
+            // simulator reporting Cupertino) — storing/pricing it produced a
+            // 17,145 km "trip". Drop it; the ride keeps the driver's fare.
+            if ($dropoffLat && $dropoffLng && ! FareService::inServiceArea($dropoffLat, $dropoffLng)) {
+                Log::warning('ride_complete_dropoff_outside_service_area', [
+                    'ride_id' => $ride->id, 'lat' => $dropoffLat, 'lng' => $dropoffLng,
+                ]);
+                $dropoffLat = $dropoffLng = null;
+            }
+
             if (! empty($completionData['dropoff_address'])) {
                 $updates['dropoff_address'] = $completionData['dropoff_address'];
             } elseif ($dropoffLat && $dropoffLng) {
@@ -866,21 +920,20 @@ class RideController extends ApiController
             if ($dropoffLat && $dropoffLng) {
                 $updates['dropoff_lat'] = $dropoffLat;
                 $updates['dropoff_lng'] = $dropoffLng;
+            }
 
-                // Auto-calculate fare from actual driven route when no explicit fare was given
-                if (! isset($completionData['final_fare'])) {
-                    $mRoute = $this->fare->getRoute(
-                        (float) $ride->pickup_lat, (float) $ride->pickup_lng,
-                        $dropoffLat, $dropoffLng,
-                    );
-                    $fareResult = $this->fare->calculateRideFare(
-                        $ride->service_type, $mRoute,
-                        (float) $ride->pickup_lat, (float) $ride->pickup_lng,
-                    );
-                    $updates['fare']         = $fareResult['total'];
-                    $updates['distance_km']  = $mRoute['distance_km'];
-                    $updates['duration_min'] = $mRoute['duration_min'];
-                }
+            // Distance/duration from the GPS track actually driven — recorded
+            // even when the driver confirmed an explicit fare, so receipts and
+            // reports show the real trip.
+            $meter = app(TripMeterService::class)->measure($ride, $dropoffLat, $dropoffLng);
+            $updates['distance_km']  = $meter['distance_km'];
+            $updates['duration_min'] = $meter['duration_min'];
+
+            if (! isset($completionData['final_fare'])) {
+                $updates['fare'] = $this->fare->calculateRideFare(
+                    $ride->service_type, $meter,
+                    (float) $ride->pickup_lat, (float) $ride->pickup_lng,
+                )['total'];
             }
         }
 
