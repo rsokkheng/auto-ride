@@ -93,7 +93,7 @@
                     @endif
                 </div>
                 <div class="hint">
-                    Open the ROTEH app, enter this code at checkout, and enjoy your discount.
+                    Open the ROTEH app, enter this code at checkout your discount.
                 </div>
             </div>
         @else
