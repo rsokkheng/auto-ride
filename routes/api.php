@@ -122,6 +122,7 @@ Route::prefix('v1')->group(function () {
     Route::get('rides/scheduled',           [RideFeaturesController::class, 'scheduled']);
     Route::patch('rides/{ride}/schedule',   [RideFeaturesController::class, 'modifyScheduled']);
     Route::get('rides/reorder-last', [RideFeaturesController::class, 'reorderLast']);
+    Route::get('rides/cancellation-policy', [RideFeaturesController::class, 'cancellationPolicy']);
     Route::post('rides/estimate', [RideController::class, 'estimate'])->middleware('service-area');
     Route::post('rides', [RideController::class, 'store'])->middleware('service-area');
 

@@ -18,6 +18,7 @@ use App\Models\MarketplaceVehicleColor;
 use App\Models\MarketplaceVehicleSize;
 use App\Models\MarketplaceVehicleType;
 use App\Models\MovingFloorFeeTier;
+use App\Models\CancellationPolicyTier;
 use App\Models\PromoEvent;
 use App\Models\MarketplaceProductImage;
 use App\Models\Ride;
@@ -185,18 +186,18 @@ class AdminController extends Controller
 
     public function fareManagement()
     {
-        $settings = PricingSetting::all()->keyBy('key');
-        $tiers    = rescue(fn () => MembershipTier::orderBy('sort_order')->get(), collect(), false);
+        $settings    = PricingSetting::all()->keyBy('key');
+        $tiers       = rescue(fn () => MembershipTier::orderBy('sort_order')->get(), collect(), false);
+        $cancelTiers = CancellationPolicyTier::orderByRaw("FIELD(stage, 'before_accept', 'after_accept', 'after_arrival')")
+            ->orderBy('from_minute')
+            ->get();
 
-        return view('admin.fare-management', compact('settings', 'tiers'));
+        return view('admin.fare-management', compact('settings', 'tiers', 'cancelTiers'));
     }
 
     public function updateFareManagement(Request $request)
     {
         $data = $request->validate([
-            'cancel_fee_after_arrival'        => 'required|integer|min:0',
-            'cancel_fee_after_accepted'        => 'required|integer|min:0',
-            'cancel_free_minutes'              => 'required|integer|min:0',
             'waiting_free_minutes'             => 'required|integer|min:0',
             'waiting_rate_khr_per_min'         => 'required|integer|min:0',
             'night_surcharge_rate'             => 'required|numeric|min:0|max:2',
@@ -210,9 +211,34 @@ class AdminController extends Controller
             'loyalty_redeem_rate_khr'          => 'required|integer|min:0',
         ]);
 
-        foreach ($data as $key => $value) {
-            PricingSetting::updateOrCreate(['key' => $key], ['value' => $value]);
+        $cancelTiers = $request->validate([
+            'cancel_tiers'               => 'required|array|min:1|max:30',
+            'cancel_tiers.*.stage'       => 'required|in:' . implode(',', CancellationPolicyTier::STAGES),
+            'cancel_tiers.*.from_minute' => 'required|integer|min:0|max:1440',
+            'cancel_tiers.*.fee_khr'     => 'required|integer|min:0',
+        ])['cancel_tiers'];
+
+        $keys = array_map(fn ($t) => $t['stage'] . ':' . (int) $t['from_minute'], $cancelTiers);
+        if (count($keys) !== count(array_unique($keys))) {
+            return back()->withInput()->withErrors([
+                'cancel_tiers' => 'Each cancellation stage can only have one tier per start minute.',
+            ]);
         }
+
+        \DB::transaction(function () use ($data, $cancelTiers) {
+            foreach ($data as $key => $value) {
+                PricingSetting::set($key, $value);
+            }
+
+            CancellationPolicyTier::query()->delete();
+            foreach ($cancelTiers as $tier) {
+                CancellationPolicyTier::create([
+                    'stage'       => $tier['stage'],
+                    'from_minute' => (int) $tier['from_minute'],
+                    'fee_khr'     => (int) $tier['fee_khr'],
+                ]);
+            }
+        });
 
         return back()->with('success', 'Fee settings saved successfully.');
     }

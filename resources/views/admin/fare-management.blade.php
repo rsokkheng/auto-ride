@@ -33,48 +33,83 @@
 <form method="POST" action="{{ route('admin.fare-management.update') }}">
 @csrf
 
-{{-- ── Section 1: Cancellation Fees ───────────────────────────────────── --}}
+{{-- ── Section 1: Cancellation Policy ─────────────────────────────────── --}}
+@php
+    $stageLabels = [
+        'before_accept' => 'Before driver accepts',
+        'after_accept'  => 'After driver accepts',
+        'after_arrival' => 'After driver arrives',
+    ];
+    $cancelRows = old('cancel_tiers', $cancelTiers->map(fn ($t) => [
+        'stage'       => $t->stage,
+        'from_minute' => $t->from_minute,
+        'fee_khr'     => $t->fee_khr,
+    ])->all());
+@endphp
 <div class="fm-card">
     <div class="fm-header">
         <div class="fm-icon" style="background:#ef4444;"><i class="fas fa-times-circle"></i></div>
         <div>
-            <div class="fm-title">Cancellation Fees</div>
-            <div class="fm-subtitle">Charged to the passenger when they cancel after driver actions</div>
+            <div class="fm-title">Cancellation Policy</div>
+            <div class="fm-subtitle">Fees charged to the passenger on cancel — shown as-is on the app's Cancellation Policy screen</div>
         </div>
     </div>
     <div class="fm-body">
-        <div class="row">
-            <div class="col-md-4 mb-3">
-                <div class="field-label">Fee After Driver Arrived</div>
-                <div class="input-wrap">
-                    <span class="input-prefix">៛</span>
-                    <input type="number" name="cancel_fee_after_arrival" class="fm-input px"
-                           value="{{ $settings['cancel_fee_after_arrival']->value ?? 3000 }}" min="0" step="500" required>
-                </div>
-                <small class="text-muted" style="font-size:.72rem;">Charged when passenger cancels after driver arrived at pickup</small>
-            </div>
-            <div class="col-md-4 mb-3">
-                <div class="field-label">Fee After Accepted (outside free window)</div>
-                <div class="input-wrap">
-                    <span class="input-prefix">៛</span>
-                    <input type="number" name="cancel_fee_after_accepted" class="fm-input px"
-                           value="{{ $settings['cancel_fee_after_accepted']->value ?? 1000 }}" min="0" step="500" required>
-                </div>
-                <small class="text-muted" style="font-size:.72rem;">Charged when passenger cancels after free window expires</small>
-            </div>
-            <div class="col-md-4 mb-3">
-                <div class="field-label">Free Cancellation Window</div>
-                <div class="input-wrap">
-                    <input type="number" name="cancel_free_minutes" class="fm-input"
-                           value="{{ $settings['cancel_free_minutes']->value ?? 3 }}" min="0" max="60" required>
-                    <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:.78rem;color:#94a3b8;">min</span>
-                </div>
-                <small class="text-muted" style="font-size:.72rem;">Minutes after acceptance before fee applies</small>
-            </div>
+        @error('cancel_tiers')
+        <div class="alert alert-danger py-2" style="font-size:.8rem;">{{ $message }}</div>
+        @enderror
+        <div class="table-responsive">
+            <table class="table table-sm mb-2" id="cancel-tiers-table" style="font-size:.85rem;">
+                <thead>
+                    <tr>
+                        <th class="field-label" style="border-top:0;">Stage</th>
+                        <th class="field-label" style="border-top:0;width:180px;">From minute</th>
+                        <th class="field-label" style="border-top:0;width:200px;">Fee</th>
+                        <th style="border-top:0;width:50px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($cancelRows as $i => $row)
+                    <tr>
+                        <td>
+                            <select name="cancel_tiers[{{ $i }}][stage]" class="fm-input" required>
+                                @foreach($stageLabels as $value => $label)
+                                <option value="{{ $value }}" @selected($row['stage'] === $value)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </td>
+                        <td>
+                            <div class="input-wrap">
+                                <input type="number" name="cancel_tiers[{{ $i }}][from_minute]" class="fm-input"
+                                       value="{{ $row['from_minute'] }}" min="0" max="1440" required>
+                                <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:.78rem;color:#94a3b8;">min</span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="input-wrap">
+                                <span class="input-prefix">៛</span>
+                                <input type="number" name="cancel_tiers[{{ $i }}][fee_khr]" class="fm-input px"
+                                       value="{{ $row['fee_khr'] }}" min="0" step="500" required>
+                            </div>
+                        </td>
+                        <td class="text-right">
+                            <button type="button" class="btn btn-sm btn-outline-danger js-remove-tier" title="Remove">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
         </div>
+        <button type="button" class="btn btn-sm btn-outline-primary mb-3" id="add-cancel-tier">
+            <i class="fas fa-plus mr-1"></i> Add tier
+        </button>
         <div class="info-box">
             <i class="fas fa-info-circle mr-1"></i>
-            Logic: If driver has arrived → <strong>arrived fee</strong>. If accepted > free window → <strong>accepted fee</strong>. Otherwise → free.
+            Each tier applies from its <strong>start minute</strong> until the next tier of the same stage. Minutes count from when the
+            ride was requested / the driver accepted / the driver arrived. A stage with no tier from minute 0 is free until its first tier.
+            Fees are skipped when the passenger's wallet balance is too low.
         </div>
     </div>
 </div>
@@ -265,3 +300,31 @@
 
 </form>
 @endsection
+
+@push('scripts')
+<script>
+(function () {
+    var table = document.querySelector('#cancel-tiers-table tbody');
+    var next  = table.rows.length;
+
+    document.getElementById('add-cancel-tier').addEventListener('click', function () {
+        var tpl = table.rows[0] ? table.rows[0].cloneNode(true) : null;
+        if (!tpl) return;
+        tpl.querySelectorAll('[name]').forEach(function (el) {
+            el.name = el.name.replace(/cancel_tiers\[\d+\]/, 'cancel_tiers[' + next + ']');
+            if (el.tagName === 'SELECT') el.value = 'after_accept';
+            else el.value = 0;
+        });
+        next++;
+        table.appendChild(tpl);
+    });
+
+    table.addEventListener('click', function (e) {
+        var btn = e.target.closest('.js-remove-tier');
+        if (!btn) return;
+        if (table.rows.length <= 1) return alert('Keep at least one tier.');
+        btn.closest('tr').remove();
+    });
+})();
+</script>
+@endpush

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\CancellationPolicyTier;
 use App\Models\Ride;
 use App\Models\RideStop;
 use App\Models\PromoCode;
@@ -81,6 +82,15 @@ class RideFeaturesController extends ApiController
     }
 
     // ── Re-order last ride ────────────────────────────────────────────────────
+
+    // ── Cancellation policy ───────────────────────────────────────────────────
+
+    public function cancellationPolicy(Request $request)
+    {
+        if (! $this->authUser($request)) return $this->unauthorized();
+
+        return $this->success(['tiers' => CancellationPolicyTier::policy()]);
+    }
 
     public function reorderLast(Request $request)
     {

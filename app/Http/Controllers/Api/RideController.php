@@ -998,18 +998,7 @@ class RideController extends ApiController
         $isByPassenger   = $user->id === $ride->passenger_id;
 
         if ($isByPassenger) {
-            $feeAfterArrival  = (int) \App\Models\PricingSetting::get('cancel_fee_after_arrival', 3000);
-            $feeAfterAccepted = (int) \App\Models\PricingSetting::get('cancel_fee_after_accepted', 1000);
-            $freeMinutes      = (int) \App\Models\PricingSetting::get('cancel_free_minutes', 3);
-
-            if ($ride->status === Ride::STATUS_DRIVER_ARRIVED) {
-                $cancellationFee = $feeAfterArrival;
-            } elseif ($ride->status === Ride::STATUS_ACCEPTED && $ride->accepted_at) {
-                $minutesSinceAccept = (int) now()->diffInMinutes($ride->accepted_at);
-                if ($minutesSinceAccept >= $freeMinutes) {
-                    $cancellationFee = $feeAfterAccepted;
-                }
-            }
+            $cancellationFee = \App\Models\CancellationPolicyTier::feeFor($ride);
 
             if ($cancellationFee > 0 && $user->wallet_balance >= $cancellationFee) {
                 $this->wallet->debit($user, $cancellationFee, 'cancellation_fee', "Cancellation fee for ride #{$ride->id}");
