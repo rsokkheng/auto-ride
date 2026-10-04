@@ -149,6 +149,16 @@ class AuthController extends ApiController
             'refresh_token_expires_at'=> null,
         ]);
 
+        // Unlink this phone's push token, so the account's alerts stop
+        // arriving on a phone it has logged out of.
+        $fcmToken = $request->input('fcm_token');
+        if (is_string($fcmToken) && $fcmToken !== '') {
+            if ($user->fcm_token === $fcmToken) {
+                $user->update(['fcm_token' => null]);
+            }
+            DriverDevice::where('user_id', $user->id)->where('token', $fcmToken)->update(['is_active' => false]);
+        }
+
         return $this->success(['message' => 'Logged out successfully.']);
     }
 
@@ -520,6 +530,11 @@ class AuthController extends ApiController
         $deviceId  = $data['device_id'] ?? substr(md5($token), 0, 16);
 
         $user->update(['fcm_token' => $token]);
+
+        // A phone has one token. If another account was logged in on this
+        // phone before, stop sending that account's pushes here.
+        User::where('fcm_token', $token)->where('id', '!=', $user->id)->update(['fcm_token' => null]);
+        DriverDevice::where('token', $token)->where('user_id', '!=', $user->id)->update(['is_active' => false]);
 
         // Auto-register into driver_devices so sendToDriver() works without
         // requiring the app to call the new /driver/device-token endpoint.
