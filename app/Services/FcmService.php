@@ -122,6 +122,20 @@ class FcmService
     }
 
     /**
+     * Push to a user's phone without adding to their in-app notification list —
+     * for alerts that already have their own inbox (admin alerts).
+     */
+    public function pushOnly(User $user, string $title, string $body, array $data = []): void
+    {
+        if (! $user->fcm_token) return;
+
+        $fcmStatus = $this->sendOne($user->fcm_token, $title, $body, $data);
+        if ($this->isDeadToken($fcmStatus)) {
+            $user->update(['fcm_token' => null]);
+        }
+    }
+
+    /**
      * Push to a bare device token with no account behind it (guest shoppers).
      */
     public function sendToToken(string $fcmToken, string $title, string $body, array $data = []): string
@@ -316,7 +330,11 @@ class FcmService
 
         $type = $data['type'] ?? '';
         [$soundName, $channelId] = self::TYPE_SOUNDS[$type]
-            ?? (str_starts_with($type, 'shop_') ? [null, 'shop_updates'] : [null, 'general']);
+            ?? match (true) {
+                str_starts_with($type, 'shop_')  => [null, 'shop_updates'],
+                str_starts_with($type, 'admin_') => [null, 'admin_alerts'],
+                default                          => [null, 'general'],
+            };
         $iosSound = $soundName ? "{$soundName}.wav" : 'default';
 
         $stringData = array_map('strval', $data + ['sound' => $soundName ?? 'default']);

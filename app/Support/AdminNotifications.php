@@ -7,6 +7,7 @@ use App\Models\AdminNotification;
 use App\Models\CarRental;
 use App\Models\MarketplaceOrder;
 use App\Models\User;
+use App\Services\FcmService;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -166,7 +167,8 @@ class AdminNotifications
 
     private static function notify(string $type, string $category, string $kind, int $orderId, string $title, string $message, array $data): void
     {
-        foreach (self::recipients() as $admin) {
+        $recipients = self::recipients();
+        foreach ($recipients as $admin) {
             $n = AdminNotification::create([
                 'user_id'    => $admin->id,
                 'type'       => $type,
@@ -183,6 +185,34 @@ class AdminNotifications
                 'counts'       => AdminNotification::unreadCounts($admin->id),
             ]);
         }
+
+        self::pushToPhones($recipients, $title, $message, [
+            'type'       => 'admin_alert',
+            'alert_type' => $type,
+            'order_kind' => $kind,
+            'order_id'   => (string) $orderId,
+        ]);
+    }
+
+    // Admins logged in on the mobile app get a phone push too. Sent after the
+    // response on web requests so FCM round-trips never slow checkout down.
+    private static function pushToPhones(Collection $admins, string $title, string $message, array $data): void
+    {
+        $admins = $admins->filter(fn (User $a) => $a->fcm_token)->values();
+        if ($admins->isEmpty()) return;
+
+        $send = function () use ($admins, $title, $message, $data) {
+            $fcm = app(FcmService::class);
+            foreach ($admins as $admin) {
+                try {
+                    $fcm->pushOnly($admin, $title, $message, $data);
+                } catch (Throwable $e) {
+                    Log::error('[AdminNotifications] push failed', ['admin_id' => $admin->id, 'error' => $e->getMessage()]);
+                }
+            }
+        };
+
+        app()->runningInConsole() ? $send() : app()->terminating($send);
     }
 
     /** Admins allowed to handle shop orders. Until the permission is seeded, every admin gets them. */

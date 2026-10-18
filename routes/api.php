@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\UserProfileController;
 use App\Http\Controllers\Api\VehicleController;
 use App\Http\Controllers\Api\AccessibilityController;
 use App\Http\Controllers\Api\AdminApiController;
+use App\Http\Controllers\Api\AdminNotificationController;
 use App\Http\Controllers\Api\BannerController;
 use App\Http\Controllers\Api\PromoEventController;
 use App\Http\Controllers\Api\BiometricController;
@@ -457,6 +458,12 @@ Route::prefix('v1')->group(function () {
 
     // Dashboard
     Route::get('admin/stats',    [AdminApiController::class, 'stats']);
+
+    // Shop-order alerts (same inbox as the web panel's bell)
+    Route::get('admin/notifications',                        [AdminNotificationController::class, 'index']);
+    Route::get('admin/notifications/unread-count',           [AdminNotificationController::class, 'unreadCount']);
+    Route::post('admin/notifications/read-all',              [AdminNotificationController::class, 'markAllRead']);
+    Route::post('admin/notifications/{notification}/read',   [AdminNotificationController::class, 'markRead']);
 
     // Users
     Route::get('admin/users',                       [AdminApiController::class, 'users']);
