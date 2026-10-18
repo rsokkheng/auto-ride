@@ -21,6 +21,11 @@ Schedule::command(SendRideReminders::class)
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/scheduler.log'));
 
+// Drops read admin notifications older than 90 days (unread ones are kept).
+Schedule::command('model:prune', ['--model' => [\App\Models\AdminNotification::class]])
+    ->daily()
+    ->appendOutputTo(storage_path('logs/scheduler.log'));
+
 // Runs via the cron-driven scheduler (not the queue worker itself) so it can
 // still detect and log a dead/stopped queue:work process.
 Schedule::command(QueueHealthCheck::class)

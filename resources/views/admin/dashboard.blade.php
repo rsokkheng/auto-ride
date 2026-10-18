@@ -25,6 +25,8 @@
 
 @section('content')
 
+@include('admin.partials.order-alert-banner')
+
 {{-- ── Top KPI row ──────────────────────────────────────────────────────── --}}
 <div class="row g-3">
     {{-- Today's Revenue --}}

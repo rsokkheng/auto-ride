@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Support\AdminNotifications;
 use App\Support\RealtimeHooks;
 use App\Support\ShopNotifications;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -22,6 +23,7 @@ class AppServiceProvider extends ServiceProvider
 
         RealtimeHooks::register();
         ShopNotifications::register();
+        AdminNotifications::register();
     }
 
     private function configureRateLimiting(): void

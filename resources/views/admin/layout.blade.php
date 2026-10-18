@@ -59,6 +59,15 @@
         </ul>
 
         <ul class="navbar-nav ml-auto">
+            @php
+                $anEnabled = Auth::check() && Auth::user()->role === 'admin';
+                $anCounts  = $anEnabled
+                    ? rescue(fn () => \App\Models\AdminNotification::unreadCounts(Auth::id()), null, false)
+                    : null;
+            @endphp
+            @if($anCounts)
+                @include('admin.partials.notification-bell')
+            @endif
             <li class="nav-item dropdown">
                 <a class="nav-link" data-toggle="dropdown" href="#">
                     <div class="d-flex align-items-center gap-2">
@@ -332,6 +341,9 @@
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2.0/dist/js/adminlte.min.js"></script>
+@if($anCounts)
+    @include('admin.partials.notification-script')
+@endif
 
 @stack('scripts')
 </body>

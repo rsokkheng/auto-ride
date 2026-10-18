@@ -1107,6 +1107,10 @@ class AdminController extends Controller
         $query = \App\Models\MarketplaceOrder::with(['product', 'buyer', 'seller'])
             ->latest();
 
+        // Exact order, e.g. opened from an admin notification.
+        if ($request->filled('id')) {
+            $query->whereKey($request->integer('id'));
+        }
         if ($request->filled('order_type')) {
             $query->where('order_type', $request->order_type);
         }
@@ -1139,6 +1143,7 @@ class AdminController extends Controller
     public function confirmMarketplaceOrder(\App\Models\MarketplaceOrder $order)
     {
         if ($order->status === 'pending') {
+            $order->actedBy = 'admin';
             $order->update(['status' => 'confirmed']);
         }
         return back()->with('success', 'Order #' . $order->id . ' confirmed.');
@@ -1147,6 +1152,7 @@ class AdminController extends Controller
     public function completeMarketplaceOrder(\App\Models\MarketplaceOrder $order)
     {
         if ($order->status === 'confirmed') {
+            $order->actedBy = 'admin';
             $order->update(['status' => 'completed', 'payment_status' => 'paid']);
             if ($order->order_type === 'purchase') {
                 $product   = $order->product;
@@ -1163,6 +1169,7 @@ class AdminController extends Controller
     public function cancelMarketplaceOrder(\App\Models\MarketplaceOrder $order)
     {
         if (! in_array($order->status, ['completed', 'cancelled'])) {
+            $order->actedBy = 'admin';
             $order->update(['status' => 'cancelled']);
         }
         return back()->with('success', 'Order #' . $order->id . ' cancelled.');
@@ -1176,6 +1183,10 @@ class AdminController extends Controller
 
         $query = \App\Models\CarRental::with(['user', 'marketplaceProduct.images'])->latest();
 
+        // Exact rental, e.g. opened from an admin notification.
+        if ($request->filled('id')) {
+            $query->whereKey($request->integer('id'));
+        }
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
@@ -1204,6 +1215,7 @@ class AdminController extends Controller
     public function confirmCarRental(\App\Models\CarRental $rental)
     {
         if ($rental->status === 'pending') {
+            $rental->actedBy = 'admin';
             $rental->update(['status' => 'confirmed', 'confirmed_at' => now()]);
         }
         return back()->with('success', 'Rental #' . $rental->id . ' confirmed.');
@@ -1212,6 +1224,7 @@ class AdminController extends Controller
     public function completeCarRental(\App\Models\CarRental $rental)
     {
         if ($rental->status === 'confirmed') {
+            $rental->actedBy = 'admin';
             $rental->update(['status' => 'completed']);
         }
         return back()->with('success', 'Rental #' . $rental->id . ' completed.');
@@ -1220,6 +1233,7 @@ class AdminController extends Controller
     public function cancelCarRental(\App\Models\CarRental $rental)
     {
         if (! in_array($rental->status, ['completed', 'cancelled'])) {
+            $rental->actedBy = 'admin';
             $rental->update(['status' => 'cancelled', 'cancelled_at' => now()]);
         }
         return back()->with('success', 'Rental #' . $rental->id . ' cancelled.');

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminController;
+use App\Http\Controllers\Admin\NotificationController;
 use App\Http\Controllers\Admin\ReportExportController;
 use App\Http\Controllers\Admin\SettlementController;
 use App\Http\Controllers\Seller\SellerController;
@@ -27,6 +28,13 @@ Route::post('admin/logout', [AdminController::class, 'logout'])->name('admin.log
 
 Route::prefix('admin')->group(function () {
     Route::get('/', [AdminController::class, 'dashboard'])->name('admin.dashboard');
+
+    // Notifications (header bell, realtime over Reverb)
+    Route::get('notifications',                       [NotificationController::class, 'index'])->name('admin.notifications');
+    Route::get('notifications/feed',                  [NotificationController::class, 'feed'])->name('admin.notifications.feed');
+    Route::post('notifications/read-all',             [NotificationController::class, 'markAllRead'])->name('admin.notifications.read-all');
+    Route::get('notifications/{notification}/open',   [NotificationController::class, 'open'])->name('admin.notifications.open');
+    Route::post('broadcasting/auth',                  [NotificationController::class, 'broadcastAuth'])->name('admin.broadcasting.auth');
 
     // Driver Approvals
     Route::get('drivers', [AdminController::class, 'drivers'])->name('admin.drivers');

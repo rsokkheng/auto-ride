@@ -17,6 +17,11 @@ use Illuminate\Support\Facades\Broadcast;
 
 Broadcast::channel('user.{userId}', fn (User $user, int $userId) => $user->id === $userId);
 
+// Admin panel bell — authorized from the web session via POST /admin/broadcasting/auth.
+Broadcast::channel('admin.{userId}', fn (User $user, int $userId) =>
+    $user->id === $userId && $user->role === 'admin'
+);
+
 Broadcast::channel('driver.{driverId}', fn (User $user, int $driverId) =>
     $user->id === $driverId && $user->role === 'driver'
 );
