@@ -78,6 +78,37 @@ class ShopGuestPromoTest extends TestCase
         $this->assertSame(self::GUEST_TOKEN, $order->guest_token);
     }
 
+    public function test_guest_can_choose_delivery_to_their_address(): void
+    {
+        $product = $this->product($this->user());
+
+        $this->postJson("/api/v1/marketplace/{$product->id}/order", $this->guestFields(['fulfillment' => 'delivery']))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['delivery_address']);
+
+        $this->postJson("/api/v1/marketplace/{$product->id}/order", $this->guestFields([
+            'fulfillment'      => 'delivery',
+            'delivery_address' => 'St 271, Phnom Penh',
+            'delivery_lat'     => 11.5449,
+            'delivery_lng'     => 104.8922,
+        ]))->assertCreated()
+            ->assertJsonPath('data.order.fulfillment', 'delivery')
+            ->assertJsonPath('data.order.delivery_address', 'St 271, Phnom Penh');
+
+        $this->getJson('/api/v1/marketplace/guest-orders?guest_token=' . self::GUEST_TOKEN)
+            ->assertJsonPath('data.orders.0.fulfillment', 'delivery');
+    }
+
+    public function test_orders_default_to_pickup(): void
+    {
+        $product = $this->product($this->user());
+
+        $this->postJson("/api/v1/marketplace/{$product->id}/order", $this->guestFields(['delivery_address' => 'ignored']))
+            ->assertCreated()
+            ->assertJsonPath('data.order.fulfillment', 'pickup')
+            ->assertJsonPath('data.order.delivery_address', null);
+    }
+
     public function test_guest_order_needs_contact_details(): void
     {
         $product = $this->product($this->user());

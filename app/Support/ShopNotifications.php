@@ -79,7 +79,8 @@ class ShopNotifications
             $isRent ? '🔑 New rental request' : '🛒 New order',
             $isRent
                 ? "{$o->buyerName()} wants to rent {$title} from {$o->rent_start_date?->toDateString()} to {$o->rent_end_date?->toDateString()} — " . self::usd($o->total_price)
-                : "{$o->buyerName()} ordered {$o->quantity}× {$title} — " . self::usd($o->total_price),
+                : "{$o->buyerName()} ordered {$o->quantity}× {$title} — " . self::usd($o->total_price)
+                    . ($o->fulfillment === 'delivery' ? " · Deliver to {$o->delivery_address}" : ' · Pick up'),
             self::orderData($o, $isRent ? 'shop_rent_new' : 'shop_order_new'));
     }
 

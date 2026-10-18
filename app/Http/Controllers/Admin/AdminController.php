@@ -53,14 +53,7 @@ class AdminController extends Controller
     /** Roles allowed to access the admin panel. */
     private static function allowedRoles(): array
     {
-        $roles = ['admin'];
-
-        if (config('app.admin_test_mode')) {
-            $roles[] = 'driver';
-            $roles[] = 'passenger';
-        }
-
-        return $roles;
+        return \App\Http\Middleware\AdminAuth::allowedRoles();
     }
 
     public function __construct()

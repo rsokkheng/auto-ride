@@ -19,6 +19,10 @@ class MarketplaceOrder extends Model
         'guest_fcm_token',
         'seller_id',
         'order_type',
+        'fulfillment',
+        'delivery_address',
+        'delivery_lat',
+        'delivery_lng',
         'quantity',
         'unit_price',
         'total_price',
@@ -43,6 +47,8 @@ class MarketplaceOrder extends Model
         'quantity'           => 'integer',
         'rent_start_date'    => 'date',
         'rent_end_date'      => 'date',
+        'delivery_lat'       => 'float',
+        'delivery_lng'       => 'float',
     ];
 
     public function product(): BelongsTo

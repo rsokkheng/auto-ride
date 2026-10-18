@@ -26,7 +26,7 @@ Route::get('admin/login', [AdminController::class, 'showLogin'])->name('admin.lo
 Route::post('admin/login', [AdminController::class, 'login'])->middleware('throttle:login')->name('admin.login.post');
 Route::post('admin/logout', [AdminController::class, 'logout'])->name('admin.logout');
 
-Route::prefix('admin')->group(function () {
+Route::prefix('admin')->middleware(\App\Http\Middleware\AdminAuth::class)->group(function () {
     Route::get('/', [AdminController::class, 'dashboard'])->name('admin.dashboard');
 
     // Notifications (header bell, realtime over Reverb)

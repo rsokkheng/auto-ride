@@ -529,6 +529,10 @@ class MarketplaceController extends ApiController
             'payment_method'   => 'nullable|in:cash,wallet,aba,wing,other_online',
             'notes'            => 'nullable|string',
             'promo_code'       => 'nullable|string|max:32',
+            'fulfillment'      => 'nullable|in:pickup,delivery',
+            'delivery_address' => 'required_if:fulfillment,delivery|nullable|string|max:255',
+            'delivery_lat'     => 'nullable|numeric|between:-90,90',
+            'delivery_lng'     => 'nullable|numeric|between:-180,180',
             'accessory_ids'    => 'nullable|array',
             'accessory_ids.*'  => 'integer|exists:marketplace_product_accessories,id',
         ]);
@@ -602,6 +606,7 @@ class MarketplaceController extends ApiController
 
         $order = MarketplaceOrder::create([
             ...$this->guestColumns($guest),
+            ...$this->fulfillmentColumns($data),
             'product_id'         => $product->id,
             'buyer_id'           => $user?->id,
             'seller_id'          => $product->seller_id,
@@ -630,6 +635,7 @@ class MarketplaceController extends ApiController
                 'status'         => $order->status,
                 'payment_status' => $order->payment_status,
                 'payment_method' => $order->payment_method,
+                ...$this->fulfillmentPayload($order),
                 'quantity'       => $order->quantity,
                 'unit_price_usd'  => (float) $order->unit_price,
                 'total_price_usd' => (float) $order->total_price,
@@ -697,6 +703,10 @@ class MarketplaceController extends ApiController
             'payment_method'           => 'nullable|in:cash,wallet,aba,wing,other_online',
             'notes'                    => 'nullable|string',
             'promo_code'               => 'nullable|string|max:32',
+            'fulfillment'      => 'nullable|in:pickup,delivery',
+            'delivery_address' => 'required_if:fulfillment,delivery|nullable|string|max:255',
+            'delivery_lat'     => 'nullable|numeric|between:-90,90',
+            'delivery_lng'     => 'nullable|numeric|between:-180,180',
         ]);
 
         $productIds = collect($data['items'])->pluck('product_id');
@@ -753,6 +763,7 @@ class MarketplaceController extends ApiController
 
                 $order = MarketplaceOrder::create([
                     ...$this->guestColumns($guest),
+                    ...$this->fulfillmentColumns($data),
                     'checkout_batch_id'  => $batchId,
                     'product_id'         => $product->id,
                     'buyer_id'           => $user?->id,
@@ -788,6 +799,7 @@ class MarketplaceController extends ApiController
                 'id'              => $order->id,
                 'order_type'      => $order->order_type,
                 'status'          => $order->status,
+                ...$this->fulfillmentPayload($order),
                 'quantity'        => $order->quantity,
                 'unit_price_usd'  => (float) $order->unit_price,
                 'total_price_usd' => (float) $order->total_price,
@@ -931,6 +943,7 @@ class MarketplaceController extends ApiController
                 'status'          => $o->status,
                 'payment_status'  => $o->payment_status,
                 'payment_method'  => $o->payment_method,
+                ...$this->fulfillmentPayload($o),
                 'quantity'        => $o->quantity,
                 'unit_price'      => (float) $o->unit_price,
                 'total_price'     => (float) $o->total_price,
@@ -949,6 +962,28 @@ class MarketplaceController extends ApiController
                 'seller' => $o->seller ? ['id' => $o->seller->id, 'name' => $o->seller->name, 'phone' => $o->seller->phone] : null,
             ]),
         ]);
+    }
+
+    private function fulfillmentColumns(array $data): array
+    {
+        $delivery = ($data['fulfillment'] ?? 'pickup') === 'delivery';
+
+        return [
+            'fulfillment'      => $delivery ? 'delivery' : 'pickup',
+            'delivery_address' => $delivery ? $data['delivery_address'] : null,
+            'delivery_lat'     => $delivery ? ($data['delivery_lat'] ?? null) : null,
+            'delivery_lng'     => $delivery ? ($data['delivery_lng'] ?? null) : null,
+        ];
+    }
+
+    private function fulfillmentPayload(MarketplaceOrder $o): array
+    {
+        return [
+            'fulfillment'      => $o->fulfillment ?? 'pickup',
+            'delivery_address' => $o->delivery_address,
+            'delivery_lat'     => $o->delivery_lat,
+            'delivery_lng'     => $o->delivery_lng,
+        ];
     }
 
     /**
@@ -972,6 +1007,7 @@ class MarketplaceController extends ApiController
                 'status'          => $o->status,
                 'payment_status'  => $o->payment_status,
                 'payment_method'  => $o->payment_method,
+                ...$this->fulfillmentPayload($o),
                 'quantity'        => $o->quantity,
                 'unit_price'      => (float) $o->unit_price,
                 'total_price'     => (float) $o->total_price,
