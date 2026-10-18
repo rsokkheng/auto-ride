@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Support\RealtimeHooks;
+use App\Support\ShopNotifications;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\Paginator;
@@ -20,6 +21,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureRateLimiting();
 
         RealtimeHooks::register();
+        ShopNotifications::register();
     }
 
     private function configureRateLimiting(): void

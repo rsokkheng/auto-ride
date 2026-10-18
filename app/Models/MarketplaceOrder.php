@@ -15,6 +15,8 @@ class MarketplaceOrder extends Model
         'entry_type',
         'guest_name',
         'guest_phone',
+        'guest_token',
+        'guest_fcm_token',
         'seller_id',
         'order_type',
         'quantity',
@@ -28,6 +30,11 @@ class MarketplaceOrder extends Model
         'payment_status',
         'notes',
     ];
+
+    protected $hidden = ['guest_token', 'guest_fcm_token'];
+
+    /** Not persisted: 'buyer' | 'seller' | 'admin' — who triggered the current save, so they aren't notified about their own action. */
+    public ?string $actedBy = null;
 
     protected $casts = [
         'unit_price'         => 'decimal:2',

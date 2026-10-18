@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\CarRental;
 use App\Models\PromoCode;
-use App\Models\PromoCodeUsage;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -109,8 +108,9 @@ class RentalController extends ApiController
      */
     public function store(Request $request)
     {
-        $user = $this->authUser($request);
-        if (! $user) return $this->unauthorized();
+        $shopper = $this->resolveShopper($request);
+        if ($shopper instanceof \Illuminate\Http\JsonResponse) return $shopper;
+        ['user' => $user, 'guest' => $guest] = $shopper;
 
         $hasProduct = $request->filled('marketplace_product_id');
         $allowed    = ['motorcycle', 'tuk_tuk', 'electric', 'sedan', 'suv', 'van', 'truck'];
@@ -142,20 +142,21 @@ class RentalController extends ApiController
         $dailyKhr  = $this->dailyRate($vehicleType);
         $totalKhr  = $dailyKhr * $totalDays;
 
-        // Apply promo code if provided
-        $promoCodeId    = null;
+        $promo          = null;
         $discountAmount = 0;
         if (! empty($data['promo_code'])) {
-            $promo = PromoCode::where('code', strtoupper(trim($data['promo_code'])))->first();
-            if ($promo && $promo->isValid('rentals', $totalKhr, $user->id)) {
-                $discountAmount = $promo->calculateDiscount($totalKhr);
-                $totalKhr       = max(0, $totalKhr - $discountAmount);
-                $promoCodeId    = $promo->id;
+            $promo      = PromoCode::where('code', strtoupper(trim($data['promo_code'])))->first();
+            $guestPhone = $guest['guest_phone'] ?? null;
+            if (! $promo || ! $promo->isValid('product_rent', $totalKhr, $user?->id, $guestPhone)) {
+                return response()->json(['success' => false, 'message' => 'This promo code is invalid, expired, or does not apply to rentals.'], 422);
             }
+            $discountAmount = $promo->calculateDiscount($totalKhr);
+            $totalKhr       = max(0, $totalKhr - $discountAmount);
         }
 
         $rental = CarRental::create([
-            'user_id'                => $user->id,
+            ...$this->guestColumns($guest),
+            'user_id'                => $user?->id,
             'marketplace_product_id' => $data['marketplace_product_id'] ?? null,
             'vehicle_type'           => $vehicleType,
             'pickup_location'        => $data['pickup_location'],
@@ -171,16 +172,7 @@ class RentalController extends ApiController
             'status'                 => 'pending',
         ]);
 
-        if ($promoCodeId) {
-            PromoCodeUsage::create([
-                'promo_code_id'   => $promoCodeId,
-                'user_id'         => $user->id,
-                'bookable_type'   => CarRental::class,
-                'bookable_id'     => $rental->id,
-                'discount_amount' => $discountAmount,
-            ]);
-            PromoCode::where('id', $promoCodeId)->increment('used_count');
-        }
+        $promo?->recordUsage($rental, $discountAmount, $user?->id, $guest['guest_phone'] ?? null);
 
         $rental->load(['user', 'marketplaceProduct.images']);
 
@@ -326,12 +318,15 @@ class RentalController extends ApiController
     public function cancel(Request $request, CarRental $rental)
     {
         $user = $this->authUser($request);
-        if (! $user || $rental->user_id !== $user->id) return $this->unauthorized();
+        $isGuestOwner = ! $user && $rental->isGuest() && $rental->guest_token
+            && hash_equals($rental->guest_token, (string) $request->input('guest_token'));
+        if (! $isGuestOwner && (! $user || $rental->user_id !== $user->id)) return $this->unauthorized();
 
         if (in_array($rental->status, ['completed', 'cancelled'])) {
             return response()->json(['message' => 'Booking cannot be cancelled'], 422);
         }
 
+        $rental->actedBy = 'buyer';
         $rental->update(['status' => 'cancelled']);
         return $this->success(['rental' => $this->formatRental($rental->fresh())]);
     }
@@ -349,6 +344,7 @@ class RentalController extends ApiController
             return response()->json(['message' => 'Only pending bookings can be confirmed'], 422);
         }
 
+        $rental->actedBy = 'admin';
         $rental->update(['status' => 'confirmed']);
         return $this->success(['rental' => $this->formatRental($rental->fresh())]);
     }

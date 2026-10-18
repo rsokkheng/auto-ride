@@ -53,20 +53,29 @@ class PromoCodeController extends ApiController
         ]);
     }
 
+    /**
+     * POST /v1/promo/apply — order_amount is in riel. Guests (no bearer token)
+     * may check product purchase/rent coupons; pass guest_phone so the
+     * per-person limit is checked the same way checkout will.
+     */
     public function check(Request $request)
     {
         $user = $this->authUser($request);
-        if (! $user) return $this->unauthorized();
+        if (! $user && $request->bearerToken()) return $this->unauthorized();
 
         $data = $request->validate([
             'code'         => 'required|string',
-            'service_type' => 'required|in:rides,deliveries,moving',
+            'service_type' => 'required|in:' . implode(',', PromoCode::contextNames()),
             'order_amount' => 'required|integer|min:0',
+            'guest_phone'  => 'nullable|string|max:20',
         ]);
+
+        $context = PromoCode::normalizeContext($data['service_type']);
+        if (! $user && ! in_array($context, PromoCode::GUEST_CONTEXTS, true)) return $this->unauthorized();
 
         $promo = PromoCode::where('code', strtoupper(trim($data['code'])))->first();
 
-        if (! $promo || ! $promo->isValid($data['service_type'], $data['order_amount'], $user->id)) {
+        if (! $promo || ! $promo->isValid($context, $data['order_amount'], $user?->id, $data['guest_phone'] ?? null)) {
             return response()->json(['data' => null, 'message' => 'Invalid or expired promo code.'], 422);
         }
 

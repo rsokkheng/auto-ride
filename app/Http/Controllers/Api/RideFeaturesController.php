@@ -225,11 +225,11 @@ class RideFeaturesController extends ApiController
 
         $data = $request->validate([
             'code'         => 'required|string',
-            'service_type' => 'required|in:rides,deliveries,moving',
+            'service_type' => 'required|in:' . implode(',', PromoCode::contextNames()),
             'order_amount' => 'required|integer|min:0',
         ]);
 
-        $promo = PromoCode::where('code', strtoupper($data['code']))->first();
+        $promo = PromoCode::where('code', strtoupper(trim($data['code'])))->first();
 
         if (! $promo || ! $promo->isValid($data['service_type'], $data['order_amount'], $user->id)) {
             return response()->json(['data' => null, 'message' => 'Invalid or expired promo code.'], 422);

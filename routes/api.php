@@ -86,6 +86,7 @@ Route::prefix('v1')->group(function () {
     Route::get('marketplace/my-products', [MarketplaceController::class, 'myProducts']);
     Route::get('marketplace/my-orders',   [MarketplaceController::class, 'myOrders']);
     Route::post('marketplace/checkout',   [MarketplaceController::class, 'checkout']);
+    Route::get('marketplace/guest-orders', [MarketplaceController::class, 'guestOrders'])->middleware('throttle:30,1');
 
     // Marketplace — products CRUD
     Route::get('marketplace',                            [MarketplaceController::class, 'index']);

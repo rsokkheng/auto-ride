@@ -2669,7 +2669,7 @@ class AdminController extends Controller
             'max_discount'   => 'nullable|integer|min:0',
             'usage_limit'    => 'nullable|integer|min:1',
             'per_user_limit' => 'required|integer|min:1',
-            'service_type'   => 'required|in:rides,deliveries,moving,all',
+            'service_type'   => 'required|in:' . implode(',', array_keys(\App\Models\PromoCode::SERVICE_TYPES)),
             'active'         => 'boolean',
             'starts_at'      => 'nullable|date',
             'expires_at'     => 'nullable|date|after_or_equal:starts_at',

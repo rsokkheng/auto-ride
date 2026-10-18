@@ -12,6 +12,8 @@ class CarRental extends Model
         'entry_type',
         'guest_name',
         'guest_phone',
+        'guest_token',
+        'guest_fcm_token',
         'vehicle_id',
         'marketplace_product_id',
         'vehicle_type',
@@ -29,6 +31,11 @@ class CarRental extends Model
         'confirmed_at',
         'cancelled_at',
     ];
+
+    protected $hidden = ['guest_token', 'guest_fcm_token'];
+
+    /** Not persisted: 'buyer' | 'seller' | 'admin' — who triggered the current save, so they aren't notified about their own action. */
+    public ?string $actedBy = null;
 
     protected $casts = [
         'start_date'       => 'date',

@@ -13,7 +13,7 @@ use App\Models\MarketplaceVehicleColor;
 use App\Models\MarketplaceVehicleSize;
 use App\Models\MarketplaceVehicleType;
 use App\Models\PromoCode;
-use App\Models\PromoCodeUsage;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -501,8 +501,9 @@ class MarketplaceController extends ApiController
 
     public function placeOrder(Request $request, MarketplaceProduct $product)
     {
-        $user = $this->authUser($request);
-        if (! $user) return $this->unauthorized();
+        $shopper = $this->resolveShopper($request);
+        if ($shopper instanceof JsonResponse) return $shopper;
+        ['user' => $user, 'guest' => $guest] = $shopper;
 
         if ($product->status === 'sold') {
             return response()->json(['success' => false, 'message' => 'This product has already been sold.'], 422);
@@ -516,7 +517,7 @@ class MarketplaceController extends ApiController
         if ($product->status !== 'active') {
             return response()->json(['success' => false, 'message' => 'This product is not available.'], 422);
         }
-        if ($product->seller_id === $user->id) {
+        if ($user && $product->seller_id === $user->id) {
             return response()->json(['success' => false, 'message' => 'Cannot order your own product.'], 422);
         }
 
@@ -584,21 +585,25 @@ class MarketplaceController extends ApiController
             $total     = $unitPrice * $quantity + $accessoriesTotal;
         }
 
-        // Apply promo code if provided
-        $promoCodeId    = null;
+        $promo          = null;
         $discountAmount = 0;
+        $discountUsd    = 0;
         if (! empty($data['promo_code'])) {
-            $promo = PromoCode::where('code', strtoupper(trim($data['promo_code'])))->first();
-            if ($promo && $promo->isValid('marketplace', (int) $total, $user->id)) {
-                $discountAmount = $promo->calculateDiscount((int) $total);
-                $total          = max(0, $total - $discountAmount);
-                $promoCodeId    = $promo->id;
+            $promo   = PromoCode::where('code', strtoupper(trim($data['promo_code'])))->first();
+            $applied = $promo?->discountForUsd(
+                $orderType === 'rent' ? 'product_rent' : 'product_purchase',
+                (float) $total, $user?->id, $guest['guest_phone'] ?? null);
+            if (! $applied) {
+                return response()->json(['success' => false, 'message' => 'This promo code is invalid, expired, or does not apply to this order.'], 422);
             }
+            [$discountUsd, $discountAmount] = $applied;
+            $total = max(0, $total - $discountUsd);
         }
 
         $order = MarketplaceOrder::create([
+            ...$this->guestColumns($guest),
             'product_id'         => $product->id,
-            'buyer_id'           => $user->id,
+            'buyer_id'           => $user?->id,
             'seller_id'          => $product->seller_id,
             'order_type'         => $orderType,
             'quantity'           => $quantity,
@@ -613,16 +618,7 @@ class MarketplaceController extends ApiController
             'notes'           => $data['notes'] ?? null,
         ]);
 
-        if ($promoCodeId) {
-            PromoCodeUsage::create([
-                'promo_code_id'   => $promoCodeId,
-                'user_id'         => $user->id,
-                'bookable_type'   => MarketplaceOrder::class,
-                'bookable_id'     => $order->id,
-                'discount_amount' => $discountAmount,
-            ]);
-            PromoCode::where('id', $promoCodeId)->increment('used_count');
-        }
+        $promo?->recordUsage($order, $discountAmount, $user?->id, $guest['guest_phone'] ?? null);
 
         $this->createOrderAccessories($order, $accessories['items']);
         $order->load(['product.images', 'buyer', 'seller', 'accessories']);
@@ -642,7 +638,8 @@ class MarketplaceController extends ApiController
                     'name_en' => $a->name_en, 'name_km' => $a->name_km, 'price' => (float) $a->price,
                 ])->values(),
                 'discount_amount' => $discountAmount,
-                'promo_applied'   => $promoCodeId !== null,
+                'discount_usd'    => $discountUsd,
+                'promo_applied'   => $promo !== null,
                 'days'           => $orderType === 'rent' ? $days : null,
                 'rent_start_date'=> $order->rent_start_date?->toDateString(),
                 'rent_end_date'  => $order->rent_end_date?->toDateString(),
@@ -655,10 +652,11 @@ class MarketplaceController extends ApiController
                     'condition'    => $product->condition,
                     'image'        => $product->images->first()?->full_url,
                 ],
+                'is_guest' => $order->isGuest(),
                 'renter' => [
-                    'id'    => $user->id,
-                    'name'  => $user->name,
-                    'phone' => $user->phone,
+                    'id'    => $user?->id,
+                    'name'  => $order->buyerName(),
+                    'phone' => $order->buyerPhone(),
                 ],
                 'seller' => $order->seller ? [
                     'id'    => $order->seller->id,
@@ -683,8 +681,9 @@ class MarketplaceController extends ApiController
      */
     public function checkout(Request $request)
     {
-        $user = $this->authUser($request);
-        if (! $user) return $this->unauthorized();
+        $shopper = $this->resolveShopper($request);
+        if ($shopper instanceof JsonResponse) return $shopper;
+        ['user' => $user, 'guest' => $guest] = $shopper;
 
         $data = $request->validate([
             'items'                    => 'required|array|min:1|max:20',
@@ -723,32 +722,40 @@ class MarketplaceController extends ApiController
 
         $subtotal = collect($priced)->sum(fn($p) => $p['pricing']['total']);
 
-        $promoCodeId    = null;
+        $promo          = null;
         $discountAmount = 0;
+        $discountUsd    = 0;
         if (! empty($data['promo_code'])) {
-            $promo = PromoCode::where('code', strtoupper(trim($data['promo_code'])))->first();
-            if ($promo && $promo->isValid('marketplace', (int) $subtotal, $user->id)) {
-                $discountAmount = $promo->calculateDiscount((int) $subtotal);
-                $promoCodeId    = $promo->id;
+            $promo    = PromoCode::where('code', strtoupper(trim($data['promo_code'])))->first();
+            $contexts = collect($priced)
+                ->map(fn ($p) => $p['pricing']['order_type'] === 'rent' ? 'product_rent' : 'product_purchase')
+                ->unique();
+            $applied  = $promo && $contexts->every(fn ($c) => $promo->appliesTo($c))
+                ? $promo->discountForUsd($contexts->first(), (float) $subtotal, $user?->id, $guest['guest_phone'] ?? null)
+                : null;
+            if (! $applied) {
+                return response()->json(['success' => false, 'message' => 'This promo code is invalid, expired, or does not apply to this order.'], 422);
             }
+            [$discountUsd, $discountAmount] = $applied;
         }
 
         $batchId = (string) Str::uuid();
         $orders  = [];
 
-        DB::transaction(function () use ($priced, $user, $data, $batchId, $discountAmount, $subtotal, $promoCodeId, &$orders) {
+        DB::transaction(function () use ($priced, $user, $guest, $data, $batchId, $discountAmount, $discountUsd, $subtotal, $promo, &$orders) {
             foreach ($priced as $p) {
                 $product = $p['product'];
                 $pricing = $p['pricing'];
 
                 // Split the discount across items proportionally to their share of the subtotal.
-                $itemDiscount = $subtotal > 0 ? (int) round($discountAmount * ($pricing['total'] / $subtotal)) : 0;
+                $itemDiscount = $subtotal > 0 ? round($discountUsd * ($pricing['total'] / $subtotal), 2) : 0;
                 $finalTotal   = max(0, $pricing['total'] - $itemDiscount);
 
                 $order = MarketplaceOrder::create([
+                    ...$this->guestColumns($guest),
                     'checkout_batch_id'  => $batchId,
                     'product_id'         => $product->id,
-                    'buyer_id'           => $user->id,
+                    'buyer_id'           => $user?->id,
                     'seller_id'          => $product->seller_id,
                     'order_type'         => $pricing['order_type'],
                     'quantity'           => $pricing['quantity'],
@@ -767,24 +774,16 @@ class MarketplaceController extends ApiController
                 $orders[] = $order->load(['product.images', 'seller', 'accessories']);
             }
 
-            if ($promoCodeId) {
-                PromoCodeUsage::create([
-                    'promo_code_id'   => $promoCodeId,
-                    'user_id'         => $user->id,
-                    'bookable_type'   => MarketplaceOrder::class,
-                    'bookable_id'     => $orders[0]->id,
-                    'discount_amount' => $discountAmount,
-                ]);
-                PromoCode::where('id', $promoCodeId)->increment('used_count');
-            }
+            $promo?->recordUsage($orders[0], $discountAmount, $user?->id, $guest['guest_phone'] ?? null);
         });
 
         return $this->success([
             'checkout_batch_id' => $batchId,
             'subtotal_usd'      => (float) $subtotal,
             'discount_amount'   => $discountAmount,
-            'total_usd'         => (float) max(0, $subtotal - $discountAmount),
-            'promo_applied'     => $promoCodeId !== null,
+            'discount_usd'      => $discountUsd,
+            'total_usd'         => (float) max(0, $subtotal - $discountUsd),
+            'promo_applied'     => $promo !== null,
             'orders' => collect($orders)->map(fn(MarketplaceOrder $order) => [
                 'id'              => $order->id,
                 'order_type'      => $order->order_type,
@@ -816,7 +815,7 @@ class MarketplaceController extends ApiController
      * computes its pricing. Returns ['error' => string] on failure, otherwise
      * ['order_type', 'quantity', 'unit_price', 'total', 'rent_start_date', 'rent_end_date', 'days'].
      */
-    private function priceOrderItem($user, MarketplaceProduct $product, array $item): array
+    private function priceOrderItem(?\App\Models\User $user, MarketplaceProduct $product, array $item): array
     {
         if ($product->status === 'sold') {
             return ['error' => "\"{$product->title}\" has already been sold."];
@@ -830,7 +829,7 @@ class MarketplaceController extends ApiController
         if ($product->status !== 'active') {
             return ['error' => "\"{$product->title}\" is not available."];
         }
-        if ($product->seller_id === $user->id) {
+        if ($user && $product->seller_id === $user->id) {
             return ['error' => "Cannot order your own product: \"{$product->title}\"."];
         }
 
@@ -952,6 +951,83 @@ class MarketplaceController extends ApiController
         ]);
     }
 
+    /**
+     * GET /v1/marketplace/guest-orders?guest_token=...
+     * Purchases and rentals placed from this device without an account.
+     */
+    public function guestOrders(Request $request)
+    {
+        $data = $request->validate(['guest_token' => 'required|string|min:20|max:64']);
+
+        $orders = MarketplaceOrder::with(['product.images', 'seller', 'accessories'])
+            ->where('entry_type', 'guest')
+            ->where('guest_token', $data['guest_token'])
+            ->latest()
+            ->limit(100)
+            ->get()
+            ->map(fn (MarketplaceOrder $o) => [
+                'source'          => 'marketplace_order',
+                'id'              => $o->id,
+                'order_type'      => $o->order_type,
+                'status'          => $o->status,
+                'payment_status'  => $o->payment_status,
+                'payment_method'  => $o->payment_method,
+                'quantity'        => $o->quantity,
+                'unit_price'      => (float) $o->unit_price,
+                'total_price'     => (float) $o->total_price,
+                'rent_start_date' => $o->rent_start_date?->toDateString(),
+                'rent_end_date'   => $o->rent_end_date?->toDateString(),
+                'notes'           => $o->notes,
+                'created_at'      => $o->created_at->toDateTimeString(),
+                'product'         => $o->product ? [
+                    'id'    => $o->product->id,
+                    'title' => $o->product->title,
+                    'image' => $o->product->images->first()?->full_url,
+                ] : null,
+                'seller' => $o->seller ? ['id' => $o->seller->id, 'name' => $o->seller->name, 'phone' => $o->seller->phone] : null,
+            ]);
+
+        $rentals = \App\Models\CarRental::with(['marketplaceProduct.images', 'marketplaceProduct.seller'])
+            ->where('entry_type', 'guest')
+            ->where('guest_token', $data['guest_token'])
+            ->latest()
+            ->limit(100)
+            ->get()
+            ->map(function (\App\Models\CarRental $r) {
+                $rate     = max(1, (int) config('ride.khr_per_usd', 4100));
+                $totalUsd = round($r->total_amount_khr / $rate, 2);
+                $product  = $r->marketplaceProduct;
+                return [
+                    'source'          => 'car_rental',
+                    'id'              => $r->id,
+                    'product_id'      => $r->marketplace_product_id,
+                    'order_type'      => 'rent',
+                    'status'          => $r->status,
+                    'payment_status'  => 'unpaid',
+                    'payment_method'  => $r->payment_method,
+                    'quantity'        => 1,
+                    'days'            => $r->total_days,
+                    'unit_price'      => $r->total_days ? round($totalUsd / $r->total_days, 2) : $totalUsd,
+                    'total_price'     => $totalUsd,
+                    'rent_start_date' => $r->start_date->toDateString(),
+                    'rent_end_date'   => $r->end_date->toDateString(),
+                    'notes'           => $r->notes,
+                    'created_at'      => $r->created_at->toDateTimeString(),
+                    'product'         => $product ? [
+                        'id'    => $product->id,
+                        'title' => $product->title,
+                        'image' => $product->images->first()?->full_url,
+                    ] : ['id' => null, 'title' => ucfirst(str_replace('_', ' ', $r->vehicle_type)), 'image' => null],
+                    'seller' => $product?->seller ? ['id' => $product->seller->id, 'name' => $product->seller->name, 'phone' => $product->seller->phone] : null,
+                ];
+            });
+
+        return $this->success([
+            'orders'  => $orders->where('order_type', 'purchase')->values(),
+            'rentals' => $orders->where('order_type', 'rent')->concat($rentals)->sortByDesc('created_at')->values(),
+        ]);
+    }
+
     public function confirmOrder(Request $request, MarketplaceOrder $order)
     {
         $user = $this->authUser($request);
@@ -961,6 +1037,7 @@ class MarketplaceController extends ApiController
             return response()->json(['message' => 'Order cannot be confirmed'], 422);
         }
 
+        $order->actedBy = 'seller';
         $order->update(['status' => 'confirmed']);
         return $this->success(['order' => $order->fresh()]);
     }
@@ -976,6 +1053,7 @@ class MarketplaceController extends ApiController
             return response()->json(['message' => 'Order must be confirmed first'], 422);
         }
 
+        $order->actedBy = $order->seller_id === $user->id ? 'seller' : 'buyer';
         $order->update(['status' => 'completed', 'payment_status' => 'paid']);
 
         $product   = $order->product;
@@ -993,7 +1071,10 @@ class MarketplaceController extends ApiController
     public function cancelOrder(Request $request, MarketplaceOrder $order)
     {
         $user = $this->authUser($request);
-        if (! $user || ! in_array($user->id, [$order->seller_id, $order->buyer_id])) {
+        $isGuestOwner = ! $user && $order->isGuest() && $order->guest_token
+            && hash_equals($order->guest_token, (string) $request->input('guest_token'));
+
+        if (! $isGuestOwner && (! $user || ! in_array($user->id, [$order->seller_id, $order->buyer_id]))) {
             return $this->unauthorized();
         }
 
@@ -1001,6 +1082,7 @@ class MarketplaceController extends ApiController
             return response()->json(['message' => 'Order cannot be cancelled'], 422);
         }
 
+        $order->actedBy = ($user && $order->seller_id === $user->id) ? 'seller' : 'buyer';
         $order->update(['status' => 'cancelled']);
         return $this->success(['order' => $order->fresh()]);
     }

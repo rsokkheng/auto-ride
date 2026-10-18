@@ -52,6 +52,15 @@ return [
 
     /*
     |------------------------------------------------------------------
+    | KHR per USD
+    |------------------------------------------------------------------
+    | Promo codes are defined in riel; marketplace prices are in USD.
+    | Must match the rate the app uses to preview coupon discounts.
+    */
+    'khr_per_usd' => (int) env('KHR_PER_USD', 4100),
+
+    /*
+    |------------------------------------------------------------------
     | Service Area (bounding box)
     |------------------------------------------------------------------
     | Coordinates outside this box are treated as bad GPS (a simulator's

@@ -103,6 +103,33 @@ class FcmService
     }
 
     /**
+     * Push to a user on whichever devices they have, and always keep a row in
+     * their in-app notification list — even when no device is registered.
+     */
+    public function notifyUser(User $user, string $title, string $body, array $data = []): void
+    {
+        $hasDevice = $user->fcm_token
+            || ($user->role === 'driver' && DriverDevice::where('user_id', $user->id)->where('is_active', true)->exists());
+
+        if (! $hasDevice) {
+            $this->logNotification($user->id, $title, $body, $data, '', 'NO_TOKEN');
+            return;
+        }
+
+        $user->role === 'driver'
+            ? $this->sendToDriver($user, $title, $body, $data)
+            : $this->sendToUser($user, $title, $body, $data);
+    }
+
+    /**
+     * Push to a bare device token with no account behind it (guest shoppers).
+     */
+    public function sendToToken(string $fcmToken, string $title, string $body, array $data = []): string
+    {
+        return $this->sendOne($fcmToken, $title, $body, $data);
+    }
+
+    /**
      * Send to multiple users at once (passengers / broadcast).
      */
     public function sendToUsers(array $users, string $title, string $body, array $data = []): void
@@ -287,7 +314,9 @@ class FcmService
 
         $url = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
 
-        [$soundName, $channelId] = self::TYPE_SOUNDS[$data['type'] ?? ''] ?? [null, 'general'];
+        $type = $data['type'] ?? '';
+        [$soundName, $channelId] = self::TYPE_SOUNDS[$type]
+            ?? (str_starts_with($type, 'shop_') ? [null, 'shop_updates'] : [null, 'general']);
         $iosSound = $soundName ? "{$soundName}.wav" : 'default';
 
         $stringData = array_map('strval', $data + ['sound' => $soundName ?? 'default']);

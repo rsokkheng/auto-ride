@@ -54,7 +54,7 @@
                             <br><small class="text-muted">min ៛{{ number_format($c->min_order) }}</small>
                         @endif
                     </td>
-                    <td><span class="badge badge-secondary">{{ ucfirst($c->service_type) }}</span></td>
+                    <td><span class="badge badge-secondary">{{ \App\Models\PromoCode::SERVICE_TYPES[$c->service_type] ?? ucfirst($c->service_type) }}</span></td>
                     <td>
                         <small>
                             {{ $c->used_count }}{{ $c->usage_limit ? ' / ' . $c->usage_limit : ' / ∞' }} used
@@ -183,10 +183,9 @@
                         <div class="form-group col-md-4">
                             <label>Applies To <span class="text-danger">*</span></label>
                             <select name="service_type" id="c-servicetype" class="form-control" required>
-                                <option value="all">All services</option>
-                                <option value="rides">Rides only</option>
-                                <option value="deliveries">Deliveries only</option>
-                                <option value="moving">Moving only</option>
+                                @foreach (\App\Models\PromoCode::SERVICE_TYPES as $value => $label)
+                                    <option value="{{ $value }}">{{ $label }}</option>
+                                @endforeach
                             </select>
                         </div>
                         <div class="form-group col-md-4">
