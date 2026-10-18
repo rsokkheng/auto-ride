@@ -152,6 +152,28 @@ class AdminNotificationTest extends TestCase
         $this->get(route('admin.dashboard'))->assertOk()->assertSee('anBell', false);
     }
 
+    public function test_browser_socket_uses_public_domain_in_production(): void
+    {
+        config([
+            'broadcasting.default' => 'reverb',
+            'broadcasting.connections.reverb.key' => 'pk',
+            'broadcasting.connections.reverb.options' => ['host' => '127.0.0.1', 'port' => 8080, 'scheme' => 'http'],
+        ]);
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+
+        $this->app['env'] = 'production';
+        $this->get('https://admin.roteh.test/admin/notifications')
+            ->assertSee('"host":"admin.roteh.test","port":443,"tls":true', false);
+
+        config(['broadcasting.connections.reverb.client' => ['host' => 'ws.roteh.test', 'port' => 6001, 'scheme' => 'https']]);
+        $this->get('https://admin.roteh.test/admin/notifications')
+            ->assertSee('"host":"ws.roteh.test","port":6001,"tls":true', false);
+
+        $this->app['env'] = 'local';
+        config(['broadcasting.connections.reverb.client' => []]);
+        $this->get('/admin/notifications')->assertSee('"host":"127.0.0.1","port":8080,"tls":false', false);
+    }
+
     public function test_non_admins_cannot_use_the_endpoints(): void
     {
         $user = User::factory()->create(['role' => 'passenger']);

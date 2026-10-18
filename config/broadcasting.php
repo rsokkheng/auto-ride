@@ -16,6 +16,14 @@ return [
                 'scheme' => env('REVERB_SCHEME', 'https'),
                 'useTLS' => env('REVERB_SCHEME', 'https') === 'https',
             ],
+            // Where *browsers* (the admin panel) connect — not where Laravel pushes.
+            // Unset: production uses the panel's own domain on 443 (nginx proxies
+            // /app/ to Reverb); other envs reuse the push host/port above.
+            'client' => [
+                'host' => env('REVERB_CLIENT_HOST'),
+                'port' => (int) env('REVERB_CLIENT_PORT', 443),
+                'scheme' => env('REVERB_CLIENT_SCHEME', 'https'),
+            ],
             'client_options' => [
                 // Guzzle client options: https://docs.guzzlephp.org/en/stable/request-options.html
             ],

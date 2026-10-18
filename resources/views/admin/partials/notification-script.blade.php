@@ -1,6 +1,12 @@
 {{-- Bell dropdown + realtime alerts. Needs jQuery/Bootstrap loaded first. --}}
 @php
     $reverb = config('broadcasting.connections.reverb');
+    $prod   = app()->isProduction();
+    $client = [
+        'host'   => ($reverb['client']['host'] ?? null) ?: ($prod ? request()->getHost() : ($reverb['options']['host'] ?? request()->getHost())),
+        'port'   => ($reverb['client']['port'] ?? null) ?: ($prod ? 443 : ($reverb['options']['port'] ?? 443)),
+        'scheme' => ($reverb['client']['scheme'] ?? null) ?: ($prod ? 'https' : ($reverb['options']['scheme'] ?? 'https')),
+    ];
     $anConfig = [
         'userId'     => Auth::id(),
         'feedUrl'    => route('admin.notifications.feed'),
@@ -8,9 +14,9 @@
         'csrf'       => csrf_token(),
         'realtime'   => config('broadcasting.default') === 'reverb' && ! empty($reverb['key']) ? [
             'key'          => $reverb['key'],
-            'host'         => $reverb['options']['host'] ?? request()->getHost(),
-            'port'         => (int) ($reverb['options']['port'] ?? 443),
-            'tls'          => ($reverb['options']['scheme'] ?? 'https') === 'https',
+            'host' => config('broadcasting.connections.reverb.client.host'),
+            'port' => (int) config('broadcasting.connections.reverb.client.port', 443),
+            'tls' => config('broadcasting.connections.reverb.client.scheme', 'https') === 'https',
             'authEndpoint' => route('admin.broadcasting.auth'),
         ] : null,
     ];
@@ -128,7 +134,11 @@
             authEndpoint: cfg.realtime.authEndpoint,
             auth: { headers: { 'X-CSRF-TOKEN': cfg.csrf, Accept: 'application/json' } },
         });
-        pusher.connection.bind('state_change', s => { connected = s.current === 'connected'; });
+        pusher.connection.bind('state_change', s => {
+            connected = s.current === 'connected';
+            // Shows in DevTools → Console; "unavailable"/"failed" means the browser can't reach Reverb.
+            console[connected ? 'info' : 'warn'](`[notifications] realtime ${s.current} (${cfg.realtime.tls ? 'wss' : 'ws'}://${cfg.realtime.host}:${cfg.realtime.port})`);
+        });
         pusher.subscribe('private-admin.' + cfg.userId).bind('admin_notification.created', onNotification);
     }
 
