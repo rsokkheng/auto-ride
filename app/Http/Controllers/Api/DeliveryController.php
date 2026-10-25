@@ -81,9 +81,13 @@ class DeliveryController extends ApiController
         $user = $this->authUser($request);
         if (! $user || $user->role !== 'driver') return $this->unauthorized();
 
+        // A driver already on a trip isn't shown new jobs.
+        $busy = $user->hasActiveTrip();
+
         $deliveries = Delivery::with(['sender', 'vehicle'])
             ->whereIn('status', ['requested', 'pending'])
             ->whereNull('driver_id')
+            ->when($busy, fn ($q) => $q->whereRaw('1 = 0'))
             ->orderBy('created_at')
             ->paginate(10);
 
@@ -439,7 +443,7 @@ class DeliveryController extends ApiController
     private function driversToOffer(Delivery $delivery): \Illuminate\Support\Collection
     {
         if ($delivery->pickup_lat === null || $delivery->pickup_lng === null) {
-            return User::where('role', 'driver')->where('available', true)->whereNotNull('fcm_token')->get();
+            return User::where('role', 'driver')->where('available', true)->withoutActiveTrip()->whereNotNull('fcm_token')->get();
         }
 
         $radiusKm = (float) PricingSetting::get('delivery_match_radius_km', config('delivery.match_radius_km', 30));
@@ -447,7 +451,7 @@ class DeliveryController extends ApiController
 
         return $nearby === []
             ? collect()
-            : User::whereIn('id', array_keys($nearby))->where('role', 'driver')->where('available', true)->get();
+            : User::whereIn('id', array_keys($nearby))->where('role', 'driver')->where('available', true)->withoutActiveTrip()->get();
     }
 
     // ── Share tracking link ─────────────────────────────────────────────────
@@ -576,6 +580,10 @@ class DeliveryController extends ApiController
         // For partner-assigned deliveries, only the assigned driver can accept.
         if ($delivery->status === 'assigned' && $delivery->driver_id !== $user->id) {
             return response()->json(['message' => 'This delivery is assigned to a different driver.'], 403);
+        }
+
+        if ($delivery->driver_id !== $user->id && $user->hasActiveTrip()) {
+            return response()->json(['message' => 'You already have an active trip. Finish it first.'], 422);
         }
 
         // For open deliveries, block if another driver already claimed it.

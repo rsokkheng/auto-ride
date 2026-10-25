@@ -113,7 +113,7 @@ class RideDispatchService
         $queue = $ride->dispatch_queue ?? [];
 
         while ($position < count($queue)) {
-            $driver = User::where('id', $queue[$position])->where('available', true)->first();
+            $driver = User::where('id', $queue[$position])->where('available', true)->withoutActiveTrip()->first();
 
             if ($driver) {
                 $ride->update([

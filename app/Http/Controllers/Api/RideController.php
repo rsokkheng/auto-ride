@@ -239,9 +239,13 @@ class RideController extends ApiController
         // (self_serve_expires_at set) and the grace window hasn't expired yet. While a
         // ride is still being offered sequentially to its ranked queue (expires_at NULL),
         // it must not be snipeable here by a driver outside that queue.
+        // A driver already on a trip isn't shown new jobs.
+        $busy = $user->hasActiveTrip();
+
         $rides = Ride::with(['passenger', 'vehicle'])
             ->where('status', Ride::STATUS_REQUESTED)
             ->whereNull('driver_id')
+            ->when($busy, fn ($q) => $q->whereRaw('1 = 0'))
             ->whereNotNull('self_serve_expires_at')
             ->where('self_serve_expires_at', '>', now())
             ->orderBy('created_at')
@@ -250,7 +254,7 @@ class RideController extends ApiController
         // Plus the ride currently being offered to *this* driver by ranked
         // dispatch — otherwise the offer only ever reached them as a push
         // notification and never showed up on their dashboard to accept.
-        if ($rides->currentPage() === 1) {
+        if (! $busy && $rides->currentPage() === 1) {
             $offered = Ride::with(['passenger', 'vehicle'])
                 ->where('status', Ride::STATUS_REQUESTED)
                 ->whereNull('driver_id')
@@ -587,6 +591,12 @@ class RideController extends ApiController
 
         if ($ride->driver_id && $ride->driver_id !== $user->id) {
             return response()->json(['data' => null, 'message' => 'Ride already claimed by another driver.'], 422);
+        }
+
+        // `available` (claimed below) only tracks rides — also refuse while
+        // the driver is on a delivery.
+        if ($user->hasActiveTrip()) {
+            return response()->json(['data' => null, 'message' => 'You already have an active trip. Finish it first.'], 422);
         }
 
         $vehicle = $user->vehicles()->where('status', 'active')->latest()->first();

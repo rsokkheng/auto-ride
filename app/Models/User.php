@@ -105,6 +105,33 @@ class User extends Authenticatable
         return $this->avatar_url;
     }
 
+    // ── Active trip (busy driver) ───────────────────────────────────────────
+    // A driver on an accepted/arrived/in-progress ride or an accepted/in-transit
+    // delivery must not be offered — or allowed to accept — another job.
+    // Rides already flip `available` off on accept; deliveries don't, so this
+    // checks the trips themselves.
+
+    public const ACTIVE_RIDE_STATUSES     = [Ride::STATUS_ACCEPTED, Ride::STATUS_DRIVER_ARRIVED, Ride::STATUS_IN_PROGRESS];
+    public const ACTIVE_DELIVERY_STATUSES = ['accepted', 'in_progress', 'picked_up', 'in_transit'];
+
+    /** Drivers with no active ride or delivery. */
+    public function scopeWithoutActiveTrip($query)
+    {
+        return $query
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('rides')
+                ->whereColumn('rides.driver_id', 'users.id')
+                ->whereIn('rides.status', self::ACTIVE_RIDE_STATUSES))
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('deliveries')
+                ->whereColumn('deliveries.driver_id', 'users.id')
+                ->whereIn('deliveries.status', self::ACTIVE_DELIVERY_STATUSES));
+    }
+
+    public function hasActiveTrip(): bool
+    {
+        return Ride::where('driver_id', $this->id)->whereIn('status', self::ACTIVE_RIDE_STATUSES)->exists()
+            || Delivery::where('driver_id', $this->id)->whereIn('status', self::ACTIVE_DELIVERY_STATUSES)->exists();
+    }
+
     public function vehicles(): HasMany
     {
         return $this->hasMany(Vehicle::class);
