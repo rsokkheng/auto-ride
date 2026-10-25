@@ -5,9 +5,12 @@ namespace Tests\Feature;
 use App\Models\CarRental;
 use App\Models\MarketplaceOrder;
 use App\Models\MarketplaceProduct;
+use App\Models\PhoneOtp;
 use App\Models\PromoCode;
 use App\Models\User;
 use App\Services\FcmService;
+use App\Support\GuestPhoneToken;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
@@ -61,7 +64,96 @@ class ShopGuestPromoTest extends TestCase
             'guest_phone' => '012345678',
             'guest_token' => self::GUEST_TOKEN,
             'fcm_token'   => 'guest-fcm-token',
+            'guest_phone_token' => GuestPhoneToken::issue('012345678')['token'],
         ];
+    }
+
+    // ── Guest phone OTP ──────────────────────────────────────────────────────
+
+    public function test_guest_order_without_verified_phone_is_rejected(): void
+    {
+        $product = $this->product($this->user());
+        $fields  = $this->guestFields();
+        unset($fields['guest_phone_token']);
+
+        $this->postJson("/api/v1/marketplace/{$product->id}/order", $fields)
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'guest_phone_unverified');
+        $this->assertSame(0, MarketplaceOrder::count());
+    }
+
+    public function test_phone_token_only_works_for_its_own_number(): void
+    {
+        $product = $this->product($this->user());
+
+        $this->postJson("/api/v1/marketplace/{$product->id}/order", $this->guestFields([
+            'guest_phone_token' => GuestPhoneToken::issue('099999999')['token'],
+        ]))->assertUnprocessable()->assertJsonPath('code', 'guest_phone_unverified');
+    }
+
+    public function test_expired_or_forged_phone_token_is_rejected(): void
+    {
+        $product = $this->product($this->user());
+        $token   = GuestPhoneToken::issue('012345678')['token'];
+
+        $this->travel(GuestPhoneToken::TTL_MINUTES + 1)->minutes();
+        $this->postJson("/api/v1/marketplace/{$product->id}/order", $this->guestFields(['guest_phone_token' => $token]))
+            ->assertUnprocessable();
+
+        $this->postJson("/api/v1/marketplace/{$product->id}/order", $this->guestFields(['guest_phone_token' => 'not-a-real-token']))
+            ->assertUnprocessable()->assertJsonPath('code', 'guest_phone_unverified');
+    }
+
+    public function test_guest_rental_needs_verified_phone(): void
+    {
+        $product = $this->product($this->user());
+        $fields  = $this->guestFields([
+            'marketplace_product_id' => $product->id,
+            'pickup_location'        => 'ROTEH CAMBODIA',
+            'start_date'             => now()->addDay()->toDateString(),
+            'end_date'               => now()->addDays(3)->toDateString(),
+        ]);
+        unset($fields['guest_phone_token']);
+
+        $this->postJson('/api/v1/rentals', $fields)
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'guest_phone_unverified');
+        $this->assertSame(0, CarRental::count());
+    }
+
+    public function test_guest_phone_verify_issues_token_without_creating_an_account(): void
+    {
+        PhoneOtp::create([
+            'phone'        => '012345678',
+            'otp_hash'     => Hash::make('123456'),
+            'expires_at'   => now()->addMinutes(3),
+            'last_sent_at' => now(),
+        ]);
+        $users = User::count();
+
+        $this->postJson('/api/v1/shop/guest-phone/verify', ['phone' => '012345678', 'code' => '000000'])
+            ->assertUnprocessable();
+
+        $token = $this->postJson('/api/v1/shop/guest-phone/verify', ['phone' => '+85512345678', 'code' => '123456'])
+            ->assertOk()
+            ->json('data.guest_phone_token');
+
+        $this->assertSame($users, User::count());
+        $this->assertTrue(GuestPhoneToken::matches($token, '012 345 678'));
+
+        // The code is single-use.
+        $this->postJson('/api/v1/shop/guest-phone/verify', ['phone' => '012345678', 'code' => '123456'])
+            ->assertUnprocessable();
+    }
+
+    public function test_logged_in_buyer_needs_no_phone_token(): void
+    {
+        $buyer   = $this->user();
+        $product = $this->product($this->user());
+
+        $this->withToken($buyer->api_token)
+            ->postJson("/api/v1/marketplace/{$product->id}/order", ['quantity' => 1])
+            ->assertCreated();
     }
 
     public function test_guest_can_buy_without_logging_in(): void

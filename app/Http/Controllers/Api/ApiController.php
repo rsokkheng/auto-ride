@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\GuestPhoneToken;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -50,7 +51,20 @@ class ApiController extends Controller
             'guest_phone' => ['required', 'string', 'max:20', 'regex:/^\+?[0-9 ]{8,16}$/'],
             'guest_token' => 'required|string|min:20|max:64',
             'fcm_token'   => 'nullable|string|max:255',
+            'guest_phone_token' => 'nullable|string|max:2048',
         ]);
+
+        // The phone must have been confirmed by SMS OTP
+        // (POST /shop/guest-phone/verify) — otherwise anyone could order
+        // under someone else's number.
+        if (! GuestPhoneToken::matches($guest['guest_phone_token'] ?? null, $guest['guest_phone'])) {
+            return response()->json([
+                'message' => 'Please verify your phone number with the SMS code.',
+                'code'    => 'guest_phone_unverified',
+                'errors'  => ['guest_phone_token' => ['Please verify your phone number with the SMS code.']],
+            ], 422);
+        }
+        unset($guest['guest_phone_token']);
 
         return ['user' => null, 'guest' => $guest];
     }

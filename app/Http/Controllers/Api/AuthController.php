@@ -8,6 +8,7 @@ use App\Models\PhoneOtp;
 use App\Models\Ride;
 use App\Models\User;
 use App\Services\SmsService;
+use App\Support\GuestPhoneToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
@@ -372,26 +373,9 @@ class AuthController extends ApiController
 
         $phone = $this->normalizePhone($data['phone']);
 
-        $record = PhoneOtp::where('phone', $phone)
-            ->whereNull('verified_at')
-            ->where('expires_at', '>', now())
-            ->latest()
-            ->first();
-
-        if (! $record) {
-            return response()->json(['message' => 'Invalid or expired OTP'], 422);
+        if ($error = $this->consumeOtp($phone, $data['code'])) {
+            return $error;
         }
-
-        if ($record->attempts >= self::OTP_MAX_ATTEMPTS) {
-            return response()->json(['message' => 'Too many incorrect attempts. Please request a new OTP.'], 429);
-        }
-
-        if (! Hash::check($data['code'], $record->otp_hash)) {
-            $record->increment('attempts');
-            return response()->json(['message' => 'Invalid or expired OTP'], 422);
-        }
-
-        $record->update(['verified_at' => now()]);
 
         $user = User::where('phone', $phone)->first();
 
@@ -415,6 +399,64 @@ class AuthController extends ApiController
             'phone_verified' => true,
             'phone'          => $phone,
         ]));
+    }
+
+    /**
+     * POST /shop/guest-phone/verify
+     * Confirms a guest shopper's phone with the SMS code from /auth/otp/send
+     * WITHOUT creating an account, and returns a short-lived token that
+     * guest orders/rentals must carry (see ApiController::resolveShopper).
+     */
+    public function verifyGuestPhone(Request $request)
+    {
+        $data = $request->validate([
+            'phone' => 'required|string|max:24',
+            'code'  => 'required|string|max:8',
+        ]);
+
+        $phone = $this->normalizePhone($data['phone']);
+
+        if ($error = $this->consumeOtp($phone, $data['code'])) {
+            return $error;
+        }
+
+        $proof = GuestPhoneToken::issue($phone);
+
+        return $this->success([
+            'phone'             => $phone,
+            'guest_phone_token' => $proof['token'],
+            'expires_at'        => $proof['expires_at'],
+        ]);
+    }
+
+    /**
+     * Checks [code] against the latest unexpired OTP for [phone] and marks it
+     * used. Returns an error response, or null when the code is correct.
+     */
+    private function consumeOtp(string $phone, string $code): ?\Illuminate\Http\JsonResponse
+    {
+        $record = PhoneOtp::where('phone', $phone)
+            ->whereNull('verified_at')
+            ->where('expires_at', '>', now())
+            ->latest()
+            ->first();
+
+        if (! $record) {
+            return response()->json(['message' => 'Invalid or expired OTP'], 422);
+        }
+
+        if ($record->attempts >= self::OTP_MAX_ATTEMPTS) {
+            return response()->json(['message' => 'Too many incorrect attempts. Please request a new OTP.'], 429);
+        }
+
+        if (! Hash::check($code, $record->otp_hash)) {
+            $record->increment('attempts');
+            return response()->json(['message' => 'Invalid or expired OTP'], 422);
+        }
+
+        $record->update(['verified_at' => now()]);
+
+        return null;
     }
 
     private function normalizePhone(string $phone): string

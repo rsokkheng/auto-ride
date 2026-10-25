@@ -34,6 +34,7 @@ class AdminMobileNotificationTest extends TestCase
         $this->postJson("/api/v1/marketplace/{$product->id}/order", [
             'guest_name' => 'Sokha', 'guest_phone' => '012345678',
             'guest_token' => 'guest-device-token-0123456789abcdef',
+            'guest_phone_token' => \App\Support\GuestPhoneToken::issue('012345678')['token'],
         ])->assertCreated();
     }
 

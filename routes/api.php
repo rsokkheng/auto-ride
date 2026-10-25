@@ -61,6 +61,7 @@ Route::prefix('v1')->group(function () {
     Route::put('auth/profile', [AuthController::class, 'updateProfile']);
     Route::post('auth/otp/send',    [AuthController::class, 'sendOTP'])->middleware('throttle:otp-send');
     Route::post('auth/otp/verify',  [AuthController::class, 'verifyOTP'])->middleware('throttle:otp-verify');
+    Route::post('shop/guest-phone/verify', [AuthController::class, 'verifyGuestPhone'])->middleware('throttle:otp-verify');
     Route::post('auth/phone/verify',[AuthController::class, 'verifyPhone']);
     Route::post('auth/firebase-token', [AuthController::class, 'firebaseToken']);
     Route::get('auth/fcm-token',       [AuthController::class, 'getFcmToken']);
