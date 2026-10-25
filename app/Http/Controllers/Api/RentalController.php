@@ -113,7 +113,7 @@ class RentalController extends ApiController
         ['user' => $user, 'guest' => $guest] = $shopper;
 
         $hasProduct = $request->filled('marketplace_product_id');
-        $allowed    = ['motorcycle', 'tuk_tuk', 'electric', 'sedan', 'suv', 'van', 'truck'];
+        $allowed    = CarRental::VEHICLE_TYPES;
 
         $data = $request->validate([
             'marketplace_product_id' => 'nullable|integer|exists:marketplace_products,id',
@@ -128,18 +128,17 @@ class RentalController extends ApiController
             'promo_code'             => 'nullable|string|max:32',
         ]);
 
-        // Derive vehicle_type from the linked marketplace product's vehicle
-        $vehicleType = $data['vehicle_type'] ?? null;
-        if ($hasProduct && ! $vehicleType) {
-            $product     = \App\Models\MarketplaceProduct::with('vehicle')->find($data['marketplace_product_id']);
-            $rawType     = $product?->vehicle?->type ?? null;
-            $vehicleType = in_array($rawType, $allowed) ? $rawType : 'sedan';
-        }
+        // A listed product sets the vehicle type (from its marketplace vehicle
+        // type) and the price (its own rent_price_per_day).
+        $product = $hasProduct
+            ? \App\Models\MarketplaceProduct::with(['vehicle', 'marketplaceVehicleType'])->find($data['marketplace_product_id'])
+            : null;
+        $vehicleType = $data['vehicle_type'] ?? CarRental::vehicleTypeForProduct($product) ?? 'sedan';
 
         $start     = Carbon::parse($data['start_date']);
         $end       = Carbon::parse($data['end_date']);
         $totalDays = max(1, $start->diffInDays($end) + 1);
-        $dailyKhr  = $this->dailyRate($vehicleType);
+        $dailyKhr  = (int) round(CarRental::dailyRateUsdFor($product, $vehicleType) * CarRental::KHR_PER_USD);
         $totalKhr  = $dailyKhr * $totalDays;
 
         $promo          = null;
@@ -199,7 +198,7 @@ class RentalController extends ApiController
         if ($status) $carQuery->where('status', $status);
 
         $carRentals = $carQuery->latest()->get()->map(function ($r) {
-            $dailyUsd = $this->dailyRateUsd($r->vehicle_type);
+            $dailyUsd = $r->dailyRateUsd();
             $product  = $r->marketplaceProduct;
             return [
                 'source'                 => 'car_rental',
@@ -370,29 +369,15 @@ class RentalController extends ApiController
 
     private function dailyRateUsd(string $vehicleType): float
     {
-        return match ($vehicleType) {
-            'motorcycle' => 5.00,
-            'tuk_tuk'   => 7.00,
-            'electric'  => 9.00,
-            'sedan'     => 10.00,
-            'suv'       => 15.00,
-            'van'       => 18.00,
-            'truck'     => 25.00,
-            default     => 10.00,
-        };
-    }
-
-    private function dailyRate(string $vehicleType): int
-    {
-        return (int) round($this->dailyRateUsd($vehicleType) * 4000);
+        return CarRental::genericDailyRateUsd($vehicleType);
     }
 
     private function formatRental(CarRental $r): array
     {
-        $dailyUsd = $this->dailyRateUsd($r->vehicle_type);
+        $dailyUsd = $r->dailyRateUsd();
         $totalUsd = round($dailyUsd * $r->total_days, 2);
 
-        $r->loadMissing(['user', 'marketplaceProduct.images']);
+        $r->loadMissing(['user', 'marketplaceProduct.images', 'marketplaceProduct.marketplaceVehicleType']);
 
         $product = $r->marketplaceProduct;
 
@@ -403,6 +388,7 @@ class RentalController extends ApiController
 
             'marketplace_product_id' => $r->marketplace_product_id,
             'vehicle_type'           => $r->vehicle_type,
+            'vehicle_label'          => $r->vehicleLabel(),
             'pickup_location'        => $r->pickup_location,
             'pickup_lat'             => $r->pickup_lat,
             'pickup_lng'             => $r->pickup_lng,

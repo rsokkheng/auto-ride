@@ -153,7 +153,7 @@
                     ['header' => 'Operations', 'items' => [
                         ['Rides',            'fa-route',            'admin.rides',            ['admin.rides']],
                         ['Deliveries',       'fa-box',              'admin.deliveries',       ['admin.deliveries']],
-                        ['Car Rentals',      'fa-car-side',         'admin.car-rentals',      ['admin.car-rentals*']],
+                        ['Rental',      'fa-car-side',         'admin.car-rentals',      ['admin.car-rentals*']],
                         ['Marketplace',      'fa-store',            'admin.marketplace',      ['admin.marketplace']],
                         ['Marketplace Orders','fa-shopping-bag',    'admin.marketplace-orders',['admin.marketplace-orders*']],
                         ['Charging Stations','fa-charging-station', 'admin.charging-stations',['admin.charging-stations']],

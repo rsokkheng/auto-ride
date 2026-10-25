@@ -34,7 +34,7 @@
             </select>
             <select name="vehicle_type" class="form-control form-control-sm mr-2 mb-1">
                 <option value="">All Vehicles</option>
-                @foreach(['motorcycle','tuk_tuk','electric','sedan','suv','van','truck'] as $vt)
+                @foreach(\App\Models\CarRental::VEHICLE_TYPES as $vt)
                     <option value="{{ $vt }}" {{ request('vehicle_type') == $vt ? 'selected' : '' }}>
                         {{ ucfirst(str_replace('_',' ', $vt)) }}
                     </option>
@@ -115,17 +115,18 @@
             <tbody>
             @forelse($rentals as $rental)
                 @php
-                    $dailyUsd = match($rental->vehicle_type) {
-                        'motorcycle' => 5, 'tuk_tuk' => 7, 'electric' => 9,
-                        'sedan' => 10, 'suv' => 15, 'van' => 18, 'truck' => 25, default => 10,
-                    };
+                    $dailyUsd = $rental->dailyRateUsd();
                     $totalUsd = $dailyUsd * $rental->total_days;
                 @endphp
                 <tr>
                     <td class="align-middle font-weight-bold">{{ ($rentals->currentPage() - 1) * $rentals->perPage() + $loop->iteration }}</td>
 
                     <td class="align-middle" style="max-width:140px;white-space:normal;">
-                        @if($rental->user)
+                        @if($rental->isGuest())
+                            <span class="badge badge-secondary">Guest</span><br>
+                            <small>{{ $rental->guest_name ?? '—' }}</small><br>
+                            <small class="text-muted">{{ $rental->guest_phone ?? '' }}</small>
+                        @elseif($rental->user)
                             <div>{{ $rental->user->name }}</div>
                             <small class="text-muted">{{ $rental->user->phone ?? '' }}</small>
                         @else
@@ -149,7 +150,7 @@
 
                     <td class="align-middle">
                         <span class="badge badge-secondary">
-                            <i class="fas fa-car mr-1"></i>{{ ucfirst(str_replace('_',' ', $rental->vehicle_type)) }}
+                            <i class="fas fa-car mr-1"></i>{{ $rental->vehicleLabel() }}
                         </span>
                     </td>
 

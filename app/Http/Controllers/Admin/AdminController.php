@@ -1116,6 +1116,9 @@ class AdminController extends Controller
                 if (ctype_digit($search)) {
                     $q->orWhere('id', $search);
                 }
+                // Guest checkouts have no buyer account — match their contact details.
+                $q->orWhere('guest_name', 'like', "%{$search}%")
+                  ->orWhere('guest_phone', 'like', "%{$search}%");
                 $q->orWhereHas('buyer', function ($uq) use ($search) {
                     $uq->where('name', 'like', "%{$search}%")
                        ->orWhere('phone', 'like', "%{$search}%")
@@ -1175,7 +1178,7 @@ class AdminController extends Controller
     {
         $search = trim((string) $request->input('search', ''));
 
-        $query = \App\Models\CarRental::with(['user', 'marketplaceProduct.images'])->latest();
+        $query = \App\Models\CarRental::with(['user', 'marketplaceProduct.images', 'marketplaceProduct.marketplaceVehicleType'])->latest();
 
         // Exact rental, e.g. opened from an admin notification.
         if ($request->filled('id')) {
@@ -1192,6 +1195,9 @@ class AdminController extends Controller
                 if (ctype_digit($search)) {
                     $q->orWhere('id', $search);
                 }
+                // Guest rentals have no user account — match their contact details.
+                $q->orWhere('guest_name', 'like', "%{$search}%")
+                  ->orWhere('guest_phone', 'like', "%{$search}%");
                 $q->orWhereHas('user', function ($uq) use ($search) {
                     $uq->where('name', 'like', "%{$search}%")
                        ->orWhere('phone', 'like', "%{$search}%")

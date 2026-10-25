@@ -68,6 +68,42 @@ class ShopGuestPromoTest extends TestCase
         ];
     }
 
+    public function test_guest_cart_checkout_is_saved(): void
+    {
+        $product = $this->product($this->user());
+
+        $this->postJson('/api/v1/marketplace/checkout', $this->guestFields([
+            'items' => [['product_id' => $product->id, 'order_type' => 'purchase', 'quantity' => 1]],
+            'payment_method' => 'cash',
+        ]))->assertCreated();
+
+        $order = MarketplaceOrder::sole();
+        $this->assertNull($order->buyer_id);
+        $this->assertSame('guest', $order->entry_type);
+        $this->assertSame('Sokha', $order->guest_name);
+        $this->assertSame('012345678', $order->guest_phone);
+    }
+
+    public function test_admin_sees_and_finds_guest_orders_and_rentals(): void
+    {
+        $product = $this->product($this->user());
+        $this->postJson("/api/v1/marketplace/{$product->id}/order", $this->guestFields(['quantity' => 1]))
+            ->assertCreated();
+        $this->postJson('/api/v1/rentals', $this->guestFields([
+            'marketplace_product_id' => $product->id,
+            'pickup_location'        => 'ROTEH CAMBODIA',
+            'start_date'             => now()->addDay()->toDateString(),
+            'end_date'               => now()->addDays(3)->toDateString(),
+        ]))->assertSuccessful();
+
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+
+        $this->get(route('admin.marketplace-orders', ['search' => '012345678']))
+            ->assertOk()->assertSee('Sokha')->assertSee('Guest');
+        $this->get(route('admin.car-rentals', ['search' => 'Sokha']))
+            ->assertOk()->assertSee('Sokha')->assertSee('012345678')->assertSee('Guest');
+    }
+
     // ── Guest phone OTP ──────────────────────────────────────────────────────
 
     public function test_guest_order_without_verified_phone_is_rejected(): void
