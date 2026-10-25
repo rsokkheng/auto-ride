@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DriverDocumentController;
+use App\Http\Controllers\Api\DriverMissedRequestController;
 use App\Http\Controllers\Api\LoyaltyController;
 use App\Http\Controllers\Api\ReferralController;
 use App\Http\Controllers\Api\RentalController;
@@ -248,6 +249,8 @@ Route::prefix('v1')->group(function () {
     Route::post('driver/go-offline', [DriverController::class, 'goOffline']);
     Route::post('driver/location', [DriverController::class, 'updateLocation']);
     Route::post('driver/rides/{ride}/decline', [DriverController::class, 'declineRide']);
+    Route::get('driver/missed-requests',  [DriverMissedRequestController::class, 'index']);
+    Route::post('driver/missed-requests', [DriverMissedRequestController::class, 'store']);
     Route::get('driver/tasks', [DriverController::class, 'tasks']);
     Route::get('driver/stats', [DriverController::class, 'getDriverStats']);
     Route::post('driver/vehicles', [DriverController::class, 'registerVehicle']);
