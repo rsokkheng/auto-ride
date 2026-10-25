@@ -22,23 +22,19 @@
     <p class="page-subtitle">Vehicle rental bookings from the app and the marketplace. Amounts are what the customer was charged.</p>
 </div>
 
-{{-- Status overview — click to filter --}}
-<div class="row mb-3">
-    @php $total = $counts->sum(); @endphp
-    <div class="col-6 col-md-4 col-xl-2 mb-2">
-        <a href="{{ route('admin.car-rentals', request()->except(['status', 'page'])) }}" class="stat-card {{ ! $current ? 'is-active' : '' }}">
-            <span class="stat-icon tone-muted"><i class="fas fa-layer-group"></i></span>
-            <div><div class="stat-label">All</div><div class="stat-value">{{ number_format($total) }}</div></div>
-        </a>
-    </div>
+{{-- Status overview — click to filter (Tailwind grid, tw: prefix) --}}
+@php $total = $counts->sum(); @endphp
+<div class="tw:mb-4 tw:grid tw:grid-cols-2 tw:gap-3 tw:md:grid-cols-3 tw:xl:grid-cols-6">
+    <a href="{{ route('admin.car-rentals', request()->except(['status', 'page'])) }}" class="stat-card {{ ! $current ? 'is-active' : '' }}">
+        <span class="stat-icon tone-muted"><i class="fas fa-layer-group"></i></span>
+        <div><div class="stat-label">All</div><div class="stat-value">{{ number_format($total) }}</div></div>
+    </a>
     @foreach($statusMeta as $key => [$label, $tone, $icon])
-        <div class="col-6 col-md-4 col-xl-2 mb-2">
-            <a href="{{ route('admin.car-rentals', array_merge(request()->except('page'), ['status' => $key])) }}"
-               class="stat-card {{ $current === $key ? 'is-active' : '' }}">
-                <span class="stat-icon {{ $tone }}"><i class="fas {{ $icon }}"></i></span>
-                <div><div class="stat-label">{{ $label }}</div><div class="stat-value">{{ number_format($counts[$key] ?? 0) }}</div></div>
-            </a>
-        </div>
+        <a href="{{ route('admin.car-rentals', array_merge(request()->except('page'), ['status' => $key])) }}"
+           class="stat-card {{ $current === $key ? 'is-active' : '' }}">
+            <span class="stat-icon {{ $tone }}"><i class="fas {{ $icon }}"></i></span>
+            <div><div class="stat-label">{{ $label }}</div><div class="stat-value">{{ number_format($counts[$key] ?? 0) }}</div></div>
+        </a>
     @endforeach
 </div>
 

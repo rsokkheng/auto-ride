@@ -13,6 +13,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kantumruy+Pro:wght@400;500;600&display=swap">
     <link rel="stylesheet" href="{{ asset('css/admin-theme.css') }}?v={{ @filemtime(public_path('css/admin-theme.css')) }}">
+    {{-- Tailwind utilities (tw: prefix, no preflight) — built by `npm run build` / served by `npm run dev`. --}}
+    @if(file_exists(public_path('hot')) || file_exists(public_path('build/manifest.json')))
+        @vite('resources/css/admin.css')
+    @endif
 
     @stack('styles')
 </head>

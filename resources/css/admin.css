@@ -1,0 +1,54 @@
+/*
+ * Tailwind for the admin panel, alongside Bootstrap 4 / AdminLTE.
+ *
+ *  - No preflight: Tailwind's reset would wipe Bootstrap's base styles.
+ *  - Utilities are unlayered and !important: Bootstrap/AdminLTE are unlayered
+ *    (and use !important), so layered utilities would always lose to them.
+ *  - Every class takes the `tw:` prefix (tw:flex, tw:gap-4, tw:md:grid-cols-3,
+ *    tw:hover:bg-ink-50) so nothing collides with Bootstrap's own
+ *    .border, .rounded, .shadow, .hidden, .container …
+ *  - Colours come from public/css/admin-theme.css, so tw:bg-primary,
+ *    tw:text-ink-500, tw:bg-success-soft match the rest of the panel.
+ */
+@import 'tailwindcss/theme.css' prefix(tw);
+@import 'tailwindcss/utilities.css' prefix(tw) important;
+
+/* Only admin templates are scanned. */
+@source not '../../vendor';
+@source '../views/admin';
+
+@theme inline {
+    --font-sans: 'Inter', 'Kantumruy Pro', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+    --color-primary: var(--primary);
+    --color-primary-hover: var(--primary-hover);
+    --color-primary-soft: var(--primary-soft);
+    --color-brand: var(--brand);
+
+    --color-success: var(--success);
+    --color-success-soft: var(--success-soft);
+    --color-success-ink: var(--success-ink);
+    --color-warning: var(--warning);
+    --color-warning-soft: var(--warning-soft);
+    --color-warning-ink: var(--warning-ink);
+    --color-danger: var(--danger);
+    --color-danger-soft: var(--danger-soft);
+    --color-danger-ink: var(--danger-ink);
+    --color-info: var(--info);
+    --color-info-soft: var(--info-soft);
+    --color-info-ink: var(--info-ink);
+
+    --color-ink-50: var(--ink-50);
+    --color-ink-100: var(--ink-100);
+    --color-ink-200: var(--ink-200);
+    --color-ink-300: var(--ink-300);
+    --color-ink-400: var(--ink-400);
+    --color-ink-500: var(--ink-500);
+    --color-ink-600: var(--ink-600);
+    --color-ink-700: var(--ink-700);
+    --color-ink-800: var(--ink-800);
+    --color-ink-900: var(--ink-900);
+
+    --radius-card: var(--radius);
+    --shadow-card: var(--shadow-sm);
+}
