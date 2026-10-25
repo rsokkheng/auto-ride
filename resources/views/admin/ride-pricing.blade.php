@@ -52,7 +52,10 @@ $colors = [
                 <i class="fas {{ $p->icon }}"></i>
             </div>
             <div class="flex-1">
-                <div class="font-weight-bold" style="color:#1e293b;">{{ $p->label }}</div>
+                <div class="font-weight-bold" style="color:#1e293b;">{{ $p->name_en ?: $p->label }}</div>
+                @if($p->name_kh || $p->name_zh)
+                <div style="font-size:.8rem;color:#475569;">{{ collect([$p->name_kh, $p->name_zh])->filter()->join(' · ') }}</div>
+                @endif
                 <small class="text-muted">{{ ucfirst(str_replace('_',' ',$p->service_type)) }} · Max {{ $p->capacity }} pax</small>
             </div>
             <div>
@@ -65,6 +68,22 @@ $colors = [
         <div class="pricing-card-body">
             <form method="POST" action="{{ route('admin.ride-pricing.update', $p) }}">
                 @csrf @method('PUT')
+
+                {{-- Localized names (shown to the app user by their selected language) --}}
+                <div class="row">
+                    <div class="col-12 mb-3">
+                        <div class="field-label">Name (English)</div>
+                        <input type="text" name="name_en" class="fare-input" value="{{ old('name_en', $p->name_en ?: $p->label) }}" maxlength="100" required>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="field-label">Name (ខ្មែរ)</div>
+                        <input type="text" name="name_kh" class="fare-input" value="{{ old('name_kh', $p->name_kh) }}" maxlength="100">
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="field-label">Name (中文)</div>
+                        <input type="text" name="name_zh" class="fare-input" value="{{ old('name_zh', $p->name_zh) }}" maxlength="100">
+                    </div>
+                </div>
 
                 <div class="row">
                     {{-- Base fare --}}
@@ -117,8 +136,7 @@ $colors = [
                     </div>
                 </div>
 
-                {{-- Hidden fields (label, icon stay the same unless editing) --}}
-                <input type="hidden" name="label" value="{{ $p->label }}">
+                {{-- Hidden field (icon stays the same unless editing) --}}
                 <input type="hidden" name="icon"  value="{{ $p->icon }}">
 
                 {{-- Active toggle --}}
@@ -145,7 +163,7 @@ $colors = [
                 </div>
 
                 <button type="submit" class="btn btn-primary btn-block mt-3" style="border-radius:8px;">
-                    <i class="fas fa-save mr-1"></i> Save {{ $p->label }}
+                    <i class="fas fa-save mr-1"></i> Save {{ $p->name_en ?: $p->label }}
                 </button>
             </form>
         </div>

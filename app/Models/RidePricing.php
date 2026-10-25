@@ -2,15 +2,21 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalizedName;
 use Illuminate\Database\Eloquent\Model;
 
 class RidePricing extends Model
 {
+    use HasLocalizedName;
+
     protected $table = 'ride_pricing';
 
     protected $fillable = [
         'service_type',
         'label',
+        'name_en',
+        'name_kh',
+        'name_zh',
         'icon',
         'base',
         'per_km',
@@ -30,6 +36,12 @@ class RidePricing extends Model
         'capacity'    => 'integer',
         'active'      => 'boolean',
     ];
+
+    /** Label in the request locale (name_kh / name_zh / name_en), falling back to the raw label column. */
+    public function getLabelAttribute(): ?string
+    {
+        return $this->resolveLocalizedName('name') ?? ($this->attributes['label'] ?? null);
+    }
 
     public function toArray(): array
     {

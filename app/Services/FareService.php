@@ -388,21 +388,25 @@ class FareService
 
     private function ridePricing(string $serviceType): array
     {
-        // Load from DB (cached for 10 minutes).
+        // Load from DB (cached for 10 minutes). Raw attributes are cached so the
+        // localized label is resolved per request, not frozen in the cache.
         $all = Cache::remember('ride_pricing_all', 600, function () {
             return RidePricing::where('active', true)
                 ->get()
                 ->keyBy('service_type')
-                ->map(fn($p) => $p->toArray())
+                ->map(fn($p) => $p->getAttributes())
                 ->toArray();
         });
 
         // Fall back to config if DB not seeded yet.
         if (empty($all)) {
             $all = config('pricing.rides', []);
+            return $all[$serviceType] ?? $all['standard'] ?? [];
         }
 
-        return $all[$serviceType] ?? $all['standard'] ?? [];
+        $row = $all[$serviceType] ?? $all['standard'] ?? null;
+
+        return $row ? (new RidePricing)->newFromBuilder($row)->toArray() : [];
     }
 
     private function setting(string $key, mixed $default = null): mixed

@@ -14,6 +14,9 @@ class RidePricingSeeder extends Seeder
             [
                 'service_type' => 'motorcycle',
                 'label'        => 'Motorcycle',
+                'name_en'      => 'Motorcycle',
+                'name_kh'      => 'ម៉ូតូ',
+                'name_zh'      => '摩托车',
                 'icon'         => 'fa-motorcycle',
                 'base'         => 2500,
                 'per_km'       => 700,
@@ -26,6 +29,9 @@ class RidePricingSeeder extends Seeder
             [
                 'service_type' => 'tuk_tuk',
                 'label'        => 'Tuk-tuk',
+                'name_en'      => 'Tuk-tuk',
+                'name_kh'      => 'តុក តុក',
+                'name_zh'      => '嘟嘟车',
                 'icon'         => 'fa-taxi',
                 'base'         => 3500,
                 'per_km'       => 900,
@@ -38,6 +44,9 @@ class RidePricingSeeder extends Seeder
             [
                 'service_type' => 'standard',
                 'label'        => 'Car Standard',
+                'name_en'      => 'Car Standard',
+                'name_kh'      => 'ឡានស្តង់ដារ',
+                'name_zh'      => '标准轿车',
                 'icon'         => 'fa-car',
                 'base'         => 5000,
                 'per_km'       => 1500,
@@ -50,6 +59,9 @@ class RidePricingSeeder extends Seeder
             [
                 'service_type' => 'premium',
                 'label'        => 'Car Premium',
+                'name_en'      => 'Car Premium',
+                'name_kh'      => 'ឡានពិសេស',
+                'name_zh'      => '高级轿车',
                 'icon'         => 'fa-car-side',
                 'base'         => 8000,
                 'per_km'       => 3000,
@@ -62,6 +74,9 @@ class RidePricingSeeder extends Seeder
             [
                 'service_type' => 'shared',
                 'label'        => 'Shared Ride',
+                'name_en'      => 'Shared Ride',
+                'name_kh'      => 'ជិះរួមគ្នា',
+                'name_zh'      => '拼车',
                 'icon'         => 'fa-people-group',
                 'base'         => 2500,
                 'per_km'       => 1000,
@@ -74,6 +89,9 @@ class RidePricingSeeder extends Seeder
             [
                 'service_type' => 'van',
                 'label'        => 'Van / XL',
+                'name_en'      => 'Van / XL',
+                'name_kh'      => 'ឡានវ៉ាន / XL',
+                'name_zh'      => '面包车 / XL',
                 'icon'         => 'fa-van-shuttle',
                 'base'         => 7000,
                 'per_km'       => 2200,

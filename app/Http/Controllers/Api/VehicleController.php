@@ -18,6 +18,9 @@ class VehicleController extends ApiController
                 'id'           => $p->id,
                 'service_type' => $p->service_type,
                 'label'        => $p->label,
+                'name_en'      => $p->name_en,
+                'name_kh'      => $p->name_kh,
+                'name_zh'      => $p->name_zh,
                 'icon'         => $p->icon,
                 'capacity'     => $p->capacity,
                 'pricing'      => [

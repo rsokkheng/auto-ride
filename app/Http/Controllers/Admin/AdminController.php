@@ -1246,7 +1246,9 @@ class AdminController extends Controller
     public function updateRidePricing(Request $request, RidePricing $pricing)
     {
         $data = $request->validate([
-            'label'       => 'required|string|max:100',
+            'name_en'     => 'required|string|max:100',
+            'name_kh'     => 'nullable|string|max:100',
+            'name_zh'     => 'nullable|string|max:100',
             'icon'        => 'required|string|max:50',
             'base'        => 'required|integer|min:0',
             'per_km'      => 'required|integer|min:0',
@@ -1257,13 +1259,15 @@ class AdminController extends Controller
             'active'      => 'boolean',
         ]);
 
+        // Keep the legacy label column in sync as the fallback name.
+        $data['label']  = $data['name_en'];
         $data['active'] = $request->boolean('active');
         $pricing->update($data);
 
         FareService::clearCache();
 
         return redirect()->route('admin.ride-pricing')
-            ->with('success', "Pricing for \"{$pricing->label}\" updated.");
+            ->with('success', "Pricing for \"{$pricing->name_en}\" updated.");
     }
 
     public function updatePricingSettings(Request $request)
