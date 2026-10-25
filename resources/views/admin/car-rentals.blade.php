@@ -2,220 +2,179 @@
 @section('title', 'Car Rentals')
 @section('page-title', 'Car Rentals')
 
+@php
+    $statusMeta = [
+        'pending'   => ['Pending',   'tone-warning', 'fa-clock'],
+        'confirmed' => ['Confirmed', 'tone-info',    'fa-circle-check'],
+        'active'    => ['Active',    'tone-primary', 'fa-key'],
+        'completed' => ['Completed', 'tone-success', 'fa-flag-checkered'],
+        'cancelled' => ['Cancelled', 'tone-danger',  'fa-ban'],
+    ];
+    $current  = request('status');
+    $filtered = filled($search) || $current || request('vehicle_type');
+    $initials = fn (?string $name) => collect(preg_split('/\s+/', trim((string) $name)))
+        ->filter()->take(2)->map(fn ($w) => mb_strtoupper(mb_substr($w, 0, 1)))->join('') ?: '?';
+@endphp
+
 @section('content')
 
-@if(session('success'))
-<div class="alert alert-success alert-dismissible fade show">
-    <i class="fas fa-check-circle mr-1"></i> {{ session('success') }}
-    <button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>
+<div class="page-toolbar">
+    <p class="page-subtitle">Vehicle rental bookings from the app and the marketplace. Amounts are what the customer was charged.</p>
 </div>
-@endif
-@if(session('error'))
-<div class="alert alert-danger alert-dismissible fade show">
-    <i class="fas fa-exclamation-circle mr-1"></i> {{ session('error') }}
-    <button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>
-</div>
-@endif
 
-{{-- Filters --}}
-<div class="card mb-3">
-    <div class="card-body py-2">
-        <form method="GET" action="{{ route('admin.car-rentals') }}" class="form-inline flex-wrap">
-            <input type="text" name="search" class="form-control form-control-sm mr-2 mb-1"
-                   placeholder="Search by rental #, renter name, phone, or email…"
-                   value="{{ $search ?? '' }}" style="min-width:260px">
-            <select name="status" class="form-control form-control-sm mr-2 mb-1">
-                <option value="">All Statuses</option>
-                <option value="pending"   {{ request('status') == 'pending'   ? 'selected' : '' }}>Pending</option>
-                <option value="confirmed" {{ request('status') == 'confirmed' ? 'selected' : '' }}>Confirmed</option>
-                <option value="active"    {{ request('status') == 'active'    ? 'selected' : '' }}>Active</option>
-                <option value="completed" {{ request('status') == 'completed' ? 'selected' : '' }}>Completed</option>
-                <option value="cancelled" {{ request('status') == 'cancelled' ? 'selected' : '' }}>Cancelled</option>
-            </select>
-            <select name="vehicle_type" class="form-control form-control-sm mr-2 mb-1">
-                <option value="">All Vehicles</option>
-                @foreach(\App\Models\CarRental::VEHICLE_TYPES as $vt)
-                    <option value="{{ $vt }}" {{ request('vehicle_type') == $vt ? 'selected' : '' }}>
-                        {{ ucfirst(str_replace('_',' ', $vt)) }}
-                    </option>
+{{-- Status overview — click to filter --}}
+<div class="row mb-3">
+    @php $total = $counts->sum(); @endphp
+    <div class="col-6 col-md-4 col-xl-2 mb-2">
+        <a href="{{ route('admin.car-rentals', request()->except(['status', 'page'])) }}" class="stat-card {{ ! $current ? 'is-active' : '' }}">
+            <span class="stat-icon tone-muted"><i class="fas fa-layer-group"></i></span>
+            <div><div class="stat-label">All</div><div class="stat-value">{{ number_format($total) }}</div></div>
+        </a>
+    </div>
+    @foreach($statusMeta as $key => [$label, $tone, $icon])
+        <div class="col-6 col-md-4 col-xl-2 mb-2">
+            <a href="{{ route('admin.car-rentals', array_merge(request()->except('page'), ['status' => $key])) }}"
+               class="stat-card {{ $current === $key ? 'is-active' : '' }}">
+                <span class="stat-icon {{ $tone }}"><i class="fas {{ $icon }}"></i></span>
+                <div><div class="stat-label">{{ $label }}</div><div class="stat-value">{{ number_format($counts[$key] ?? 0) }}</div></div>
+            </a>
+        </div>
+    @endforeach
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <form method="GET" action="{{ route('admin.car-rentals') }}" class="filter-bar">
+            <div class="search-input">
+                <i class="fas fa-magnifying-glass"></i>
+                <input type="text" name="search" class="form-control form-control-sm"
+                       placeholder="Rental #, renter name, phone or email" value="{{ $search ?? '' }}">
+            </div>
+            <select name="status" class="form-control form-control-sm">
+                <option value="">All statuses</option>
+                @foreach($statusMeta as $key => [$label])
+                    <option value="{{ $key }}" @selected($current === $key)>{{ $label }}</option>
                 @endforeach
             </select>
-            <button class="btn btn-sm btn-primary mr-1 mb-1"><i class="fas fa-filter mr-1"></i>Filter</button>
-            <a href="{{ route('admin.car-rentals') }}" class="btn btn-sm btn-secondary mb-1">Reset</a>
+            <select name="vehicle_type" class="form-control form-control-sm">
+                <option value="">All vehicles</option>
+                @foreach(\App\Models\CarRental::VEHICLE_TYPES as $vt)
+                    <option value="{{ $vt }}" @selected(request('vehicle_type') === $vt)>{{ \App\Models\CarRental::VEHICLE_TYPE_LABELS[$vt] }}</option>
+                @endforeach
+            </select>
+            <button class="btn btn-sm btn-primary"><i class="fas fa-filter mr-1"></i> Apply</button>
+            @if($filtered)
+                <a href="{{ route('admin.car-rentals') }}" class="btn btn-sm btn-secondary">Clear</a>
+            @endif
+            <span class="ml-auto text-muted" style="font-size:.78rem;">
+                {{ number_format($rentals->total()) }} {{ Str::plural('rental', $rentals->total()) }}
+            </span>
         </form>
     </div>
-</div>
 
-{{-- Summary --}}
-<div class="row mb-3">
-    @php $all = $rentals->getCollection(); @endphp
-    <div class="col-6 col-md-3 mb-2">
-        <div class="info-box mb-0 shadow-sm">
-            <span class="info-box-icon bg-warning"><i class="fas fa-clock"></i></span>
-            <div class="info-box-content">
-                <span class="info-box-text">Pending</span>
-                <span class="info-box-number">{{ $all->where('status','pending')->count() }}</span>
-            </div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3 mb-2">
-        <div class="info-box mb-0 shadow-sm">
-            <span class="info-box-icon bg-info"><i class="fas fa-check"></i></span>
-            <div class="info-box-content">
-                <span class="info-box-text">Confirmed</span>
-                <span class="info-box-number">{{ $all->where('status','confirmed')->count() }}</span>
-            </div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3 mb-2">
-        <div class="info-box mb-0 shadow-sm">
-            <span class="info-box-icon bg-success"><i class="fas fa-check-double"></i></span>
-            <div class="info-box-content">
-                <span class="info-box-text">Completed</span>
-                <span class="info-box-number">{{ $all->where('status','completed')->count() }}</span>
-            </div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3 mb-2">
-        <div class="info-box mb-0 shadow-sm">
-            <span class="info-box-icon bg-danger"><i class="fas fa-times"></i></span>
-            <div class="info-box-content">
-                <span class="info-box-text">Cancelled</span>
-                <span class="info-box-number">{{ $all->where('status','cancelled')->count() }}</span>
-            </div>
-        </div>
-    </div>
-</div>
-
-{{-- Table --}}
-<div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0"><i class="fas fa-car mr-1"></i> Car Rental Bookings</h3>
-        <span class="badge badge-secondary">{{ $rentals->total() }} total</span>
-    </div>
     <div class="card-body table-responsive p-0">
-        <table class="table table-hover text-nowrap mb-0">
-            <thead class="thead-light">
+        <table class="table table-hover text-nowrap">
+            <thead>
                 <tr>
-                    <th>No.</th>
-                    <th>Customer</th>
-                    <th>Product</th>
+                    <th>Rental</th>
+                    <th>Renter</th>
                     <th>Vehicle</th>
-                    <th>Pickup Location</th>
-                    <th>Dates</th>
-                    <th>Days</th>
-                    <th>Total (KHR)</th>
-                    <th>Total (USD)</th>
-                    <th>Payment</th>
+                    <th>Period &amp; pickup</th>
+                    <th class="text-right">Amount</th>
                     <th>Status</th>
-                    <th>Booked At</th>
                     <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
             @forelse($rentals as $rental)
                 @php
-                    $dailyUsd = $rental->dailyRateUsd();
-                    $totalUsd = $dailyUsd * $rental->total_days;
+                    $product = $rental->marketplaceProduct;
+                    $image   = $product?->images->first()?->full_url;
+                    [$sLabel, $sTone] = $statusMeta[$rental->status] ?? [ucfirst($rental->status), 'tone-muted'];
+                    $renter  = $rental->isGuest() ? $rental->guest_name : $rental->user?->name;
+                    $phone   = $rental->isGuest() ? $rental->guest_phone : $rental->user?->phone;
                 @endphp
                 <tr>
-                    <td class="align-middle font-weight-bold">{{ ($rentals->currentPage() - 1) * $rentals->perPage() + $loop->iteration }}</td>
+                    <td>
+                        <div class="font-weight-bold" style="color:var(--ink-900);">#{{ $rental->id }}</div>
+                        <div class="text-muted" style="font-size:.74rem;">{{ $rental->created_at->format('d M, H:i') }}</div>
+                    </td>
 
-                    <td class="align-middle" style="max-width:140px;white-space:normal;">
-                        @if($rental->isGuest())
-                            <span class="badge badge-secondary">Guest</span><br>
-                            <small>{{ $rental->guest_name ?? '—' }}</small><br>
-                            <small class="text-muted">{{ $rental->guest_phone ?? '' }}</small>
-                        @elseif($rental->user)
-                            <div>{{ $rental->user->name }}</div>
-                            <small class="text-muted">{{ $rental->user->phone ?? '' }}</small>
+                    <td>
+                        @if($renter || $phone)
+                            <div class="person">
+                                <span class="avatar-chip">{{ $initials($renter) }}</span>
+                                <div style="min-width:0;">
+                                    <div class="person-name" style="max-width:130px;">
+                                        {{ $renter ?? '—' }}
+                                        @if($rental->isGuest())<span class="badge badge-secondary ml-1">Guest</span>@endif
+                                    </div>
+                                    <div class="person-sub">{{ $phone ?? '' }}</div>
+                                </div>
+                            </div>
                         @else
                             <span class="text-muted">—</span>
                         @endif
                     </td>
 
-                    <td class="align-middle" style="max-width:160px;white-space:normal;">
-                        @if($rental->marketplaceProduct)
-                            <div class="d-flex align-items-center">
-                                @if($rental->marketplaceProduct->images->first())
-                                    <img src="{{ $rental->marketplaceProduct->images->first()->full_url }}"
-                                         class="img-thumbnail mr-1" style="width:36px;height:36px;object-fit:cover;">
-                                @endif
-                                <small>{{ $rental->marketplaceProduct->title }}</small>
+                    <td>
+                        <div class="d-flex align-items-center" style="gap:.6rem;">
+                            @if($image)
+                                <img src="{{ $image }}" class="thumb" alt="" loading="lazy"
+                                     onerror="this.outerHTML='<span class=&quot;thumb-placeholder&quot;><i class=&quot;fas fa-car-side&quot;></i></span>'">
+                            @else
+                                <span class="thumb-placeholder"><i class="fas fa-car-side"></i></span>
+                            @endif
+                            <div style="min-width:0;">
+                                <div class="text-truncate" style="max-width:150px;font-weight:500;color:var(--ink-900);"
+                                     title="{{ $product?->title }}">
+                                    {{ $product?->title ?? 'Standard rental' }}
+                                </div>
+                                <div class="text-muted" style="font-size:.74rem;">{{ $rental->vehicleLabel() }}</div>
                             </div>
-                        @else
-                            <span class="text-muted small">Generic</span>
-                        @endif
+                        </div>
                     </td>
 
-                    <td class="align-middle">
-                        <span class="badge badge-secondary">
-                            <i class="fas fa-car mr-1"></i>{{ $rental->vehicleLabel() }}
-                        </span>
+                    <td>
+                        <div>{{ $rental->start_date->format('d M') }} – {{ $rental->end_date->format('d M Y') }}</div>
+                        <div class="text-muted" style="font-size:.74rem;">
+                            {{ $rental->total_days }} {{ Str::plural('day', $rental->total_days) }} · ${{ number_format($rental->dailyRateUsd(), 2) }}/day
+                        </div>
+                        <div class="text-muted text-truncate" style="font-size:.74rem;max-width:165px;" title="{{ $rental->pickup_location }}">
+                            <i class="fas fa-location-dot mr-1" style="color:var(--ink-400);"></i>{{ $rental->pickup_location }}
+                        </div>
                     </td>
 
-                    <td class="align-middle" style="max-width:180px;white-space:normal;">
-                        <small>{{ $rental->pickup_location }}</small>
+                    <td class="text-right">
+                        <div class="font-weight-bold" style="color:var(--ink-900);">{{ number_format($rental->total_amount_khr) }} ៛</div>
+                        <div class="text-muted" style="font-size:.74rem;">
+                            ${{ number_format($rental->total_amount_khr / \App\Models\CarRental::KHR_PER_USD, 2) }}
+                            · <span class="text-capitalize">{{ str_replace('_', ' ', $rental->payment_method ?? '—') }}</span>
+                        </div>
                     </td>
 
-                    <td class="align-middle">
-                        <small>
-                            {{ $rental->start_date->format('d M Y') }}<br>
-                            → {{ $rental->end_date->format('d M Y') }}
-                        </small>
-                    </td>
+                    <td><span class="status-pill {{ $sTone }}">{{ $sLabel }}</span></td>
 
-                    <td class="align-middle text-center">{{ $rental->total_days }}</td>
-                    <td class="align-middle">{{ number_format($rental->total_amount_khr) }}</td>
-                    <td class="align-middle font-weight-bold">${{ number_format($totalUsd, 2) }}</td>
-
-                    <td class="align-middle">
-                        <span class="text-capitalize">{{ str_replace('_',' ', $rental->payment_method) }}</span>
-                    </td>
-
-                    <td class="align-middle">
-                        @php
-                            $cls = match($rental->status) {
-                                'pending'  =>'badge-warning','confirmed'=>'badge-info',
-                                'active'   =>'badge-primary','completed'=>'badge-success',
-                                'cancelled'=>'badge-danger', default=>'badge-secondary',
-                            };
-                        @endphp
-                        <span class="badge {{ $cls }}">{{ ucfirst($rental->status) }}</span>
-                    </td>
-
-                    <td class="align-middle">
-                        <small>{{ $rental->created_at->format('d M Y') }}<br>{{ $rental->created_at->format('H:i') }}</small>
-                    </td>
-
-                    {{-- Actions: icon buttons --}}
-                    <td class="align-middle text-center" style="min-width:110px;">
-                        <div class="btn-group">
+                    <td class="text-center">
+                        <div class="action-group">
                             @if($rental->status === 'pending')
-                                <button type="button"
-                                    class="btn btn-sm btn-info mr-1"
-                                    title="Confirm"
-                                    onclick="showConfirm('confirm','#{{ $rental->id }}','{{ route('admin.car-rentals.confirm', $rental) }}')">
+                                <button type="button" class="btn btn-sm btn-outline-info btn-icon" title="Confirm rental" data-toggle="tooltip"
+                                        onclick="showConfirm('confirm','#{{ $rental->id }}','{{ route('admin.car-rentals.confirm', $rental) }}')">
                                     <i class="fas fa-check"></i>
                                 </button>
                             @endif
                             @if($rental->status === 'confirmed')
-                                <button type="button"
-                                    class="btn btn-sm btn-success mr-1"
-                                    title="Complete"
-                                    onclick="showConfirm('complete','#{{ $rental->id }}','{{ route('admin.car-rentals.complete', $rental) }}')">
+                                <button type="button" class="btn btn-sm btn-outline-success btn-icon" title="Mark completed" data-toggle="tooltip"
+                                        onclick="showConfirm('complete','#{{ $rental->id }}','{{ route('admin.car-rentals.complete', $rental) }}')">
                                     <i class="fas fa-check-double"></i>
                                 </button>
                             @endif
-                            @if(! in_array($rental->status, ['completed','cancelled']))
-                                <button type="button"
-                                    class="btn btn-sm btn-danger"
-                                    title="Cancel"
-                                    onclick="showConfirm('cancel','#{{ $rental->id }}','{{ route('admin.car-rentals.cancel', $rental) }}')">
-                                    <i class="fas fa-times"></i>
+                            @if(! in_array($rental->status, ['completed', 'cancelled']))
+                                <button type="button" class="btn btn-sm btn-outline-danger btn-icon" title="Cancel rental" data-toggle="tooltip"
+                                        onclick="showConfirm('cancel','#{{ $rental->id }}','{{ route('admin.car-rentals.cancel', $rental) }}')">
+                                    <i class="fas fa-xmark"></i>
                                 </button>
-                            @endif
-                            @if(in_array($rental->status, ['completed','cancelled']))
+                            @else
                                 <span class="text-muted">—</span>
                             @endif
                         </div>
@@ -223,41 +182,51 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="13" class="text-center text-muted py-4">
-                        <i class="fas fa-car fa-2x mb-2 d-block"></i>No rentals found.
+                    <td colspan="7">
+                        <div class="empty-state">
+                            <div class="empty-icon"><i class="fas fa-car-side"></i></div>
+                            <h6>{{ $filtered ? 'No rentals match these filters' : 'No rentals yet' }}</h6>
+                            <p class="mb-0" style="font-size:.82rem;">
+                                @if($filtered)
+                                    Try another search or <a href="{{ route('admin.car-rentals') }}">clear the filters</a>.
+                                @else
+                                    Bookings made in the app will appear here.
+                                @endif
+                            </p>
+                        </div>
                     </td>
                 </tr>
             @endforelse
             </tbody>
         </table>
     </div>
+
     @if($rentals->hasPages())
-    <div class="card-footer clearfix">{{ $rentals->links() }}</div>
+        <div class="card-footer d-flex flex-wrap align-items-center justify-content-between" style="gap:.5rem;">
+            <span class="text-muted" style="font-size:.78rem;">
+                Showing {{ $rentals->firstItem() }}–{{ $rentals->lastItem() }} of {{ number_format($rentals->total()) }}
+            </span>
+            {{ $rentals->onEachSide(1)->links() }}
+        </div>
     @endif
 </div>
 
-{{-- Confirm Modal --}}
+{{-- Confirm modal --}}
 <div class="modal fade" id="actionModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalTitle">Confirm Action</h5>
-                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            <div class="modal-body text-center pt-4 pb-3">
+                <span id="modalIconWrap" class="stat-icon mx-auto mb-3" style="width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.25rem;">
+                    <i id="modalIcon" class="fas fa-question"></i>
+                </span>
+                <h5 class="mb-1" id="modalTitle" style="font-size:1rem;">Confirm action</h5>
+                <p id="modalMessage" class="text-muted mb-0" style="font-size:.84rem;"></p>
             </div>
-            <div class="modal-body text-center py-4">
-                <i id="modalIcon" class="fas fa-question-circle fa-3x mb-3"></i>
-                <p id="modalMessage" class="mb-0 font-weight-bold"></p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">
-                    <i class="fas fa-times mr-1"></i> Cancel
-                </button>
-                <form id="actionForm" method="POST">
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Go back</button>
+                <form id="actionForm" method="POST" class="m-0">
                     @csrf
-                    <button type="submit" id="modalBtn" class="btn btn-primary">
-                        <i id="modalBtnIcon" class="fas fa-check mr-1"></i>
-                        <span id="modalBtnText">Confirm</span>
-                    </button>
+                    <button type="submit" id="modalBtn" class="btn btn-primary"><span id="modalBtnText">Confirm</span></button>
                 </form>
             </div>
         </div>
@@ -266,21 +235,22 @@
 
 @push('scripts')
 <script>
+$(function () { $('[data-toggle="tooltip"]').tooltip({ boundary: 'window' }); });
+
 function showConfirm(action, label, url) {
     const config = {
-        confirm:  { title:'Confirm Rental',   msg:'Confirm rental ' + label + '?',           icon:'fa-check-circle',  iconColor:'#17a2b8', btnClass:'btn-info',    btnIcon:'fa-check',        btnText:'Yes, Confirm'  },
-        complete: { title:'Complete Rental',   msg:'Mark rental ' + label + ' as completed?', icon:'fa-check-double',  iconColor:'#28a745', btnClass:'btn-success', btnIcon:'fa-check-double', btnText:'Yes, Complete' },
-        cancel:   { title:'Cancel Rental',     msg:'Cancel rental ' + label + '? This cannot be undone.', icon:'fa-times-circle', iconColor:'#dc3545', btnClass:'btn-danger',  btnIcon:'fa-times',        btnText:'Yes, Cancel'   },
+        confirm:  { title: 'Confirm rental ' + label + '?',  msg: 'The renter will be notified that the booking is confirmed.', icon: 'fa-check',        tone: 'tone-info',    btn: 'btn-info',    text: 'Confirm rental' },
+        complete: { title: 'Complete rental ' + label + '?', msg: 'Marks the vehicle as returned and the rental as finished.',   icon: 'fa-check-double', tone: 'tone-success', btn: 'btn-success', text: 'Mark completed' },
+        cancel:   { title: 'Cancel rental ' + label + '?',   msg: 'The renter will be notified. This cannot be undone.',          icon: 'fa-xmark',        tone: 'tone-danger',  btn: 'btn-danger',  text: 'Cancel rental' },
     };
     const c = config[action];
-    document.getElementById('modalTitle').textContent   = c.title;
-    document.getElementById('modalMessage').textContent = c.msg;
-    document.getElementById('modalIcon').className      = 'fas ' + c.icon + ' fa-3x mb-3';
-    document.getElementById('modalIcon').style.color    = c.iconColor;
-    document.getElementById('modalBtn').className       = 'btn ' + c.btnClass;
-    document.getElementById('modalBtnIcon').className   = 'fas ' + c.btnIcon + ' mr-1';
-    document.getElementById('modalBtnText').textContent = c.btnText;
-    document.getElementById('actionForm').action        = url;
+    document.getElementById('modalTitle').textContent    = c.title;
+    document.getElementById('modalMessage').textContent  = c.msg;
+    document.getElementById('modalIcon').className       = 'fas ' + c.icon;
+    document.getElementById('modalIconWrap').className   = 'stat-icon mx-auto mb-3 ' + c.tone;
+    document.getElementById('modalBtn').className        = 'btn ' + c.btn;
+    document.getElementById('modalBtnText').textContent  = c.text;
+    document.getElementById('actionForm').action         = url;
     $('#actionModal').modal('show');
 }
 </script>

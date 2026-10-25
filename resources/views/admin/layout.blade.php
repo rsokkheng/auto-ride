@@ -9,32 +9,10 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2.0/dist/css/adminlte.min.css">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=swap">
-
-    <style>
-        .brand-link { background: linear-gradient(135deg, #1c1c2e, #2d1b3d) !important; }
-        .brand-link:hover { background: linear-gradient(135deg, #252540, #3d2555) !important; }
-        .brand-text { color: #fff !important; font-weight: 700 !important; }
-        .brand-accent { color: #e63946; }
-        .main-sidebar { background: #1c1c2e !important; }
-        .sidebar { background: transparent; }
-        .nav-sidebar .nav-link { color: #94a3b8 !important; border-radius: 8px; margin: 2px 8px; }
-        .nav-sidebar .nav-link:hover { background: rgba(255,255,255,0.07) !important; color: #fff !important; }
-        .nav-sidebar .nav-link.active { background: linear-gradient(135deg, #e63946, #c1121f) !important; color: #fff !important; }
-        .nav-sidebar .nav-icon { color: inherit !important; }
-        .user-panel .info a { color: #e2e8f0 !important; }
-        .main-header.navbar { border-bottom: 1px solid #f1f5f9; box-shadow: 0 1px 8px rgba(0,0,0,0.06); }
-        .content-wrapper { background: #f8fafc; }
-        .content-header h1 { font-size: 1.4rem; font-weight: 700; color: #1e293b; }
-        .card { border: none; border-radius: 12px; box-shadow: 0 1px 8px rgba(0,0,0,0.06); }
-        .card-header { background: #fff; border-bottom: 1px solid #f1f5f9; border-radius: 12px 12px 0 0 !important; }
-        .card-title { font-weight: 600; color: #1e293b; }
-        .small-box { border-radius: 12px; }
-        .small-box:hover { transform: translateY(-2px); transition: transform .2s; }
-        .main-footer { background: #fff; border-top: 1px solid #f1f5f9; color: #64748b; font-size: .85rem; }
-        .table thead th { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #64748b; border-top: none; }
-        .sidebar-dark-primary .nav-sidebar > .nav-item > .nav-link.active { background: linear-gradient(135deg,#e63946,#c1121f); }
-    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kantumruy+Pro:wght@400;500;600&display=swap">
+    <link rel="stylesheet" href="{{ asset('css/admin-theme.css') }}?v={{ @filemtime(public_path('css/admin-theme.css')) }}">
 
     @stack('styles')
 </head>
@@ -51,9 +29,9 @@
                 </a>
             </li>
             <li class="nav-item d-none d-sm-inline-block">
-                <span class="nav-link text-muted" style="font-size:.8rem;">
-                    <i class="fas fa-circle" style="color:#4ade80;font-size:.5rem;vertical-align:middle;"></i>
-                    &nbsp;ROTEH Admin
+                <span class="nav-link topbar-status">
+                    <i class="far fa-calendar" style="font-size:.75rem;"></i>
+                    {{ now(config('app.timezone'))->format('l, d M Y') }}
                 </span>
             </li>
         </ul>
@@ -70,20 +48,19 @@
             @endif
             <li class="nav-item dropdown">
                 <a class="nav-link" data-toggle="dropdown" href="#">
+                    @php $adminInitials = collect(preg_split('/\s+/', trim(Auth::user()->name ?? 'Admin')))->filter()->take(2)->map(fn ($w) => mb_strtoupper(mb_substr($w, 0, 1)))->join(''); @endphp
                     <div class="d-flex align-items-center gap-2">
-                        <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#e63946,#c1121f);display:flex;align-items:center;justify-content:center;">
-                            <i class="fas fa-user-shield text-white" style="font-size:.75rem;"></i>
-                        </div>
-                        <span class="d-none d-md-inline" style="font-size:.85rem;font-weight:600;color:#1e293b;">
+                        <span class="avatar-chip">{{ $adminInitials ?: 'A' }}</span>
+                        <span class="d-none d-md-inline" style="font-size:.84rem;font-weight:600;color:var(--ink-900);">
                             {{ Auth::user()->name ?? 'Admin' }}
                         </span>
-                        <i class="fas fa-chevron-down" style="font-size:.65rem;color:#94a3b8;"></i>
+                        <i class="fas fa-chevron-down" style="font-size:.6rem;color:var(--ink-400);"></i>
                     </div>
                 </a>
-                <div class="dropdown-menu dropdown-menu-right" style="border:none;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.12);min-width:200px;">
-                    <div class="px-4 py-3 border-bottom">
-                        <div style="font-weight:600;font-size:.85rem;color:#1e293b;">{{ Auth::user()->name ?? 'Admin' }}</div>
-                        <div style="font-size:.75rem;color:#94a3b8;">{{ Auth::user()->email ?? '' }}</div>
+                <div class="dropdown-menu dropdown-menu-right" style="min-width:220px;">
+                    <div class="px-3 py-2 mb-1 border-bottom">
+                        <div style="font-weight:600;font-size:.84rem;color:var(--ink-900);">{{ Auth::user()->name ?? 'Admin' }}</div>
+                        <div style="font-size:.74rem;color:var(--ink-500);">{{ Auth::user()->email ?? '' }}</div>
                     </div>
                     <a href="{{ route('admin.dashboard') }}" class="dropdown-item d-flex align-items-center gap-2 py-2">
                         <i class="fas fa-gauge-high" style="width:16px;color:#64748b;"></i>
@@ -106,21 +83,20 @@
     <aside class="main-sidebar sidebar-dark-primary elevation-0">
         <a href="{{ route('admin.dashboard') }}" class="brand-link px-4">
             <div class="d-flex align-items-center gap-2">
-                <div style="width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#e63946,#c1121f);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                    <i class="fas fa-car-side text-white" style="font-size:.8rem;"></i>
+                <div class="brand-mark"><i class="fas fa-car-side text-white" style="font-size:.8rem;"></i></div>
+                <div>
+                    <span class="brand-text">ROTEH</span>
+                    <span class="brand-sub">Admin Console</span>
                 </div>
-                <span class="brand-text">ROTEH</span>
             </div>
         </a>
 
         <div class="sidebar">
             <div class="user-panel mt-3 pb-3 mb-3 d-flex align-items-center px-3">
-                <div style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                    <i class="fas fa-user-tie" style="color:#94a3b8;font-size:.85rem;"></i>
-                </div>
-                <div class="info ml-2">
-                    <a href="#" class="d-block" style="font-size:.85rem;">{{ Auth::user()->name ?? 'Administrator' }}</a>
-                    <span style="font-size:.7rem;color:#64748b;">Super Admin</span>
+                <span class="avatar-chip" style="background:rgba(255,255,255,.08);color:#e2e8f0;">{{ $adminInitials ?? 'A' }}</span>
+                <div class="info ml-2" style="min-width:0;">
+                    <a href="#" class="d-block text-truncate" style="font-size:.84rem;">{{ Auth::user()->name ?? 'Administrator' }}</a>
+                    <span style="font-size:.7rem;color:#64748b;">{{ Auth::user()?->getRoleNames()->first() ?? ucfirst(Auth::user()->role ?? 'admin') }}</span>
                 </div>
             </div>
 
@@ -221,7 +197,7 @@
             <nav class="mt-1">
                 <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
                     @foreach($menu as $section)
-                        <li class="nav-header" style="font-size:.65rem;color:#475569;letter-spacing:.1em;padding:12px 16px 4px;text-transform:uppercase;">{{ $section['header'] }}</li>
+                        <li class="nav-header">{{ $section['header'] }}</li>
 
                         @foreach($section['items'] as $item)
                             @if(isset($item['children']))
@@ -272,8 +248,8 @@
                     </div>
                     <div class="col-sm-6">
                         <ol class="breadcrumb float-sm-right" style="background:transparent;padding:0;margin:0;font-size:.8rem;">
-                            <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}" style="color:#e63946;">Home</a></li>
-                            <li class="breadcrumb-item active" style="color:#94a3b8;">@yield('page-title', 'Dashboard')</li>
+                            <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}"><i class="fas fa-house" style="font-size:.7rem;"></i></a></li>
+                            <li class="breadcrumb-item active">@yield('page-title', 'Dashboard')</li>
                         </ol>
                     </div>
                 </div>
@@ -331,10 +307,8 @@
 
     {{-- ── Footer ── --}}
     <footer class="main-footer">
-        <strong style="color:#1e293b;">ROTEH</strong> &mdash; Admin Panel
-        <div class="float-right d-none d-sm-inline-block" style="font-size:.75rem;">
-            v1.0 &nbsp;&bull;&nbsp; {{ date('Y') }}
-        </div>
+        &copy; {{ date('Y') }} <strong style="color:var(--ink-600);">ROTEH</strong> &middot; Admin Console
+        <div class="float-right d-none d-sm-inline-block">v1.0</div>
     </footer>
 </div>
 

@@ -51,6 +51,11 @@ class CarRental extends Model
 
     public const VEHICLE_TYPES = ['motorcycle', 'tuk_tuk', 'electric', 'sedan', 'suv', 'van', 'truck'];
 
+    public const VEHICLE_TYPE_LABELS = [
+        'motorcycle' => 'Motorcycle', 'tuk_tuk' => 'Tuk-tuk', 'electric' => 'Electric',
+        'sedan' => 'Sedan', 'suv' => 'SUV', 'van' => 'Van', 'truck' => 'Truck',
+    ];
+
     /** KHR per USD used for rental pricing. */
     public const KHR_PER_USD = 4000;
 
@@ -119,6 +124,7 @@ class CarRental extends Model
     public function vehicleLabel(): string
     {
         return $this->marketplaceProduct?->marketplaceVehicleType?->name
+            ?? self::VEHICLE_TYPE_LABELS[$this->vehicle_type]
             ?? ucfirst(str_replace('_', ' ', (string) $this->vehicle_type));
     }
 

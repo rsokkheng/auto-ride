@@ -1209,6 +1209,8 @@ class AdminController extends Controller
         return view('admin.car-rentals', [
             'rentals' => $query->paginate(10)->appends($request->query()),
             'search'  => $search,
+            // Across all rentals, not just the current page.
+            'counts'  => \App\Models\CarRental::selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status'),
         ]);
     }
 
