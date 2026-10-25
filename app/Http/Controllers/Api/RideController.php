@@ -15,6 +15,8 @@ use App\Services\FcmService;
 use App\Services\FirestoreService;
 use App\Services\PaymentService;
 use App\Services\RideDispatchService;
+use App\Models\DriverMissedRequest;
+use App\Models\RideDecline;
 use App\Services\WalletService;
 use App\Kafka\Producers\RideCreatedProducer;
 use App\Kafka\Producers\RideAcceptedProducer;
@@ -242,10 +244,17 @@ class RideController extends ApiController
         // A driver already on a trip isn't shown new jobs.
         $busy = $user->hasActiveTrip();
 
+        // Rides this driver already declined or let time out don't come back.
+        $dismissed = RideDecline::where('driver_id', $user->id)->pluck('ride_id')
+            ->merge(DriverMissedRequest::where('driver_id', $user->id)
+                ->where('request_type', 'ride')->pluck('request_id'))
+            ->unique()->values();
+
         $rides = Ride::with(['passenger', 'vehicle'])
             ->where('status', Ride::STATUS_REQUESTED)
             ->whereNull('driver_id')
             ->when($busy, fn ($q) => $q->whereRaw('1 = 0'))
+            ->when($dismissed->isNotEmpty(), fn ($q) => $q->whereNotIn('id', $dismissed))
             ->whereNotNull('self_serve_expires_at')
             ->where('self_serve_expires_at', '>', now())
             ->orderBy('created_at')
@@ -260,6 +269,7 @@ class RideController extends ApiController
                 ->whereNull('driver_id')
                 ->whereNull('self_serve_expires_at')
                 ->whereJsonContains('dispatch_queue', $user->id)
+                ->when($dismissed->isNotEmpty(), fn ($q) => $q->whereNotIn('id', $dismissed))
                 ->get()
                 ->filter(fn (Ride $r) => (int) (($r->dispatch_queue ?? [])[$r->dispatch_position] ?? 0) === $user->id)
                 ->values();
@@ -610,6 +620,17 @@ class RideController extends ApiController
         $driverClaimed = User::where('id', $user->id)
             ->where('available', true)
             ->update(['available' => false]);
+
+        if ($driverClaimed === 0) {
+            // `available` can be left false without any real trip (e.g. a
+            // cancel path that never restored it). hasActiveTrip() was just
+            // checked above, so the flag is stale — reset it and claim again
+            // through the same atomic guard.
+            User::where('id', $user->id)->update(['available' => true]);
+            $driverClaimed = User::where('id', $user->id)
+                ->where('available', true)
+                ->update(['available' => false]);
+        }
 
         if ($driverClaimed === 0) {
             return response()->json(['data' => null, 'message' => 'You already have an active ride.'], 422);

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Events\RealtimeUpdate;
 use App\Models\Delivery;
+use App\Models\DriverMissedRequest;
 use App\Models\PricingSetting;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -84,10 +85,15 @@ class DeliveryController extends ApiController
         // A driver already on a trip isn't shown new jobs.
         $busy = $user->hasActiveTrip();
 
+        // Deliveries this driver already declined or let time out don't come back.
+        $dismissed = DriverMissedRequest::where('driver_id', $user->id)
+            ->where('request_type', 'delivery')->pluck('request_id');
+
         $deliveries = Delivery::with(['sender', 'vehicle'])
             ->whereIn('status', ['requested', 'pending'])
             ->whereNull('driver_id')
             ->when($busy, fn ($q) => $q->whereRaw('1 = 0'))
+            ->when($dismissed->isNotEmpty(), fn ($q) => $q->whereNotIn('id', $dismissed))
             ->orderBy('created_at')
             ->paginate(10);
 

@@ -7,6 +7,7 @@ use App\Models\DriverSession;
 use App\Models\PricingSetting;
 use App\Models\Ride;
 use App\Models\RideDecline;
+use App\Services\RideDispatchService;
 use App\Models\RideLocation;
 use App\Models\Vehicle;
 use App\Jobs\SyncFirestore;
@@ -206,6 +207,21 @@ class DriverController extends ApiController
         }
 
         RideDecline::create(['driver_id' => $user->id, 'ride_id' => $ride->id]);
+
+        // If this driver is the one currently being offered the ride, move on
+        // to the next driver right away (same as POST /rides/{id}/reject) —
+        // otherwise the offer stayed parked on them until it timed out and
+        // kept reappearing on their dashboard.
+        $queue    = $ride->dispatch_queue ?? [];
+        $position = (int) ($ride->dispatch_position ?? 0);
+        if (in_array($ride->status, Ride::OPEN_STATUSES, true)
+            && isset($queue[$position]) && (int) $queue[$position] === $user->id) {
+            try {
+                app(RideDispatchService::class)->advance($ride, $position);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
 
         // Only un-target a driver who hasn't accepted yet (e.g. a ride created
         // targeting their vehicle_id directly). Once accepted, the driver is

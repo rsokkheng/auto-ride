@@ -110,6 +110,65 @@ class ActiveTripGuardTest extends TestCase
             ->assertOk();
     }
 
+    public function test_declined_ride_does_not_come_back(): void
+    {
+        $driver = $this->user('driver');
+        $ride   = $this->ride($this->user('passenger'));
+
+        $this->withToken($driver->api_token)->getJson('/api/v1/rides/available')
+            ->assertJsonCount(1, 'data.rides.data');
+
+        $this->withToken($driver->api_token)->postJson("/api/v1/driver/rides/{$ride->id}/decline")
+            ->assertOk();
+
+        $this->withToken($driver->api_token)->getJson('/api/v1/rides/available')
+            ->assertJsonCount(0, 'data.rides.data');
+    }
+
+    public function test_declining_a_ranked_offer_passes_it_to_the_next_driver(): void
+    {
+        $first  = $this->user('driver');
+        $second = $this->user('driver');
+        $ride   = $this->ride($this->user('passenger'), [
+            'self_serve_expires_at' => null,
+            'dispatch_queue'        => [$first->id, $second->id],
+            'dispatch_position'     => 0,
+        ]);
+
+        $this->withToken($first->api_token)->postJson("/api/v1/driver/rides/{$ride->id}/decline")
+            ->assertOk();
+
+        $this->assertSame(1, (int) $ride->fresh()->dispatch_position);
+        $this->withToken($first->api_token)->getJson('/api/v1/rides/available')
+            ->assertJsonCount(0, 'data.rides.data');
+    }
+
+    public function test_dismissed_delivery_does_not_come_back(): void
+    {
+        $driver   = $this->user('driver');
+        $delivery = $this->delivery($this->user('passenger'));
+
+        $this->withToken($driver->api_token)->postJson('/api/v1/driver/missed-requests', [
+            'request_type' => 'delivery', 'request_id' => $delivery->id, 'reason' => 'declined',
+        ])->assertCreated();
+
+        $this->withToken($driver->api_token)->getJson('/api/v1/deliveries/available')
+            ->assertJsonCount(0, 'data.deliveries.data');
+    }
+
+    public function test_stale_unavailable_flag_does_not_block_accepting(): void
+    {
+        // available=false but no actual trip — used to fail with "already have an active ride".
+        $driver = $this->user('driver', ['available' => false]);
+        $ride   = $this->ride($this->user('passenger'));
+
+        $this->withToken($driver->api_token)->postJson("/api/v1/rides/{$ride->id}/accept")
+            ->assertOk();
+
+        $this->assertSame($driver->id, $ride->fresh()->driver_id);
+        $this->assertFalse((bool) $driver->fresh()->available);
+    }
+
     public function test_dispatch_scope_skips_busy_drivers(): void
     {
         $free      = $this->user('driver');
