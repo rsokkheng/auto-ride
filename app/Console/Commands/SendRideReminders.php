@@ -34,9 +34,8 @@ class SendRideReminders extends Command
 
             $fcm->sendToUser(
                 $ride->passenger,
-                '🚗 Ride Reminder',
-                "Your scheduled ride is in ~{$minutesAway} minutes. Get ready!",
-                ['type' => 'ride_reminder', 'ride_id' => (string) $ride->id]
+                ...FcmService::message('ride_reminder', ['minutes' => $minutesAway]),
+                data: ['type' => 'ride_reminder', 'ride_id' => (string) $ride->id]
             );
 
             $ride->update(['reminder_sent_at' => now()]);

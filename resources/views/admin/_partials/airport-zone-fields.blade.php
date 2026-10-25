@@ -1,7 +1,8 @@
 <div class="form-group">
-    <label>Airport Name</label>
+    <label>Airport Name <small class="text-muted">(English)</small></label>
     <input type="text" name="name" class="form-control" value="{{ old('name', $zone->name ?? '') }}" required maxlength="100">
 </div>
+@include('admin.partials.localized-inputs', ['field' => 'name', 'label' => 'Airport Name', 'model' => $zone ?? null, 'maxlength' => 100])
 @unless(isset($zone))
 <div class="form-group">
     <label>IATA Code <small class="text-muted">(3–4 letters, e.g. PNH)</small></label>

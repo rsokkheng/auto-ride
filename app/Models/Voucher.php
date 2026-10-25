@@ -2,11 +2,16 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalizedName;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Voucher extends Model
 {
+    use HasLocalizedName;
+
+    /** Columns with _en / _kh / _zh variants (see HasLocalizedName). */
+    protected array $localized = ['title', 'description'];
     protected $fillable = [
         'title', 'description', 'image', 'category', 'discount_type',
         'discount_value', 'min_fare', 'max_discount', 'total_limit',

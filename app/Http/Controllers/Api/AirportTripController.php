@@ -12,7 +12,7 @@ class AirportTripController extends ApiController
     public function zones(): JsonResponse
     {
         $zones = AirportZone::active()
-            ->select('id', 'name', 'iata_code', 'latitude', 'longitude', 'radius_meters', 'surcharge_khr', 'luggage_fee_khr')
+            ->select('id', 'name', 'name_en', 'name_kh', 'name_zh', 'iata_code', 'latitude', 'longitude', 'radius_meters', 'surcharge_khr', 'luggage_fee_khr')
             ->get();
 
         return response()->json(['data' => $zones]);

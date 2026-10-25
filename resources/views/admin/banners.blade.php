@@ -55,6 +55,7 @@
                         <button class="btn btn-xs btn-info mr-1"
                             data-banner="{{ e(json_encode([
                                 'id'          => $b->id,
+                                ...$b->only(['title_en', 'title_kh', 'title_zh']),
                                 'title'       => $b->title,
                                 'deeplink'    => $b->deeplink ?? '',
                                 'target_role' => $b->target_role,
@@ -97,9 +98,10 @@
                 <input type="hidden" name="_method" id="bannerMethod" value="POST">
                 <div class="modal-body">
                     <div class="form-group">
-                        <label>Title <span class="text-danger">*</span></label>
+                        <label>Title <small class="text-muted">(English)</small> <span class="text-danger">*</span></label>
                         <input type="text" name="title" id="b-title" class="form-control" required maxlength="100">
                     </div>
+                    @include('admin.partials.localized-inputs', ['field' => 'title', 'label' => 'Title', 'idPrefix' => 'b-title', 'maxlength' => 100])
                     <div class="form-row">
                         <div class="form-group col-md-6">
                             <label>Target Audience <span class="text-danger">*</span></label>
@@ -177,7 +179,8 @@ function openEdit(btn) {
     document.getElementById('bannerModalTitle').textContent = 'Edit Banner';
     document.getElementById('bannerForm').action = updateBase + b.id;
     document.getElementById('bannerMethod').value = 'PUT';
-    document.getElementById('b-title').value    = b.title;
+    document.getElementById('b-title').value    = b.title_en || b.title;
+    fillLocalized('b-title', b, 'title');
     document.getElementById('b-role').value     = b.target_role;
     document.getElementById('b-deeplink').value = b.deeplink;
     document.getElementById('b-from').value     = b.valid_from;

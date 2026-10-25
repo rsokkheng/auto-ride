@@ -21,7 +21,7 @@ class PromoCodeController extends ApiController
             ->where(fn($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
             ->where(fn($q) => $q->whereNull('usage_limit')->orWhereColumn('used_count', '<', 'usage_limit'))
             ->orderByDesc('created_at')
-            ->get(['id', 'code', 'description', 'type', 'value', 'min_order', 'max_discount', 'expires_at', 'service_type']);
+            ->get(['id', 'code', 'description', 'description_en', 'description_kh', 'description_zh', 'type', 'value', 'min_order', 'max_discount', 'expires_at', 'service_type']);
 
         return $this->success(['promos' => $promos]);
     }

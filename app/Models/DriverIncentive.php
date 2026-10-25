@@ -2,10 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalizedName;
 use Illuminate\Database\Eloquent\Model;
 
 class DriverIncentive extends Model
 {
+    use HasLocalizedName;
+
+    /** Columns with _en / _kh / _zh variants (see HasLocalizedName). */
+    protected array $localized = ['title', 'description'];
     protected $fillable = [
         'driver_id', 'title', 'description', 'target_trips', 'bonus_amount',
         'period_start', 'period_end', 'status', 'earned_at',

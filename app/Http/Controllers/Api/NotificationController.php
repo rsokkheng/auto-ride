@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Support\Localized;
 use App\Models\PushNotification;
 use Illuminate\Http\Request;
 
@@ -54,8 +55,8 @@ class NotificationController extends ApiController
         }
 
         $data = $request->validate([
-            'title' => 'required|string|max:120',
-            'body' => 'required|string|max:500',
+            ...Localized::rules(['title' => 'string|max:120'], ['title']),
+            ...Localized::rules(['body' => 'string|max:500'], ['body']),
             'type' => 'nullable|string|max:64',
             'payload' => 'nullable|array',
         ]);

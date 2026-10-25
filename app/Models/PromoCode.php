@@ -2,10 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalizedName;
 use Illuminate\Database\Eloquent\Model;
 
 class PromoCode extends Model
 {
+    use HasLocalizedName;
+
+    /** Columns with _en / _kh / _zh variants (see HasLocalizedName). */
+    protected array $localized = ['description'];
     /** service_type value => admin label */
     public const SERVICE_TYPES = [
         'all'              => 'All services',

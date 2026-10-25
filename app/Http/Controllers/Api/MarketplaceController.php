@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Support\Localized;
 use App\Models\MarketplaceCategory;
 use App\Models\MarketplaceItem;
 use App\Models\MarketplaceOrder;
@@ -161,8 +162,11 @@ class MarketplaceController extends ApiController
             }
             if ($request->filled('search')) {
                 $query->where(function ($q) use ($request) {
-                    $q->where('title', 'like', '%' . $request->search . '%')
-                      ->orWhere('description', 'like', '%' . $request->search . '%');
+                    // Match the search in any language.
+                    $term = '%' . $request->search . '%';
+                    foreach (['title', 'title_kh', 'title_zh', 'description', 'description_kh', 'description_zh'] as $col) {
+                        $q->orWhere($col, 'like', $term);
+                    }
                 });
             }
 
@@ -213,8 +217,8 @@ class MarketplaceController extends ApiController
         if (! $user) return $this->unauthorized();
 
         $data = $request->validate([
-            'title'              => 'required|string|max:200',
-            'description'        => 'nullable|string',
+            ...Localized::rules(['title' => 'string|max:200'], ['title']),
+            ...Localized::rules(['description' => 'string']),
             'category_id'        => 'nullable|exists:marketplace_categories,id',
             'marketplace_vehicle_type_id'  => 'nullable|exists:marketplace_vehicle_types,id',
             'marketplace_vehicle_color_id' => 'nullable|exists:marketplace_vehicle_colors,id',
@@ -296,7 +300,9 @@ class MarketplaceController extends ApiController
             }
             $items[] = [
                 'name_en' => (string) $entry['name_en'],
-                'name_km' => isset($entry['name_km']) ? (string) $entry['name_km'] : null,
+                // name_km is the legacy key for Khmer.
+                'name_kh' => isset($entry['name_kh']) || isset($entry['name_km']) ? (string) ($entry['name_kh'] ?? $entry['name_km']) : null,
+                'name_zh' => isset($entry['name_zh']) ? (string) $entry['name_zh'] : null,
                 'price'   => (float) $entry['price'],
             ];
         }
@@ -317,7 +323,8 @@ class MarketplaceController extends ApiController
             MarketplaceProductAccessory::create([
                 'product_id' => $product->id,
                 'name_en'    => $item['name_en'],
-                'name_kh'    => $item['name_km'],
+                'name_kh'    => $item['name_kh'],
+                'name_zh'    => $item['name_zh'],
                 'price'      => $item['price'],
                 'sort_order' => $i,
             ]);
@@ -359,7 +366,8 @@ class MarketplaceController extends ApiController
                 'order_id'     => $order->id,
                 'accessory_id' => $accessory->id,
                 'name_en'      => $accessory->name_en,
-                'name_km'      => $accessory->name_kh,
+                'name_kh'      => $accessory->name_kh,
+                'name_zh'      => $accessory->name_zh,
                 'price'        => $accessory->price,
             ]);
         }
@@ -373,8 +381,8 @@ class MarketplaceController extends ApiController
         if (! $user || $product->seller_id !== $user->id) return $this->unauthorized();
 
         $data = $request->validate([
-            'title'              => 'nullable|string|max:200',
-            'description'        => 'nullable|string',
+            ...Localized::rules(['title' => 'string|max:200']),
+            ...Localized::rules(['description' => 'string']),
             'category_id'        => 'nullable|exists:marketplace_categories,id',
             'marketplace_vehicle_type_id'  => 'nullable|exists:marketplace_vehicle_types,id',
             'marketplace_vehicle_color_id' => 'nullable|exists:marketplace_vehicle_colors,id',
@@ -641,7 +649,9 @@ class MarketplaceController extends ApiController
                 'total_price_usd' => (float) $order->total_price,
                 'accessories_total_usd' => (float) $order->accessories_total,
                 'accessories' => $order->accessories->map(fn(MarketplaceOrderAccessory $a) => [
-                    'name_en' => $a->name_en, 'name_km' => $a->name_km, 'price' => (float) $a->price,
+                    'name' => $a->name, 'name_en' => $a->name_en, 'name_kh' => $a->name_kh, 'name_zh' => $a->name_zh,
+                    'name_km' => $a->name_kh, // legacy key
+                    'price' => (float) $a->price,
                 ])->values(),
                 'discount_amount' => $discountAmount,
                 'discount_usd'    => $discountUsd,
@@ -805,7 +815,9 @@ class MarketplaceController extends ApiController
                 'total_price_usd' => (float) $order->total_price,
                 'accessories_total_usd' => (float) $order->accessories_total,
                 'accessories' => $order->accessories->map(fn(MarketplaceOrderAccessory $a) => [
-                    'name_en' => $a->name_en, 'name_km' => $a->name_km, 'price' => (float) $a->price,
+                    'name' => $a->name, 'name_en' => $a->name_en, 'name_kh' => $a->name_kh, 'name_zh' => $a->name_zh,
+                    'name_km' => $a->name_kh, // legacy key
+                    'price' => (float) $a->price,
                 ])->values(),
                 'rent_start_date' => $order->rent_start_date?->toDateString(),
                 'rent_end_date'   => $order->rent_end_date?->toDateString(),
@@ -1137,8 +1149,8 @@ class MarketplaceController extends ApiController
 
         $data = $request->validate([
             'vehicle_id'  => 'required|exists:vehicles,id',
-            'title'       => 'required|string|max:120',
-            'description' => 'nullable|string',
+            ...Localized::rules(['title' => 'string|max:120'], ['title']),
+            ...Localized::rules(['description' => 'string']),
             'type'        => 'required|in:buy,rent',
             'price'       => 'required|numeric|min:0',
             'rent_rate'   => 'nullable|numeric|min:0',

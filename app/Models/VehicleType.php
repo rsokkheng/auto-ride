@@ -9,6 +9,9 @@ class VehicleType extends Model
 {
     use HasLocalizedName;
 
+    /** Columns with _en / _kh / _zh variants (see HasLocalizedName). */
+    protected array $localized = ['name', 'description'];
+
     protected $fillable = [
         'name',
         'name_en',

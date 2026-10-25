@@ -7,6 +7,7 @@ use App\Models\CarRental;
 use App\Models\MarketplaceOrder;
 use App\Models\User;
 use App\Services\FcmService;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -55,72 +56,71 @@ class ShopNotifications
     }
 
     // ── Marketplace orders ────────────────────────────────────────────────────
+    //
+    // Text lives in lang/{en,km,zh}/push.php (push.shop.*); each person gets it
+    // in their own language, product titles included.
 
     private static function orderPlaced(MarketplaceOrder $o): void
     {
         $o->loadMissing(['product', 'buyer', 'seller']);
-        $title  = $o->product?->title ?? 'your item';
+        $title  = self::productTitle($o->product, LocalizedText::trans('push.shop.your_item'));
         $isRent = $o->order_type === 'rent';
         $data   = self::orderData($o, $isRent ? 'shop_rent_requested' : 'shop_order_placed');
+        $start  = $o->rent_start_date?->toDateString();
+        $end    = $o->rent_end_date?->toDateString();
 
         $batch = $o->checkout_batch_id;
         if (! $batch || ! isset(self::$notifiedBatches[$batch])) {
             if ($batch) self::$notifiedBatches[$batch] = true;
-            self::toBuyer($o,
-                $isRent ? 'Rental request sent' : 'Order placed 🛍️',
-                $isRent
-                    ? "Your request to rent {$title} ({$o->rent_start_date?->toDateString()} → {$o->rent_end_date?->toDateString()}) was sent. We'll let you know when it's confirmed."
-                    : ($batch ? "Your order was sent to the sellers. We'll let you know when it's confirmed."
-                              : "Your order for {$title} was sent to the seller. We'll let you know when it's confirmed."),
-                $data);
+            self::toBuyer($o, ...match (true) {
+                $isRent => self::msg('rent_requested', ['title' => $title, 'start' => $start, 'end' => $end]),
+                (bool) $batch => self::msg('order_placed', [], 'body_batch'),
+                default => self::msg('order_placed', ['title' => $title]),
+            }, data: $data);
         }
 
-        self::toUser($o->seller,
-            $isRent ? '🔑 New rental request' : '🛒 New order',
-            $isRent
-                ? "{$o->buyerName()} wants to rent {$title} from {$o->rent_start_date?->toDateString()} to {$o->rent_end_date?->toDateString()} — " . self::usd($o->total_price)
-                : "{$o->buyerName()} ordered {$o->quantity}× {$title} — " . self::usd($o->total_price)
-                    . ($o->fulfillment === 'delivery' ? " · Deliver to {$o->delivery_address}" : ' · Pick up'),
-            self::orderData($o, $isRent ? 'shop_rent_new' : 'shop_order_new'));
+        $replace = [
+            'buyer' => $o->buyerName(), 'title' => $title, 'qty' => $o->quantity,
+            'price' => self::usd($o->total_price), 'start' => $start, 'end' => $end,
+            'address' => (string) $o->delivery_address,
+        ];
+        self::toUser($o->seller, ...($isRent
+                ? self::msg('seller_new_rent', $replace)
+                : self::msg('seller_new_order', $replace, $o->fulfillment === 'delivery' ? 'body_delivery' : 'body_pickup')),
+            data: self::orderData($o, $isRent ? 'shop_rent_new' : 'shop_order_new'));
     }
 
     private static function orderStatusChanged(MarketplaceOrder $o): void
     {
         $o->loadMissing(['product', 'buyer', 'seller']);
-        $title = $o->product?->title ?? "order #{$o->id}";
-        $noun  = $o->order_type === 'rent' ? 'rental' : 'order';
-        $type  = 'shop_order_' . $o->status;
+        $title   = self::productTitle($o->product, LocalizedText::trans('push.shop.order_number', ['id' => $o->id]));
+        $group   = $o->order_type === 'rent' ? 'rent_order' : 'order';
+        $type    = 'shop_order_' . $o->status;
+        $replace = ['title' => $title, 'buyer' => $o->buyerName(), 'price' => self::usd($o->total_price)];
+        $msg     = fn (string $body) => self::msg("{$group}.{$o->status}", $replace, $body);
 
         switch ($o->status) {
             case 'confirmed':
                 if ($o->actedBy !== 'buyer') {
-                    self::toBuyer($o, ucfirst($noun) . ' confirmed ✅',
-                        "The seller confirmed your {$noun} for {$title}.", self::orderData($o, $type));
+                    self::toBuyer($o, ...$msg('body'), data: self::orderData($o, $type));
                 }
                 break;
 
             case 'completed':
                 if ($o->actedBy !== 'buyer') {
-                    self::toBuyer($o, ucfirst($noun) . ' completed',
-                        "Your {$noun} for {$title} is complete. Thanks for shopping with us!", self::orderData($o, $type));
+                    self::toBuyer($o, ...$msg('body'), data: self::orderData($o, $type));
                 }
                 if ($o->actedBy !== 'seller') {
-                    self::toUser($o->seller, ucfirst($noun) . ' completed',
-                        "{$o->buyerName()}'s {$noun} for {$title} is complete — " . self::usd($o->total_price), self::orderData($o, $type));
+                    self::toUser($o->seller, ...$msg('seller_body'), data: self::orderData($o, $type));
                 }
                 break;
 
             case 'cancelled':
                 if ($o->actedBy !== 'buyer') {
-                    self::toBuyer($o, ucfirst($noun) . ' cancelled',
-                        $o->actedBy === 'seller'
-                            ? "The seller cancelled your {$noun} for {$title}."
-                            : "Your {$noun} for {$title} was cancelled.",
-                        self::orderData($o, $type));
+                    self::toBuyer($o, ...$msg($o->actedBy === 'seller' ? 'body_by_seller' : 'body'), data: self::orderData($o, $type));
                 }
                 if ($o->actedBy !== 'seller') {
-                    self::toUser($o->seller, ucfirst($noun) . ' cancelled',
-                        "{$o->buyerName()} cancelled their {$noun} for {$title}.", self::orderData($o, $type));
+                    self::toUser($o->seller, ...$msg('seller_body'), data: self::orderData($o, $type));
                 }
                 break;
         }
@@ -141,7 +141,7 @@ class ShopNotifications
         ];
     }
 
-    private static function toBuyer(MarketplaceOrder $o, string $title, string $body, array $data): void
+    private static function toBuyer(MarketplaceOrder $o, LocalizedText $title, LocalizedText $body, array $data): void
     {
         if ($o->isGuest()) {
             if ($o->guest_fcm_token) app(FcmService::class)->sendToToken($o->guest_fcm_token, $title, $body, $data);
@@ -155,38 +155,38 @@ class ShopNotifications
     private static function rentalBooked(CarRental $r): void
     {
         $r->loadMissing(['user', 'marketplaceProduct.seller']);
-        $title = $r->marketplaceProduct?->title ?? ucfirst(str_replace('_', ' ', $r->vehicle_type));
-        $dates = "{$r->start_date->toDateString()} → {$r->end_date->toDateString()}";
+        $title = self::productTitle($r->marketplaceProduct,
+            LocalizedText::plain(ucfirst(str_replace('_', ' ', (string) $r->vehicle_type))));
+        $replace = [
+            'title'  => $title,
+            'dates'  => "{$r->start_date->toDateString()} → {$r->end_date->toDateString()}",
+            'renter' => $r->renterName(),
+            'days'   => $r->total_days,
+        ];
 
-        self::toRenter($r, 'Rental booked 🔑',
-            "Your rental of {$title} ({$dates}) is pending confirmation. We'll notify you when it's confirmed.",
-            self::rentalData($r, 'shop_rental_booked'));
+        self::toRenter($r, ...self::msg('rental_booked', $replace), data: self::rentalData($r, 'shop_rental_booked'));
 
-        self::toUser($r->marketplaceProduct?->seller, '🔑 New rental request',
-            "{$r->renterName()} wants to rent {$title} ({$dates}, {$r->total_days} day" . ($r->total_days === 1 ? '' : 's') . ').',
-            self::rentalData($r, 'shop_rental_new'));
+        self::toUser($r->marketplaceProduct?->seller,
+            ...self::msg('rental_new', $replace, $r->total_days === 1 ? 'body_one' : 'body'),
+            data: self::rentalData($r, 'shop_rental_new'));
     }
 
     private static function rentalStatusChanged(CarRental $r): void
     {
         $r->loadMissing(['user', 'marketplaceProduct.seller']);
-        $title = $r->marketplaceProduct?->title ?? 'your vehicle';
-        $type  = 'shop_rental_' . $r->status;
+        if (! in_array($r->status, ['confirmed', 'active', 'completed', 'cancelled'], true)) return;
 
-        [$heading, $body] = match ($r->status) {
-            'confirmed' => ['Rental confirmed ✅', "Your rental of {$title} from {$r->start_date->toDateString()} is confirmed."],
-            'active'    => ['Rental started', "Your rental of {$title} has started. Drive safe!"],
-            'completed' => ['Rental completed', "Your rental of {$title} is complete. Thanks for renting with us!"],
-            'cancelled' => ['Rental cancelled', "Your rental of {$title} was cancelled."],
-            default     => [null, null],
-        };
-        if (! $heading) return;
+        $title   = self::productTitle($r->marketplaceProduct, LocalizedText::trans('push.shop.your_vehicle'));
+        $type    = 'shop_rental_' . $r->status;
+        $replace = ['title' => $title, 'start' => $r->start_date->toDateString(), 'renter' => $r->renterName()];
 
-        if ($r->actedBy !== 'buyer') self::toRenter($r, $heading, $body, self::rentalData($r, $type));
+        if ($r->actedBy !== 'buyer') {
+            self::toRenter($r, ...self::msg("rental.{$r->status}", $replace), data: self::rentalData($r, $type));
+        }
 
         if ($r->status === 'cancelled' && $r->actedBy === 'buyer') {
-            self::toUser($r->marketplaceProduct?->seller, 'Rental cancelled',
-                "{$r->renterName()} cancelled their rental of {$title}.", self::rentalData($r, $type));
+            self::toUser($r->marketplaceProduct?->seller,
+                ...self::msg('rental.cancelled', $replace, 'seller_body'), data: self::rentalData($r, $type));
         }
 
         if ($r->user_id) {
@@ -204,7 +204,7 @@ class ShopNotifications
         ];
     }
 
-    private static function toRenter(CarRental $r, string $title, string $body, array $data): void
+    private static function toRenter(CarRental $r, LocalizedText $title, LocalizedText $body, array $data): void
     {
         if ($r->isGuest()) {
             if ($r->guest_fcm_token) app(FcmService::class)->sendToToken($r->guest_fcm_token, $title, $body, $data);
@@ -215,9 +215,20 @@ class ShopNotifications
 
     // ── Shared ────────────────────────────────────────────────────────────────
 
-    private static function toUser(?User $user, string $title, string $body, array $data): void
+    private static function toUser(?User $user, LocalizedText $title, LocalizedText $body, array $data): void
     {
         if ($user) app(FcmService::class)->notifyUser($user, $title, $body, $data);
+    }
+
+    /** [title, body] for push.shop.{key}. */
+    private static function msg(string $key, array $replace = [], string $bodyKey = 'body'): array
+    {
+        return FcmService::message("shop.{$key}", $replace, $bodyKey);
+    }
+
+    private static function productTitle(?Model $product, LocalizedText $fallback): LocalizedText
+    {
+        return $product ? LocalizedText::fromModel($product, 'title') : $fallback;
     }
 
     private static function usd($amount): string

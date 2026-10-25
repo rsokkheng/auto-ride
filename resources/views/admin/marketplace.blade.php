@@ -157,13 +157,15 @@
 
                     {{-- ── Title / Description ─────────────────────────── --}}
                     <div class="form-group">
-                        <label>Title <span class="text-danger">*</span></label>
+                        <label>Title <small class="text-muted">(English)</small> <span class="text-danger">*</span></label>
                         <input type="text" name="title" id="f-title" class="form-control" required maxlength="255">
                     </div>
+                    @include('admin.partials.localized-inputs', ['field' => 'title', 'label' => 'Title', 'idPrefix' => 'f-title', 'maxlength' => 255])
                     <div class="form-group">
-                        <label>Description</label>
+                        <label>Description <small class="text-muted">(English)</small></label>
                         <textarea name="description" id="f-desc" class="form-control" rows="2"></textarea>
                     </div>
+                    @include('admin.partials.localized-inputs', ['field' => 'description', 'label' => 'Description', 'idPrefix' => 'f-desc', 'textarea' => true])
 
                     {{-- ── Listing Type ─────────────────────────────────── --}}
                     <div class="form-group">
@@ -536,8 +538,10 @@ function openEdit(id, d) {
     document.getElementById('modalTitle').textContent   = 'Edit Item #' + id;
     document.getElementById('itemForm').action          = updateBase + id;
     document.getElementById('formMethod').value         = 'PUT';
-    document.getElementById('f-title').value            = d.title              || '';
-    document.getElementById('f-desc').value             = d.description        || '';
+    document.getElementById('f-title').value            = d.title_en || d.title || '';
+    document.getElementById('f-desc').value             = d.description_en || d.description || '';
+    fillLocalized('f-title', d, 'title');
+    fillLocalized('f-desc', d, 'description');
     document.getElementById('f-price').value            = d.price              || '';
     document.getElementById('f-rent').value             = d.rent_price_per_day || '';
     document.getElementById('f-condition').value        = d.condition          || 'used';

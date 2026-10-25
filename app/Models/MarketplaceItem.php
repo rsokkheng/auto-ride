@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalizedName;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,7 +10,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MarketplaceItem extends Model
 {
-    use HasFactory;
+    use HasFactory, HasLocalizedName;
+
+    /** Columns with _en / _kh / _zh variants (see HasLocalizedName). */
+    protected array $localized = ['title', 'description'];
 
     protected $fillable = [
         'seller_id',

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Support\Localized;
 use App\Models\RidePricing;
 use App\Models\Vehicle;
 use App\Models\VehicleType;
@@ -43,10 +44,10 @@ class VehicleController extends ApiController
         }
 
         $data = $request->validate([
-            'name'         => 'required|string|max:64',
+            ...Localized::rules(['name' => 'string|max:64'], ['name']),
             'slug'         => 'required|string|max:64|unique:vehicle_types,slug|alpha_dash',
             'icon'         => 'nullable|string|max:128',
-            'description'  => 'nullable|string|max:255',
+            ...Localized::rules(['description' => 'string|max:255']),
             'capacity'     => 'required|integer|min:1|max:255',
             'base_fare'    => 'required|numeric|min:0',
             'per_km_fare'  => 'required|numeric|min:0',
@@ -67,10 +68,10 @@ class VehicleController extends ApiController
         }
 
         $data = $request->validate([
-            'name'         => 'sometimes|string|max:64',
+            ...Localized::rules(['name' => 'string|max:64'], [], partial: true),
             'slug'         => 'sometimes|string|max:64|alpha_dash|unique:vehicle_types,slug,' . $vehicleType->id,
             'icon'         => 'sometimes|nullable|string|max:128',
-            'description'  => 'sometimes|nullable|string|max:255',
+            ...Localized::rules(['description' => 'string|max:255'], [], partial: true),
             'capacity'     => 'sometimes|integer|min:1|max:255',
             'base_fare'    => 'sometimes|numeric|min:0',
             'per_km_fare'  => 'sometimes|numeric|min:0',

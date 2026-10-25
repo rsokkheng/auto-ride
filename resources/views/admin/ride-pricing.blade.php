@@ -397,7 +397,12 @@ $colors = [
                     @foreach($holidays as $holiday)
                     <tr>
                         <td>{{ $holiday->date->format('Y-m-d (D)') }}</td>
-                        <td>{{ $holiday->label }}</td>
+                        <td>
+                            {{ $holiday->label }}
+                            @if($holiday->label_kh || $holiday->label_zh)
+                                <div class="text-muted" style="font-size:.78rem;">{{ collect([$holiday->label_kh, $holiday->label_zh])->filter()->join(' · ') }}</div>
+                            @endif
+                        </td>
                         <td>+{{ round($holiday->surcharge_rate * 100) }}%</td>
                         <td>
                             <form method="POST" action="{{ route('admin.ride-pricing.holidays.destroy', $holiday) }}"
@@ -426,7 +431,7 @@ $colors = [
                     <input type="date" name="date" class="form-control" value="{{ old('date') }}" required>
                 </div>
                 <div class="col-md-4 mb-2">
-                    <label class="tier-sub d-block mb-1">Label</label>
+                    <label class="tier-sub d-block mb-1">Label <small class="text-muted">(English)</small></label>
                     <input type="text" name="label" class="form-control" placeholder="e.g. Khmer New Year" value="{{ old('label') }}" required>
                 </div>
                 <div class="col-md-3 mb-2">
@@ -440,6 +445,11 @@ $colors = [
                     <button type="submit" class="btn btn-outline-warning btn-block">
                         <i class="fas fa-plus mr-1"></i> Add
                     </button>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-7 offset-md-3">
+                    @include('admin.partials.localized-inputs', ['field' => 'label', 'label' => 'Label', 'maxlength' => 255])
                 </div>
             </div>
             @if ($errors->has('date') || $errors->has('label') || $errors->has('surcharge_rate'))

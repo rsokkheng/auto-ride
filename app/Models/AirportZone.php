@@ -9,6 +9,9 @@ class AirportZone extends Model
 {
     use HasLocalizedName;
 
+    /** Columns with _en / _kh / _zh variants (see HasLocalizedName). */
+    protected array $localized = ['name'];
+
     protected $fillable = [
         'name', 'name_en', 'name_kh', 'name_zh', 'iata_code', 'latitude', 'longitude',
         'radius_meters', 'surcharge_khr', 'luggage_fee_khr', 'active',

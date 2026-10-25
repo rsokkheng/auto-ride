@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\PromoEvent;
 use App\Models\User;
 use App\Services\FcmService;
+use App\Support\LocalizedText;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -38,9 +39,12 @@ class SendPromoEventPush implements ShouldQueue
             $query->whereIn('role', ['passenger', 'driver']);
         }
 
-        $query->chunkById(200, function ($users) use ($event, $fcm) {
+        $title = LocalizedText::fromModel($event, 'title');
+        $body  = LocalizedText::fromModel($event, 'body');
+
+        $query->chunkById(200, function ($users) use ($event, $fcm, $title, $body) {
             foreach ($users as $user) {
-                $fcm->promoEvent($user, $event->id, $event->title, $event->body, $event->image_url);
+                $fcm->promoEvent($user, $event->id, $title, $body, $event->image_url);
             }
         });
 

@@ -643,7 +643,7 @@ class RideController extends ApiController
 
         // Notify passenger: driver is on the way
         if ($fresh->passenger) {
-            $this->fcm->rideAccepted($fresh->passenger, $fresh->id, $fresh->driver->name ?? 'Your driver');
+            $this->fcm->rideAccepted($fresh->passenger, $fresh->id, $fresh->driver?->name);
         }
 
         try {
@@ -741,7 +741,7 @@ class RideController extends ApiController
         $this->firestore->syncRide($fresh);
 
         if ($fresh->passenger) {
-            $this->fcm->driverArrived($fresh->passenger, $fresh->id, $fresh->driver->name ?? 'Your driver');
+            $this->fcm->driverArrived($fresh->passenger, $fresh->id, $fresh->driver?->name);
         }
 
         return $this->success([
@@ -1175,12 +1175,11 @@ class RideController extends ApiController
 
         $ride->update(['tip_amount' => $data['amount']]);
 
-        if ($ride->driver_id) {
+        if ($ride->driver_id && $driver = User::find($ride->driver_id)) {
             $this->fcm->sendToUser(
-                $ride->driver_id,
-                'You received a tip!',
-                "Your passenger added a " . number_format($data['amount']) . " KHR tip.",
-                ['type' => 'tip_received', 'ride_id' => (string) $ride->id, 'amount' => (string) $data['amount']],
+                $driver,
+                ...FcmService::message('tip_received', ['amount' => number_format($data['amount'])]),
+                data: ['type' => 'tip_received', 'ride_id' => (string) $ride->id, 'amount' => (string) $data['amount']],
             );
         }
 

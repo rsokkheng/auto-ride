@@ -10,6 +10,9 @@ class MembershipTier extends Model
 {
     use HasLocalizedName;
 
+    /** Columns with _en / _kh / _zh variants (see HasLocalizedName). */
+    protected array $localized = ['name', 'benefits'];
+
     protected $fillable = [
         'name', 'name_en', 'name_kh', 'name_zh', 'slug', 'min_points', 'badge_color', 'icon', 'benefits',
         'ride_discount_pct', 'delivery_discount_pct', 'points_multiplier',

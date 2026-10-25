@@ -2,11 +2,16 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalizedName;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 
 class HolidayPricing extends Model
 {
+    use HasLocalizedName;
+
+    /** Columns with _en / _kh / _zh variants (see HasLocalizedName). */
+    protected array $localized = ['label'];
     protected $table = 'holiday_pricing';
 
     protected $fillable = [

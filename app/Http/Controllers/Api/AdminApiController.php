@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Support\Localized;
 use App\Models\Banner;
 use App\Models\Delivery;
 use App\Models\DriverDocument;
@@ -726,7 +727,7 @@ class AdminApiController extends ApiController
         if (! $admin) return $this->unauthorized();
 
         $data = $request->validate([
-            'title'       => 'required|string|max:255',
+            ...Localized::rules(['title' => 'string|max:255'], ['title']),
             'deeplink'    => 'nullable|string|max:500',
             'target_role' => 'nullable|in:all,passenger,driver',
             'sort_order'  => 'nullable|integer',
@@ -755,7 +756,7 @@ class AdminApiController extends ApiController
         if (! $admin) return $this->unauthorized();
 
         $data = $request->validate([
-            'title'       => 'sometimes|string|max:255',
+            ...Localized::rules(['title' => 'string|max:255'], [], partial: true),
             'deeplink'    => 'sometimes|nullable|string|max:500',
             'target_role' => 'sometimes|nullable|in:all,passenger,driver',
             'sort_order'  => 'sometimes|nullable|integer',
@@ -806,13 +807,13 @@ class AdminApiController extends ApiController
         if (! $admin) return $this->unauthorized();
 
         $data = $request->validate([
-            'name'        => 'required|string|max:255',
+            ...Localized::rules(['name' => 'string|max:255'], ['name']),
             'type'        => 'required|in:rides,deliveries,delivery,moving,both',
             'multiplier'  => 'required|numeric|min:1|max:10',
             'center_lat'  => 'required|numeric',
             'center_lng'  => 'required|numeric',
             'radius_km'   => 'required|numeric|min:0.1',
-            'description' => 'nullable|string',
+            ...Localized::rules(['description' => 'string']),
             'active'      => 'nullable|boolean',
         ]);
 
@@ -829,7 +830,7 @@ class AdminApiController extends ApiController
         if (! $admin) return $this->unauthorized();
 
         $data = $request->validate([
-            'name'       => 'sometimes|string|max:255',
+            ...Localized::rules(['name' => 'string|max:255'], [], partial: true),
             'type'       => 'sometimes|in:rides,deliveries,delivery,moving,both',
             'multiplier' => 'sometimes|numeric|min:1|max:10',
             'center_lat' => 'sometimes|numeric',

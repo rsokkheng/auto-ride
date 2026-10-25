@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Support\Localized;
 use App\Http\Controllers\Controller;
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
@@ -947,8 +948,8 @@ class AdminController extends Controller
         $listingType = ($isSale && $isRent) ? 'both' : ($isSale ? 'sale' : 'rent');
 
         $data = $request->validate([
-            'title'              => 'required|string|max:255',
-            'description'        => 'nullable|string',
+            ...Localized::rules(['title' => 'string|max:255'], ['title']),
+            ...Localized::rules(['description' => 'string']),
             'price'              => $isSale ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
             'rent_price_per_day' => $isRent ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
             'category_id'                  => 'nullable|exists:marketplace_categories,id',
@@ -1001,8 +1002,8 @@ class AdminController extends Controller
         $listingType = ($isSale && $isRent) ? 'both' : ($isSale ? 'sale' : 'rent');
 
         $data = $request->validate([
-            'title'              => 'required|string|max:255',
-            'description'        => 'nullable|string',
+            ...Localized::rules(['title' => 'string|max:255'], ['title']),
+            ...Localized::rules(['description' => 'string']),
             'price'              => $isSale ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
             'rent_price_per_day' => $isRent ? 'required|numeric|min:0' : 'nullable|numeric|min:0',
             'category_id'                  => 'nullable|exists:marketplace_categories,id',
@@ -1312,7 +1313,7 @@ class AdminController extends Controller
     {
         $data = $request->validate([
             'date'           => 'required|date|unique:holiday_pricing,date',
-            'label'          => 'required|string|max:100',
+            ...Localized::rules(['label' => 'string|max:100'], ['label']),
             'surcharge_rate' => 'required|numeric|min:0|max:1',
         ]);
 
@@ -1462,8 +1463,8 @@ class AdminController extends Controller
     public function storeSurgeZone(Request $request)
     {
         $data = $request->validate([
-            'name'        => 'required|string|max:255',
-            'description' => 'nullable|string',
+            ...Localized::rules(['name' => 'string|max:255'], ['name']),
+            ...Localized::rules(['description' => 'string']),
             'center_lat'  => 'required|numeric|between:-90,90',
             'center_lng'  => 'required|numeric|between:-180,180',
             'radius_km'   => 'required|numeric|min:0.1|max:100',
@@ -1488,8 +1489,8 @@ class AdminController extends Controller
     public function updateSurgeZone(Request $request, SurgeZone $surgeZone)
     {
         $data = $request->validate([
-            'name'                 => 'required|string|max:255',
-            'description'          => 'nullable|string',
+            ...Localized::rules(['name' => 'string|max:255'], ['name']),
+            ...Localized::rules(['description' => 'string']),
             'center_lat'           => 'required|numeric|between:-90,90',
             'center_lng'           => 'required|numeric|between:-180,180',
             'radius_km'            => 'required|numeric|min:0.1|max:100',
@@ -1537,8 +1538,8 @@ class AdminController extends Controller
     public function storeChargingStation(Request $request)
     {
         $data = $request->validate([
-            'name'            => 'required|string|max:255',
-            'address'         => 'required|string|max:255',
+            ...Localized::rules(['name' => 'string|max:255'], ['name']),
+            ...Localized::rules(['address' => 'string|max:255'], ['address']),
             'latitude'        => 'required|numeric|between:-90,90',
             'longitude'       => 'required|numeric|between:-180,180',
             'available_ports' => 'required|integer|min:0',
@@ -1555,8 +1556,8 @@ class AdminController extends Controller
     public function updateChargingStation(Request $request, ChargingStation $station)
     {
         $data = $request->validate([
-            'name'            => 'required|string|max:255',
-            'address'         => 'required|string|max:255',
+            ...Localized::rules(['name' => 'string|max:255'], ['name']),
+            ...Localized::rules(['address' => 'string|max:255'], ['address']),
             'latitude'        => 'required|numeric|between:-90,90',
             'longitude'       => 'required|numeric|between:-180,180',
             'available_ports' => 'required|integer|min:0',
@@ -2524,7 +2525,7 @@ class AdminController extends Controller
     public function storeBanner(Request $request)
     {
         $data = $request->validate([
-            'title'       => 'required|string|max:100',
+            ...Localized::rules(['title' => 'string|max:100'], ['title']),
             'deeplink'    => 'nullable|string|max:255',
             'target_role' => 'required|in:all,passenger,driver',
             'sort_order'  => 'nullable|integer|min:0',
@@ -2546,7 +2547,7 @@ class AdminController extends Controller
     public function updateBanner(Request $request, Banner $banner)
     {
         $data = $request->validate([
-            'title'       => 'required|string|max:100',
+            ...Localized::rules(['title' => 'string|max:100'], ['title']),
             'deeplink'    => 'nullable|string|max:255',
             'target_role' => 'required|in:all,passenger,driver',
             'sort_order'  => 'nullable|integer|min:0',
@@ -2594,8 +2595,8 @@ class AdminController extends Controller
     public function storePromoEvent(Request $request)
     {
         $data = $request->validate([
-            'title'       => 'required|string|max:100',
-            'body'        => 'required|string|max:1000',
+            ...Localized::rules(['title' => 'string|max:100'], ['title']),
+            ...Localized::rules(['body' => 'string|max:1000'], ['body']),
             'target_role' => 'required|in:all,passenger,driver',
             'active'      => 'boolean',
             'image'       => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
@@ -2621,8 +2622,8 @@ class AdminController extends Controller
     public function updatePromoEvent(Request $request, PromoEvent $event)
     {
         $data = $request->validate([
-            'title'       => 'required|string|max:100',
-            'body'        => 'required|string|max:1000',
+            ...Localized::rules(['title' => 'string|max:100'], ['title']),
+            ...Localized::rules(['body' => 'string|max:1000'], ['body']),
             'target_role' => 'required|in:all,passenger,driver',
             'active'      => 'boolean',
             'resend'      => 'boolean',
@@ -2673,7 +2674,7 @@ class AdminController extends Controller
     {
         return [
             'code'           => 'required|string|max:32',
-            'description'    => 'nullable|string|max:255',
+            ...Localized::rules(['description' => 'string|max:255']),
             'type'           => 'required|in:percent,fixed',
             'value'          => 'required|integer|min:1',
             'min_order'      => 'nullable|integer|min:0',
@@ -2734,7 +2735,7 @@ class AdminController extends Controller
     public function storeAirportZone(Request $request)
     {
         $data = $request->validate([
-            'name'            => 'required|string|max:100',
+            ...Localized::rules(['name' => 'string|max:100'], ['name']),
             'iata_code'       => 'required|string|max:4|unique:airport_zones',
             'latitude'        => 'required|numeric|between:-90,90',
             'longitude'       => 'required|numeric|between:-180,180',
@@ -2752,7 +2753,7 @@ class AdminController extends Controller
     public function updateAirportZone(Request $request, AirportZone $zone)
     {
         $data = $request->validate([
-            'name'            => 'required|string|max:100',
+            ...Localized::rules(['name' => 'string|max:100'], ['name']),
             'latitude'        => 'required|numeric|between:-90,90',
             'longitude'       => 'required|numeric|between:-180,180',
             'radius_meters'   => 'required|integer|min:100|max:10000',
@@ -2849,9 +2850,9 @@ class AdminController extends Controller
     public function storeSubscriptionPlan(Request $request)
     {
         $data = $request->validate([
-            'name'                  => 'required|string|max:80',
+            ...Localized::rules(['name' => 'string|max:80'], ['name']),
             'slug'                  => 'required|string|max:40|unique:subscription_plans',
-            'description'           => 'nullable|string',
+            ...Localized::rules(['description' => 'string']),
             'price_khr'             => 'required|integer|min:0',
             'billing_cycle'         => 'required|in:weekly,monthly,yearly',
             'ride_credit_khr'       => 'nullable|integer|min:0',
@@ -2885,8 +2886,8 @@ class AdminController extends Controller
     public function updateSubscriptionPlan(Request $request, SubscriptionPlan $plan)
     {
         $data = $request->validate([
-            'name'                  => 'required|string|max:80',
-            'description'           => 'nullable|string',
+            ...Localized::rules(['name' => 'string|max:80'], ['name']),
+            ...Localized::rules(['description' => 'string']),
             'price_khr'             => 'required|integer|min:0',
             'billing_cycle'         => 'required|in:weekly,monthly,yearly',
             'ride_credit_khr'       => 'nullable|integer|min:0',

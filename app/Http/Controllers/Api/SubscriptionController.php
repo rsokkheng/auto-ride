@@ -260,7 +260,7 @@ class SubscriptionController extends ApiController
         $user = $this->authUser($request);
         if (! $user) return $this->unauthorized();
 
-        $transactions = SubscriptionTransaction::with('plan:id,name,slug,badge_color,icon')
+        $transactions = SubscriptionTransaction::with('plan:id,name,name_en,name_kh,name_zh,slug,badge_color,icon')
             ->where('user_id', $user->id)
             ->orderByDesc('created_at')
             ->paginate(10);

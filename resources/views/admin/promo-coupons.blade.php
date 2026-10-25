@@ -82,6 +82,7 @@
                         <button class="btn btn-xs btn-info mr-1"
                             data-coupon="{{ e(json_encode([
                                 'id'             => $c->id,
+                                ...$c->only(['description_en', 'description_kh', 'description_zh']),
                                 'code'           => $c->code,
                                 'description'    => $c->description,
                                 'type'           => $c->type,
@@ -143,11 +144,12 @@
                                    style="letter-spacing:1px;font-weight:700;" placeholder="e.g. NEWUSER50">
                         </div>
                         <div class="form-group col-md-6">
-                            <label>Description <small class="text-muted">(optional)</small></label>
+                            <label>Description <small class="text-muted">(English, optional)</small></label>
                             <input type="text" name="description" id="c-description" class="form-control" maxlength="255"
                                    placeholder="e.g. 50% off for new users">
                         </div>
                     </div>
+                    @include('admin.partials.localized-inputs', ['field' => 'description', 'label' => 'Description', 'idPrefix' => 'c-description', 'maxlength' => 255])
                     <div class="form-row">
                         <div class="form-group col-md-4">
                             <label>Discount Type <span class="text-danger">*</span></label>
@@ -269,7 +271,8 @@ function openEdit(btn) {
     document.getElementById('couponForm').action = cUpdateBase + c.id;
     document.getElementById('couponMethod').value = 'PUT';
     document.getElementById('c-code').value = c.code;
-    document.getElementById('c-description').value = c.description || '';
+    document.getElementById('c-description').value = c.description_en || c.description || '';
+    fillLocalized('c-description', c, 'description');
     document.getElementById('c-type').value = c.type;
     document.getElementById('c-value').value = c.value;
     document.getElementById('c-minorder').value = c.min_order ?? 0;

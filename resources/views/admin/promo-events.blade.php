@@ -66,6 +66,7 @@
                         <button class="btn btn-xs btn-info mr-1"
                             data-event="{{ e(json_encode([
                                 'id'          => $e->id,
+                                ...$e->only(['title_en', 'title_kh', 'title_zh', 'body_en', 'body_kh', 'body_zh']),
                                 'title'       => $e->title,
                                 'body'        => $e->body,
                                 'target_role' => $e->target_role,
@@ -106,15 +107,18 @@
                 <input type="hidden" name="_method" id="eventMethod" value="POST">
                 <div class="modal-body">
                     <div class="form-group">
-                        <label>Title <span class="text-danger">*</span></label>
+                        <label>Title <small class="text-muted">(English)</small> <span class="text-danger">*</span></label>
                         <input type="text" name="title" id="e-title" class="form-control" required maxlength="100"
                                placeholder="e.g. Friday Night Party Discount">
                     </div>
+                    @include('admin.partials.localized-inputs', ['field' => 'title', 'label' => 'Title', 'idPrefix' => 'e-title', 'maxlength' => 100])
                     <div class="form-group">
-                        <label>Body <span class="text-danger">*</span></label>
+                        <label>Body <small class="text-muted">(English)</small> <span class="text-danger">*</span></label>
                         <textarea name="body" id="e-body" class="form-control" rows="3" required maxlength="1000"
                                   placeholder="e.g. 20% off all rides this Friday 6pm–midnight!"></textarea>
                     </div>
+                    @include('admin.partials.localized-inputs', ['field' => 'body', 'label' => 'Body', 'idPrefix' => 'e-body', 'textarea' => true, 'rows' => 3, 'maxlength' => 1000])
+                    <small class="text-muted d-block mb-3">Each user gets the push in their app language; empty languages fall back to English.</small>
                     <div class="form-row">
                         <div class="form-group col-md-6">
                             <label>Target Audience <span class="text-danger">*</span></label>
@@ -178,8 +182,10 @@ function openEdit(btn) {
     document.getElementById('eventModalTitle').textContent = 'Edit Event';
     document.getElementById('eventForm').action = eUpdateBase + ev.id;
     document.getElementById('eventMethod').value = 'PUT';
-    document.getElementById('e-title').value  = ev.title;
-    document.getElementById('e-body').value   = ev.body;
+    document.getElementById('e-title').value  = ev.title_en || ev.title;
+    document.getElementById('e-body').value   = ev.body_en || ev.body;
+    fillLocalized('e-title', ev, 'title');
+    fillLocalized('e-body', ev, 'body');
     document.getElementById('e-role').value   = ev.target_role;
     document.getElementById('e-active').checked = !!ev.active;
     document.getElementById('e-resend').checked = false;

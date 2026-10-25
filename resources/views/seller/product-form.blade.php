@@ -17,16 +17,34 @@
 
         {{-- Title --}}
         <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Title <span class="text-red-500">*</span></label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Title <span class="text-gray-400 text-xs">(English)</span> <span class="text-red-500">*</span></label>
             <input type="text" name="title" value="{{ old('title', $product->title ?? '') }}" required
                    class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+            @foreach(['kh' => 'ខ្មែរ', 'zh' => '中文'] as $sfx => $lang)
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Title <span class="text-gray-400 text-xs">({{ $lang }}, optional)</span></label>
+                <input type="text" name="title_{{ $sfx }}" maxlength="200" value="{{ old('title_'.$sfx, isset($product) ? $product->getAttributes()['title_'.$sfx] ?? '' : '') }}"
+                       class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            @endforeach
         </div>
 
         {{-- Description --}}
         <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Description <span class="text-gray-400 text-xs">(English)</span></label>
             <textarea name="description" rows="4"
                       class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">{{ old('description', $product->description ?? '') }}</textarea>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+            @foreach(['kh' => 'ខ្មែរ', 'zh' => '中文'] as $sfx => $lang)
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Description <span class="text-gray-400 text-xs">({{ $lang }}, optional)</span></label>
+                <textarea name="description_{{ $sfx }}" rows="3"
+                          class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">{{ old('description_'.$sfx, isset($product) ? $product->getAttributes()['description_'.$sfx] ?? '' : '') }}</textarea>
+            </div>
+            @endforeach
         </div>
 
         {{-- Category + Condition --}}

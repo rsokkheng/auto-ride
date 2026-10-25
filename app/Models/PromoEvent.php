@@ -2,11 +2,16 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalizedName;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PromoEvent extends Model
 {
+    use HasLocalizedName;
+
+    /** Columns with _en / _kh / _zh variants (see HasLocalizedName). */
+    protected array $localized = ['title', 'body'];
     protected $fillable = [
         'title', 'body', 'image', 'target_role', 'active', 'created_by', 'sent_at',
     ];

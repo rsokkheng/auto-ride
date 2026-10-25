@@ -10,6 +10,9 @@ class SubscriptionPlan extends Model
 {
     use HasLocalizedName;
 
+    /** Columns with _en / _kh / _zh variants (see HasLocalizedName). */
+    protected array $localized = ['name', 'description', 'features'];
+
     protected $fillable = [
         'name', 'name_en', 'name_kh', 'name_zh', 'slug', 'description', 'price_khr', 'billing_cycle',
         'ride_credit_khr', 'ride_discount_pct', 'delivery_discount_pct',

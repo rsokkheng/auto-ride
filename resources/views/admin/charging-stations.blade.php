@@ -42,14 +42,15 @@
                     <td>
                         <button class="btn btn-xs btn-info mr-1" onclick="openEdit({
                             id: {{ $s->id }},
-                            name: @json($s->name),
-                            address: @json($s->address),
+                            name: {{ Illuminate\Support\Js::from($s->name) }},
+                            address: {{ Illuminate\Support\Js::from($s->address) }},
+                            localized: {{ Illuminate\Support\Js::from($s->only(['name_en', 'name_kh', 'name_zh', 'address_en', 'address_kh', 'address_zh'])) }},
                             latitude: '{{ $s->latitude }}',
                             longitude: '{{ $s->longitude }}',
                             available_ports: '{{ $s->available_ports }}',
-                            operator: @json($s->operator ?? ''),
+                            operator: {{ Illuminate\Support\Js::from($s->operator ?? '') }},
                             rating: '{{ $s->rating ?? '' }}',
-                            details: @json($s->details ?? '')
+                            details: {{ Illuminate\Support\Js::from($s->details ?? '') }}
                         })"><i class="fas fa-edit"></i></button>
                         <form method="POST" action="{{ route('admin.charging-stations.destroy', $s) }}" class="d-inline"
                               onsubmit="return confirm({{ Illuminate\Support\Js::from('Delete station ' . $s->name . '?') }})">
@@ -80,13 +81,15 @@
                 <input type="hidden" name="_method" id="formMethod" value="POST">
                 <div class="modal-body">
                     <div class="form-group">
-                        <label>Name <span class="text-danger">*</span></label>
+                        <label>Name <small class="text-muted">(English)</small> <span class="text-danger">*</span></label>
                         <input type="text" name="name" id="f-name" class="form-control" required>
                     </div>
+                    @include('admin.partials.localized-inputs', ['field' => 'name', 'label' => 'Name', 'idPrefix' => 'f-name', 'maxlength' => 255])
                     <div class="form-group">
-                        <label>Address <span class="text-danger">*</span></label>
+                        <label>Address <small class="text-muted">(English)</small> <span class="text-danger">*</span></label>
                         <input type="text" name="address" id="f-address" class="form-control" required>
                     </div>
+                    @include('admin.partials.localized-inputs', ['field' => 'address', 'label' => 'Address', 'idPrefix' => 'f-address', 'maxlength' => 255])
                     <div class="form-row">
                         <div class="form-group col-md-6">
                             <label>Latitude <span class="text-danger">*</span></label>
@@ -143,8 +146,10 @@ function openEdit(d) {
     document.getElementById('modalTitle').textContent = 'Edit Station #' + d.id;
     document.getElementById('stationForm').action = updateBase + d.id;
     document.getElementById('formMethod').value = 'PUT';
-    document.getElementById('f-name').value = d.name;
-    document.getElementById('f-address').value = d.address;
+    document.getElementById('f-name').value = d.localized.name_en || d.name;
+    document.getElementById('f-address').value = d.localized.address_en || d.address;
+    fillLocalized('f-name', d.localized, 'name');
+    fillLocalized('f-address', d.localized, 'address');
     document.getElementById('f-lat').value = d.latitude;
     document.getElementById('f-lng').value = d.longitude;
     document.getElementById('f-ports').value = d.available_ports;

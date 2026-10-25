@@ -2,10 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalizedName;
 use Illuminate\Database\Eloquent\Model;
 
 class Banner extends Model
 {
+    use HasLocalizedName;
+
+    /** Columns with _en / _kh / _zh variants (see HasLocalizedName). */
+    protected array $localized = ['title'];
     protected $fillable = [
         'title', 'image', 'deeplink', 'target_role',
         'sort_order', 'active', 'valid_from', 'valid_until',

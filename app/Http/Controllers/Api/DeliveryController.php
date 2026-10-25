@@ -411,9 +411,8 @@ class DeliveryController extends ApiController
             $dropoffLabel = $delivery->dropoff_address ?? 'Destination TBD';
             $this->fcm->sendToUsers(
                 $nearbyDrivers->whereNotNull('fcm_token')->all(),
-                '📦 New Delivery Request',
-                "{$delivery->pickup_address} → {$dropoffLabel}",
-                ['type' => 'delivery_requested', 'delivery_id' => (string) $delivery->id]
+                ...FcmService::message('delivery_requested', ['pickup' => $delivery->pickup_address, 'dropoff' => $dropoffLabel]),
+                data: ['type' => 'delivery_requested', 'delivery_id' => (string) $delivery->id]
             );
         } catch (\Throwable $e) {
             report($e);
@@ -597,7 +596,7 @@ class DeliveryController extends ApiController
 
         // Notify sender: driver assigned
         if ($fresh->sender) {
-            $this->fcm->deliveryAccepted($fresh->sender, $fresh->id, $fresh->driver->name ?? 'Your driver');
+            $this->fcm->deliveryAccepted($fresh->sender, $fresh->id, $fresh->driver?->name);
         }
 
         return $this->success([
@@ -645,12 +644,10 @@ class DeliveryController extends ApiController
 
         try {
             if ($fresh->sender) {
-                $label = $fresh->service_type === 'moving' ? 'Moving job' : 'Delivery';
                 $this->fcm->sendToUser(
                     $fresh->sender,
-                    "{$label} Started",
-                    "Your driver has picked up and is on the way.",
-                    ['type' => 'delivery_started', 'delivery_id' => (string) $fresh->id]
+                    ...FcmService::message($fresh->service_type === 'moving' ? 'moving_started' : 'delivery_started'),
+                    data: ['type' => 'delivery_started', 'delivery_id' => (string) $fresh->id]
                 );
             }
         } catch (\Throwable $e) {
@@ -899,7 +896,7 @@ class DeliveryController extends ApiController
             // Notify partner/sender
             if ($fresh->sender) {
                 try {
-                    $this->fcm->sendToUser($fresh->sender, 'Package Delivered', 'Your package has been delivered successfully.', [
+                    $this->fcm->sendToUser($fresh->sender, ...FcmService::message('delivery_delivered'), data: [
                         'type'        => 'delivery_delivered',
                         'delivery_id' => (string) $fresh->id,
                     ]);

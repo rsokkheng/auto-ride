@@ -24,7 +24,7 @@ class BannerController extends ApiController
             ->where(fn($q) => $q->whereNull('valid_until')->orWhere('valid_until', '>=', now()))
             ->orderBy('sort_order')
             ->orderByDesc('created_at')
-            ->get(['id', 'title', 'image', 'deeplink', 'valid_until'])
+            ->get(['id', 'title', 'title_en', 'title_kh', 'title_zh', 'image', 'deeplink', 'valid_until'])
             ->map(fn($b) => [
                 'id'          => $b->id,
                 'title'       => $b->title,

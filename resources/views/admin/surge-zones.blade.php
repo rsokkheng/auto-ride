@@ -84,6 +84,7 @@
                         <button class="btn btn-xs btn-info mr-1"
                             data-zone="{{ e(json_encode([
                                 'id'                  => $z->id,
+                                ...$z->only(['name_en', 'name_kh', 'name_zh', 'description_en', 'description_kh', 'description_zh']),
                                 'name'                => $z->name,
                                 'description'         => $z->description ?? '',
                                 'center_lat'          => $z->center_lat,
@@ -133,15 +134,17 @@
 
                     {{-- Basic info --}}
                     <div class="form-group">
-                        <label>Zone Name <span class="text-danger">*</span></label>
+                        <label>Zone Name <small class="text-muted">(English)</small> <span class="text-danger">*</span></label>
                         <input type="text" name="name" id="f-name" class="form-control"
                                placeholder="e.g. Airport Rush, City Centre Peak" required>
                     </div>
+                    @include('admin.partials.localized-inputs', ['field' => 'name', 'label' => 'Zone Name', 'idPrefix' => 'f-name', 'maxlength' => 255])
                     <div class="form-group">
-                        <label>Description</label>
+                        <label>Description <small class="text-muted">(English)</small></label>
                         <input type="text" name="description" id="f-description" class="form-control"
                                placeholder="Optional note">
                     </div>
+                    @include('admin.partials.localized-inputs', ['field' => 'description', 'label' => 'Description'])
 
                     {{-- Location --}}
                     <div class="form-row">
@@ -311,8 +314,10 @@ function openEdit(btn) {
     document.getElementById('modalTitle').textContent   = 'Edit Surge Zone #' + z.id;
     document.getElementById('surgeForm').action         = updateBase + z.id;
     document.getElementById('formMethod').value         = 'PUT';
-    document.getElementById('f-name').value             = z.name;
-    document.getElementById('f-description').value      = z.description;
+    document.getElementById('f-name').value             = z.name_en || z.name;
+    document.getElementById('f-description').value      = z.description_en || z.description;
+    fillLocalized('f-name', z, 'name');
+    fillLocalized('f-description', z, 'description');
     document.getElementById('f-lat').value              = z.center_lat;
     document.getElementById('f-lng').value              = z.center_lng;
     document.getElementById('f-radius').value           = z.radius_km;

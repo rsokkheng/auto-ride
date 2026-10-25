@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\DriverDevice;
 use App\Models\PushNotification;
 use App\Models\User;
+use App\Support\LocalizedText;
 use Google\Auth\Credentials\ServiceAccountCredentials;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -41,15 +42,21 @@ class FcmService
     private ?string $projectId   = null;
 
     // ── Public send helpers ───────────────────────────────────────────────────
+    //
+    // $title / $body may be a plain string or a LocalizedText (en / kh / zh).
+    // Each device gets the text in its user's saved language; the in-app
+    // notification row keeps all three so the list follows the app language.
 
     /**
      * Send to a single user via their users.fcm_token (fallback / passenger use).
      */
-    public function sendToUser(User $user, string $title, string $body, array $data = []): void
+    public function sendToUser(User $user, string|LocalizedText $title, string|LocalizedText $body, array $data = []): void
     {
         if (! $user->fcm_token) return;
-        $fcmStatus = $this->sendOne($user->fcm_token, $title, $body, $data);
-        $this->logNotification($user->id, $title, $body, $data, $user->fcm_token, $fcmStatus);
+        [$title, $body] = [LocalizedText::wrap($title), LocalizedText::wrap($body)];
+
+        $fcmStatus = $this->sendOne($user->fcm_token, $title->for($user), $body->for($user), $data);
+        $this->logNotification($user, $title, $body, $data, $user->fcm_token, $fcmStatus);
 
         if ($this->isDeadToken($fcmStatus)) {
             $user->update(['fcm_token' => null]);
@@ -60,7 +67,7 @@ class FcmService
      * Send to a driver via all their registered devices in driver_devices.
      * Falls back to users.fcm_token if no devices are registered.
      */
-    public function sendToDriver(User $driver, string $title, string $body, array $data = []): void
+    public function sendToDriver(User $driver, string|LocalizedText $title, string|LocalizedText $body, array $data = []): void
     {
         $devices = DriverDevice::where('user_id', $driver->id)
             ->where('is_active', true)
@@ -72,9 +79,11 @@ class FcmService
             return;
         }
 
+        [$title, $body] = [LocalizedText::wrap($title), LocalizedText::wrap($body)];
+
         foreach ($devices as $device) {
-            $fcmStatus = $this->sendOne($device->token, $title, $body, $data, $device->platform);
-            $this->logNotification($driver->id, $title, $body, $data, $device->token, $fcmStatus);
+            $fcmStatus = $this->sendOne($device->token, $title->for($driver), $body->for($driver), $data, $device->platform);
+            $this->logNotification($driver, $title, $body, $data, $device->token, $fcmStatus);
 
             if ($this->isDeadToken($fcmStatus)) {
                 $device->update(['is_active' => false]);
@@ -106,13 +115,13 @@ class FcmService
      * Push to a user on whichever devices they have, and always keep a row in
      * their in-app notification list — even when no device is registered.
      */
-    public function notifyUser(User $user, string $title, string $body, array $data = []): void
+    public function notifyUser(User $user, string|LocalizedText $title, string|LocalizedText $body, array $data = []): void
     {
         $hasDevice = $user->fcm_token
             || ($user->role === 'driver' && DriverDevice::where('user_id', $user->id)->where('is_active', true)->exists());
 
         if (! $hasDevice) {
-            $this->logNotification($user->id, $title, $body, $data, '', 'NO_TOKEN');
+            $this->logNotification($user, LocalizedText::wrap($title), LocalizedText::wrap($body), $data, '', 'NO_TOKEN');
             return;
         }
 
@@ -125,28 +134,29 @@ class FcmService
      * Push to a user's phone without adding to their in-app notification list —
      * for alerts that already have their own inbox (admin alerts).
      */
-    public function pushOnly(User $user, string $title, string $body, array $data = []): void
+    public function pushOnly(User $user, string|LocalizedText $title, string|LocalizedText $body, array $data = []): void
     {
         if (! $user->fcm_token) return;
 
-        $fcmStatus = $this->sendOne($user->fcm_token, $title, $body, $data);
+        $fcmStatus = $this->sendOne($user->fcm_token, LocalizedText::wrap($title)->for($user), LocalizedText::wrap($body)->for($user), $data);
         if ($this->isDeadToken($fcmStatus)) {
             $user->update(['fcm_token' => null]);
         }
     }
 
     /**
-     * Push to a bare device token with no account behind it (guest shoppers).
+     * Push to a bare device token with no account behind it (guest shoppers),
+     * in the language of the current request.
      */
-    public function sendToToken(string $fcmToken, string $title, string $body, array $data = []): string
+    public function sendToToken(string $fcmToken, string|LocalizedText $title, string|LocalizedText $body, array $data = []): string
     {
-        return $this->sendOne($fcmToken, $title, $body, $data);
+        return $this->sendOne($fcmToken, LocalizedText::wrap($title)->in(), LocalizedText::wrap($body)->in(), $data);
     }
 
     /**
      * Send to multiple users at once (passengers / broadcast).
      */
-    public function sendToUsers(array $users, string $title, string $body, array $data = []): void
+    public function sendToUsers(array $users, string|LocalizedText $title, string|LocalizedText $body, array $data = []): void
     {
         foreach ($users as $user) {
             $this->sendToUser($user, $title, $body, $data);
@@ -157,7 +167,7 @@ class FcmService
      * Push a promo/event announcement to one user (drivers get it on all their
      * registered devices, others via their single fcm_token).
      */
-    public function promoEvent(User $user, int $eventId, string $title, string $body, ?string $imageUrl = null): void
+    public function promoEvent(User $user, int $eventId, string|LocalizedText $title, string|LocalizedText $body, ?string $imageUrl = null): void
     {
         $data = [
             'type'     => 'promo_event',
@@ -172,14 +182,28 @@ class FcmService
             : $this->sendToUser($user, $title, $body, $data);
     }
 
+    /** title + body for a lang/{locale}/push.php entry, in all three languages. */
+    public static function message(string $key, array $replace = [], string $bodyKey = 'body'): array
+    {
+        return [
+            LocalizedText::trans("push.{$key}.title", $replace),
+            LocalizedText::trans("push.{$key}.{$bodyKey}", $replace),
+        ];
+    }
+
+    /** Driver display name, or "Your driver" in each language. */
+    private static function driverName(?string $name): LocalizedText
+    {
+        return filled($name) ? LocalizedText::plain($name) : LocalizedText::trans('push.your_driver');
+    }
+
     // ── Ride notification helpers ─────────────────────────────────────────────
 
     public function rideRequested(User $driver, int $rideId, string $pickup, string $dropoff, string $passengerName = '', int $fare = 0): void
     {
         $this->sendToDriver($driver,
-            '🚕 មានការកក់ដំណើរថ្មី',
-            'មានអ្នកដំណើរកំពុងស្នើសុំដំណើរ',
-            [
+            ...self::message('ride_requested'),
+            data: [
                 'type'           => 'ride_requested',
                 'booking_id'     => (string) $rideId,
                 'passenger_name' => $passengerName,
@@ -197,66 +221,59 @@ class FcmService
         }
     }
 
-    public function rideAccepted(User $passenger, int $rideId, string $driverName): void
+    public function rideAccepted(User $passenger, int $rideId, ?string $driverName): void
     {
         $this->sendToUser($passenger,
-            '🚕 អ្នកបើកបរបានទទួលដំណើរ',
-            "{$driverName} កំពុងមករកអ្នក",
-            ['type' => 'ride_accepted', 'booking_id' => (string) $rideId]
+            ...self::message('ride_accepted', ['driver' => self::driverName($driverName)]),
+            data: ['type' => 'ride_accepted', 'booking_id' => (string) $rideId]
         );
     }
 
     public function rideRejected(User $passenger, int $rideId): void
     {
         $this->sendToUser($passenger,
-            'No Driver Available',
-            'Your ride request could not be accepted. Please try again.',
-            ['type' => 'ride_rejected', 'booking_id' => (string) $rideId]
+            ...self::message('ride_rejected'),
+            data: ['type' => 'ride_rejected', 'booking_id' => (string) $rideId]
         );
     }
 
-    public function driverArrived(User $passenger, int $rideId, string $driverName): void
+    public function driverArrived(User $passenger, int $rideId, ?string $driverName): void
     {
         $this->sendToUser($passenger,
-            '📍 អ្នកបើកបរបានដល់',
-            "{$driverName} បានដល់កន្លែងទទួលអ្នក",
-            ['type' => 'driver_arrived', 'booking_id' => (string) $rideId]
+            ...self::message('driver_arrived', ['driver' => self::driverName($driverName)]),
+            data: ['type' => 'driver_arrived', 'booking_id' => (string) $rideId]
         );
     }
 
     public function rideStarted(User $passenger, int $rideId): void
     {
         $this->sendToUser($passenger,
-            '🚀 ដំណើរបានចាប់ផ្តើម',
-            'ដំណើររបស់អ្នកកំពុងដំណើរការ។ សូមធ្វើដំណើរដោយសុវត្ថិភាព!',
-            ['type' => 'ride_started', 'booking_id' => (string) $rideId]
+            ...self::message('ride_started'),
+            data: ['type' => 'ride_started', 'booking_id' => (string) $rideId]
         );
     }
 
     public function rideCompleted(User $passenger, int $rideId, int $fare): void
     {
         $this->sendToUser($passenger,
-            '🏁 ដំណើរបានបញ្ចប់',
-            "អ្នកបានដល់គោលដៅ។ ថ្លៃដំណើរ: {$fare} KHR.",
-            ['type' => 'ride_completed', 'booking_id' => (string) $rideId, 'fare' => (string) $fare]
+            ...self::message('ride_completed', ['fare' => $fare]),
+            data: ['type' => 'ride_completed', 'booking_id' => (string) $rideId, 'fare' => (string) $fare]
         );
     }
 
     public function rideCancelledByDriver(User $passenger, int $rideId): void
     {
         $this->sendToUser($passenger,
-            '❌ ដំណើរត្រូវបានលុបចោល',
-            'អ្នកបើកបរបានលុបចោលដំណើរ។ សូមកក់ម្ដងទៀត។',
-            ['type' => 'ride_cancelled', 'booking_id' => (string) $rideId, 'cancelled_by' => 'driver']
+            ...self::message('ride_cancelled_driver'),
+            data: ['type' => 'ride_cancelled', 'booking_id' => (string) $rideId, 'cancelled_by' => 'driver']
         );
     }
 
     public function rideCancelledByPassenger(User $driver, int $rideId): void
     {
         $this->sendToDriver($driver,
-            '❌ ដំណើរត្រូវបានលុបចោល',
-            'អ្នកដំណើរបានលុបចោលការកក់។',
-            ['type' => 'ride_cancelled', 'booking_id' => (string) $rideId, 'cancelled_by' => 'passenger']
+            ...self::message('ride_cancelled_passenger'),
+            data: ['type' => 'ride_cancelled', 'booking_id' => (string) $rideId, 'cancelled_by' => 'passenger']
         );
     }
 
@@ -265,47 +282,40 @@ class FcmService
     public function deliveryRequested(User $driver, int $deliveryId, string $pickup, string $dropoff): void
     {
         $this->sendToDriver($driver,
-            'New Delivery Request',
-            "{$pickup} → {$dropoff}",
-            ['type' => 'delivery_requested', 'delivery_id' => (string) $deliveryId]
+            ...self::message('delivery_requested', ['pickup' => $pickup, 'dropoff' => $dropoff]),
+            data: ['type' => 'delivery_requested', 'delivery_id' => (string) $deliveryId]
         );
     }
 
-    public function deliveryAccepted(User $sender, int $deliveryId, string $driverName): void
+    public function deliveryAccepted(User $sender, int $deliveryId, ?string $driverName): void
     {
         $this->sendToUser($sender,
-            'Driver Assigned',
-            "{$driverName} has accepted your delivery.",
-            ['type' => 'delivery_accepted', 'delivery_id' => (string) $deliveryId]
+            ...self::message('delivery_accepted', ['driver' => self::driverName($driverName)]),
+            data: ['type' => 'delivery_accepted', 'delivery_id' => (string) $deliveryId]
         );
     }
 
-    public function deliveryPickedUp(User $sender, int $deliveryId, string $driverName): void
+    public function deliveryPickedUp(User $sender, int $deliveryId, ?string $driverName): void
     {
         $this->sendToUser($sender,
-            'Package Picked Up',
-            "{$driverName} has picked up your package and is on the way.",
-            ['type' => 'delivery_picked_up', 'delivery_id' => (string) $deliveryId]
+            ...self::message('delivery_picked_up', ['driver' => self::driverName($driverName)]),
+            data: ['type' => 'delivery_picked_up', 'delivery_id' => (string) $deliveryId]
         );
     }
 
     public function deliveryCompleted(User $sender, int $deliveryId): void
     {
         $this->sendToUser($sender,
-            'Delivery Completed',
-            'Your package has been delivered successfully.',
-            ['type' => 'delivery_completed', 'delivery_id' => (string) $deliveryId]
+            ...self::message('delivery_completed'),
+            data: ['type' => 'delivery_completed', 'delivery_id' => (string) $deliveryId]
         );
     }
 
     public function deliveryCancelled(User $user, int $deliveryId, string $cancelledBy): void
     {
         $this->sendToUser($user,
-            'Delivery Cancelled',
-            $cancelledBy === 'driver'
-                ? 'Your driver cancelled the delivery. Please book again.'
-                : 'The delivery has been cancelled.',
-            ['type' => 'delivery_cancelled', 'delivery_id' => (string) $deliveryId, 'cancelled_by' => $cancelledBy]
+            ...self::message('delivery_cancelled', [], $cancelledBy === 'driver' ? 'body_by_driver' : 'body'),
+            data: ['type' => 'delivery_cancelled', 'delivery_id' => (string) $deliveryId, 'cancelled_by' => $cancelledBy]
         );
     }
 
@@ -401,18 +411,24 @@ class FcmService
     // ── Notification log ──────────────────────────────────────────────────────
 
     private function logNotification(
-        int    $userId,
-        string $title,
-        string $body,
-        array  $data,
-        string $fcmToken,
-        string $fcmStatus
+        User          $user,
+        LocalizedText $title,
+        LocalizedText $body,
+        array         $data,
+        string        $fcmToken,
+        string        $fcmStatus
     ): void {
         try {
             PushNotification::create([
-                'user_id'    => $userId,
-                'title'      => $title,
-                'body'       => $body,
+                'user_id'    => $user->id,
+                'title'      => $title->for($user),
+                'title_en'   => $title->in('en'),
+                'title_kh'   => $title->in('kh'),
+                'title_zh'   => $title->in('zh'),
+                'body'       => $body->for($user),
+                'body_en'    => $body->in('en'),
+                'body_kh'    => $body->in('kh'),
+                'body_zh'    => $body->in('zh'),
                 'type'       => $data['type'] ?? null,
                 'payload'    => $data,
                 'fcm_token'  => $fcmToken,

@@ -1,6 +1,6 @@
 <div class="row">
     <div class="form-group col-md-6">
-        <label>Plan Name <span class="text-danger">*</span></label>
+        <label>Plan Name <small class="text-muted">(English)</small> <span class="text-danger">*</span></label>
         <input type="text" name="name" class="form-control" value="{{ old('name', $plan->name ?? '') }}" required maxlength="80">
     </div>
     @unless(isset($plan))
@@ -10,10 +10,12 @@
     </div>
     @endunless
     <div class="form-group col-md-12">
-        <label>Description</label>
+        <label>Description <small class="text-muted">(English)</small></label>
         <input type="text" name="description" class="form-control" value="{{ old('description', $plan->description ?? '') }}" maxlength="200">
     </div>
 </div>
+@include('admin.partials.localized-inputs', ['field' => 'name', 'label' => 'Plan Name', 'model' => $plan ?? null, 'maxlength' => 80])
+@include('admin.partials.localized-inputs', ['field' => 'description', 'label' => 'Description', 'model' => $plan ?? null, 'maxlength' => 200])
 
 <div class="row">
     <div class="form-group col-md-6">

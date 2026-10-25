@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Seller;
 
+use App\Support\Localized;
 use App\Http\Controllers\Controller;
 use App\Models\MarketplaceCategory;
 use App\Models\MarketplaceOrder;
@@ -103,8 +104,8 @@ class SellerController extends Controller
         $user = Auth::guard('seller')->user();
 
         $data = $request->validate([
-            'title'              => 'required|string|max:200',
-            'description'        => 'nullable|string',
+            ...Localized::rules(['title' => 'string|max:200'], ['title']),
+            ...Localized::rules(['description' => 'string']),
             'category_id'        => 'nullable|exists:marketplace_categories,id',
             'condition'          => 'required|in:new,used,refurbished',
             'listing_type'       => 'required|in:sale,rent,both',
@@ -149,8 +150,8 @@ class SellerController extends Controller
         $this->authorizeProduct($product);
 
         $data = $request->validate([
-            'title'              => 'required|string|max:200',
-            'description'        => 'nullable|string',
+            ...Localized::rules(['title' => 'string|max:200'], ['title']),
+            ...Localized::rules(['description' => 'string']),
             'category_id'        => 'nullable|exists:marketplace_categories,id',
             'condition'          => 'required|in:new,used,refurbished',
             'listing_type'       => 'required|in:sale,rent,both',

@@ -230,4 +230,15 @@ class User extends Authenticatable
     {
         return $this->hasMany(LinkedAccount::class, 'primary_user_id');
     }
+
+    /**
+     * Language the user reads the app in (en / kh / zh), or null if unknown.
+     * Kept up to date from the app's ?lang= / X-Locale by SetApiLocale.
+     */
+    public function preferredLocale(): ?string
+    {
+        $lang = $this->accessibility_settings['language'] ?? null;
+
+        return $lang ? \App\Support\Localized::suffix($lang) : null;
+    }
 }
