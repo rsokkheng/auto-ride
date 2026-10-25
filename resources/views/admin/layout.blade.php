@@ -55,8 +55,9 @@
                     @php $adminInitials = collect(preg_split('/\s+/', trim(Auth::user()->name ?? 'Admin')))->filter()->take(2)->map(fn ($w) => mb_strtoupper(mb_substr($w, 0, 1)))->join(''); @endphp
                     <div class="d-flex align-items-center gap-2">
                         <span class="avatar-chip">{{ $adminInitials ?: 'A' }}</span>
-                        <span class="d-none d-md-inline" style="font-size:.84rem;font-weight:600;color:var(--ink-900);">
-                            {{ Auth::user()->name ?? 'Admin' }}
+                        <span class="d-none d-md-inline text-left" style="line-height:1.2;">
+                            <span class="d-block" style="font-size:.84rem;font-weight:600;color:var(--ink-900);">{{ Auth::user()->name ?? 'Admin' }}</span>
+                            <span class="d-block" style="font-size:.72rem;color:var(--ink-500);">{{ Auth::user()?->getRoleNames()->first() ?? ucfirst(Auth::user()->role ?? 'admin') }}</span>
                         </span>
                         <i class="fas fa-chevron-down" style="font-size:.6rem;color:var(--ink-400);"></i>
                     </div>
@@ -90,19 +91,12 @@
                 <div class="brand-mark"><i class="fas fa-car-side text-white" style="font-size:.8rem;"></i></div>
                 <div>
                     <span class="brand-text">ROTEH</span>
-                    <span class="brand-sub">Admin Console</span>
+                    <span class="brand-sub">Ride Platform</span>
                 </div>
             </div>
         </a>
 
         <div class="sidebar">
-            <div class="user-panel mt-3 pb-3 mb-3 d-flex align-items-center px-3">
-                <span class="avatar-chip" style="background:rgba(255,255,255,.08);color:#e2e8f0;">{{ $adminInitials ?? 'A' }}</span>
-                <div class="info ml-2" style="min-width:0;">
-                    <a href="#" class="d-block text-truncate" style="font-size:.84rem;">{{ Auth::user()->name ?? 'Administrator' }}</a>
-                    <span style="font-size:.7rem;color:#64748b;">{{ Auth::user()?->getRoleNames()->first() ?? ucfirst(Auth::user()->role ?? 'admin') }}</span>
-                </div>
-            </div>
 
             @php
                 $pendingDrivers    = rescue(fn() => \App\Models\User::where('role','driver')->where('approval_status','pending')->count(), 0, false);
@@ -127,8 +121,8 @@
 
                 // [label, icon, route, active-patterns, badge count, badge class, gate]
                 $menu = [
-                    ['header' => 'Overview', 'items' => [
-                        ['Dashboard', 'fa-gauge-high', 'admin.dashboard', ['admin.dashboard']],
+                    ['header' => null, 'items' => [
+                        ['Dashboard', 'fa-house', 'admin.dashboard', ['admin.dashboard']],
                     ]],
                     ['header' => 'Operations', 'items' => [
                         ['Rides',            'fa-route',            'admin.rides',            ['admin.rides']],
@@ -198,10 +192,10 @@
                 ];
             @endphp
 
-            <nav class="mt-1">
+            <nav class="mt-3">
                 <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
                     @foreach($menu as $section)
-                        <li class="nav-header">{{ $section['header'] }}</li>
+                        @if($section['header'])<li class="nav-header">{{ $section['header'] }}</li>@endif
 
                         @foreach($section['items'] as $item)
                             @if(isset($item['children']))
@@ -244,6 +238,9 @@
 
     {{-- ── Page Content ── --}}
     <div class="content-wrapper">
+        @hasSection('page-header')
+            <div class="content-header"><div class="container-fluid">@yield('page-header')</div></div>
+        @else
         <div class="content-header">
             <div class="container-fluid">
                 <div class="row align-items-center">
@@ -259,6 +256,7 @@
                 </div>
             </div>
         </div>
+        @endif
 
         <section class="content">
             <div class="container-fluid">

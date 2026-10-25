@@ -115,36 +115,62 @@ class AdminController extends Controller
 
     // ─── Dashboard ───────────────────────────────────────────────────────────
 
-    public function dashboard()
+    public function dashboard(Request $request)
     {
         $today = now()->startOfDay();
         $week  = now()->subDays(6)->startOfDay();
 
-        // Revenue last 7 days for chart — safe even if completed_at column is missing
+        // Period switch (Today / Last 7 Days / Last 30 Days): drives the charts'
+        // range plus the ride-status and revenue-by-service panels.
+        $period    = in_array($request->query('period'), ['today', '7d', '30d'], true) ? $request->query('period') : 'today';
+        $from      = match ($period) { '7d' => $week, '30d' => now()->subDays(29)->startOfDay(), default => $today };
+        $chartDays = $period === '30d' ? 30 : 7;
+
+        // Completed-ride revenue and count per day, in one grouped query.
+        $daily = rescue(fn () => Ride::where('status', 'completed')
+            ->where('completed_at', '>=', now()->subDays($chartDays - 1)->startOfDay())
+            ->selectRaw('DATE(completed_at) as day, SUM(fare) as revenue, COUNT(*) as rides')
+            ->groupBy('day')->get()->keyBy('day'), collect(), false);
+
         $revenueChart = [];
         $ridesChart   = [];
-        for ($i = 6; $i >= 0; $i--) {
-            $day   = now()->subDays($i)->toDateString();
-            $start = now()->subDays($i)->startOfDay();
-            $end   = now()->subDays($i)->endOfDay();
-            try {
-                $revenueChart[$day] = (int) Ride::where('status', 'completed')
-                    ->whereBetween('completed_at', [$start, $end])
-                    ->sum('fare');
-                $ridesChart[$day]   = Ride::where('status', 'completed')
-                    ->whereBetween('completed_at', [$start, $end])
-                    ->count();
-            } catch (\Throwable) {
-                $revenueChart[$day] = 0;
-                $ridesChart[$day]   = 0;
-            }
+        for ($i = $chartDays - 1; $i >= 0; $i--) {
+            $day = now()->subDays($i)->toDateString();
+            $revenueChart[$day] = (int) ($daily[$day]->revenue ?? 0);
+            $ridesChart[$day]   = (int) ($daily[$day]->rides ?? 0);
         }
 
+        $revenueBetween = fn ($start, $end) => rescue(fn () => (int) Ride::where('status', 'completed')
+            ->whereBetween('completed_at', [$start, $end])->sum('fare'), 0, false);
+
         $todayRevenue     = $revenueChart[now()->toDateString()] ?? 0;
-        $yesterdayRevenue = $revenueChart[now()->subDay()->toDateString()] ?? 0;
+        $yesterdayRevenue = $revenueBetween(now()->subDay()->startOfDay(), now()->subDay()->endOfDay());
         $revenueGrowth    = $yesterdayRevenue > 0
             ? round(($todayRevenue - $yesterdayRevenue) / $yesterdayRevenue * 100, 1)
             : null;
+
+        $weekRevenue     = $revenueBetween($week, now());
+        $prevWeekRevenue = $revenueBetween(now()->subDays(13)->startOfDay(), now()->subDays(7)->endOfDay());
+        $weekGrowth      = $prevWeekRevenue > 0
+            ? round(($weekRevenue - $prevWeekRevenue) / $prevWeekRevenue * 100, 1)
+            : null;
+
+        // Rides booked in the period, grouped for the status donut.
+        $byStatus = rescue(fn () => Ride::where('created_at', '>=', $from)
+            ->selectRaw('status, COUNT(*) as n')->groupBy('status')->pluck('n', 'status'), collect(), false);
+        $rideStatus = [
+            'completed'   => (int) ($byStatus['completed'] ?? 0),
+            'in_progress' => (int) collect(['accepted', 'driver_arrived', 'in_progress'])->sum(fn ($s) => $byStatus[$s] ?? 0),
+            'pending'     => (int) collect(['requested', 'pending'])->sum(fn ($s) => $byStatus[$s] ?? 0),
+            'cancelled'   => (int) ($byStatus['cancelled'] ?? 0),
+        ];
+
+        // Money actually earned in the period, per service.
+        $revenueByService = [
+            'ride'     => rescue(fn () => (int) Ride::where('status', 'completed')->where('completed_at', '>=', $from)->sum('fare'), 0, false),
+            'delivery' => rescue(fn () => (int) Delivery::whereNotNull('completed_at')->where('completed_at', '>=', $from)->sum('fee'), 0, false),
+            'rental'   => rescue(fn () => (int) \App\Models\CarRental::where('status', 'completed')->where('updated_at', '>=', $from)->sum('total_amount_khr'), 0, false),
+        ];
 
         // Helper: safely count a query even if the table doesn't exist yet
         $safe = fn (\Closure $cb, int $default = 0) => rescue($cb, $default, false);
@@ -162,17 +188,20 @@ class AdminController extends Controller
                 'deliveries_total'    => Delivery::count(),
                 'deliveries_today'    => Delivery::where('created_at', '>=', $today)->count(),
                 'revenue_today'       => $todayRevenue,
-                'revenue_week'        => $safe(fn () => (int) Ride::where('status','completed')->where('completed_at','>=',$week)->sum('fare')),
+                'revenue_week'        => $weekRevenue,
                 'revenue_growth'      => $revenueGrowth,
+                'revenue_week_growth' => $weekGrowth,
                 'marketplace'         => MarketplaceProduct::count(),
                 'support_open'        => SupportTicket::whereIn('status', ['open','in_progress'])->count(),
                 'withdrawals_pending' => $safe(fn () => WithdrawalRequest::where('status','pending')->count()),
                 'safety_incidents'    => SafetyIncident::count(),
             ],
-            'revenueChart'   => $revenueChart,
-            'ridesChart'     => $ridesChart,
-            'latestUsers'    => User::latest()->take(8)->get(),
-            'latestRides'    => Ride::with('passenger:id,name','driver:id,name')->latest()->take(8)->get(),
+            'period'           => $period,
+            'revenueChart'     => $revenueChart,
+            'ridesChart'       => $ridesChart,
+            'rideStatus'       => $rideStatus,
+            'revenueByService' => $revenueByService,
+            'latestRides'      => Ride::with('passenger:id,name','driver:id,name')->latest()->take(5)->get(),
             'pendingDrivers' => User::where('role','driver')->where('approval_status','pending')->latest()->take(5)->get(),
             'openTickets'    => SupportTicket::whereIn('status',['open','in_progress'])->latest()->take(5)->get(),
         ]);
