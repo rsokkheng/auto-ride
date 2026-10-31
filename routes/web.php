@@ -22,6 +22,10 @@ Route::get('/', function () {
     return redirect()->route('admin.login');
 });
 
+// Public "how to delete your account" page — the account-deletion URL that
+// Google Play requires in the store listing.
+Route::view('/delete-account', 'delete-account')->name('account.delete');
+
 Route::get('admin/login', [AdminController::class, 'showLogin'])->name('admin.login');
 Route::post('admin/login', [AdminController::class, 'login'])->middleware('throttle:login')->name('admin.login.post');
 Route::post('admin/logout', [AdminController::class, 'logout'])->name('admin.logout');

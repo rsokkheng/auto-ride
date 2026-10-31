@@ -56,6 +56,7 @@ Route::prefix('v1')->group(function () {
     Route::post('auth/register', [AuthController::class, 'register'])->middleware('throttle:login');
     Route::post('auth/login', [AuthController::class, 'login'])->middleware('throttle:login');
     Route::post('auth/logout', [AuthController::class, 'logout']);
+    Route::delete('auth/account', [AuthController::class, 'deleteAccount']);
     Route::post('auth/refresh', [AuthController::class, 'refreshToken']);
     Route::get('auth/me', [AuthController::class, 'me']);
     Route::get('auth/avatar', [AuthController::class, 'getAvatar']);

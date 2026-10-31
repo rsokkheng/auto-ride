@@ -134,6 +134,56 @@ class AuthController extends ApiController
         return $this->success($this->tokenResponse($user));
     }
 
+    /**
+     * DELETE /auth/account
+     * The signed-in user deletes their own account (required by Google Play
+     * for apps with sign-up). Personal data is erased and every session is
+     * revoked; rides, orders and wallet history stay for accounting, but are
+     * no longer linked to a name, email or phone.
+     */
+    public function deleteAccount(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user) return $this->unauthorized();
+
+        if ($user->hasActiveTrip()) {
+            return response()->json([
+                'message' => 'Finish your current trip before deleting your account.',
+            ], 422);
+        }
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($user) {
+            DriverDevice::where('user_id', $user->id)->delete();
+            \Illuminate\Support\Facades\DB::table('biometric_devices')->where('user_id', $user->id)->delete();
+            \Illuminate\Support\Facades\DB::table('linked_accounts')
+                ->where('primary_user_id', $user->id)->orWhere('linked_user_id', $user->id)->delete();
+            $user->savedPlaces()->delete();
+            $user->emergencyContacts()->delete();
+
+            $user->forceFill([
+                'name'                     => 'Deleted user',
+                'email'                    => "deleted-{$user->id}-" . Str::random(8) . '@deleted.invalid',
+                'phone'                    => null,
+                'proxy_phone'              => null,
+                'avatar'                   => null,
+                'password'                 => Str::random(64),
+                'api_token'                => null,
+                'refresh_token'            => null,
+                'token_expires_at'         => null,
+                'refresh_token_expires_at' => null,
+                'fcm_token'                => null,
+                'social_provider'          => null,
+                'social_id'                => null,
+                'available'                => false,
+                'current_latitude'         => null,
+                'current_longitude'        => null,
+                'status_note'              => 'account_deleted',
+            ])->save();
+        });
+
+        return $this->success(['message' => 'Your account has been deleted.']);
+    }
+
     public function logout(Request $request)
     {
         $token = $request->bearerToken() ?? $request->input('api_token');
