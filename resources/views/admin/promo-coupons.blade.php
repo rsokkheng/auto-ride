@@ -4,117 +4,109 @@
 
 @section('content')
 
-@if(session('success'))
-<div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
-    <i class="fas fa-check-circle mr-2"></i>{{ session('success') }}
-    <button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>
-</div>
-@endif
+<x-admin.page-toolbar subtitle="Codes customers enter at checkout to get a discount on rides, deliveries, moving or shop orders.">
+    <button class="btn btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Create Coupon</button>
+</x-admin.page-toolbar>
 
+<x-admin.stat-grid :cols="4">
+    <x-admin.stat-card label="Total Coupons" :value="number_format($stats['total'])" icon="fa-ticket" tone="primary"
+                       :href="route('admin.promo-coupons')" :active="!request('status')" />
+    <x-admin.stat-card label="Active" :value="number_format($stats['active'])" icon="fa-circle-check" tone="success" sub="on and not expired"
+                       :href="route('admin.promo-coupons', ['status' => 'active'])" :active="request('status') === 'active'" />
+    <x-admin.stat-card label="Expired" :value="number_format($stats['expired'])" icon="fa-hourglass-end" tone="muted"
+                       :href="route('admin.promo-coupons', ['status' => 'expired'])" :active="request('status') === 'expired'" />
+    <x-admin.stat-card label="Total Redemptions" :value="number_format($stats['redemptions'])" icon="fa-receipt" tone="violet" sub="times a code was used" />
+</x-admin.stat-grid>
+
+@php $serviceLabels = \App\Models\PromoCode::SERVICE_TYPES; @endphp
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0"><i class="fas fa-ticket-alt text-success mr-2"></i> Promo Coupons</h3>
-        <button class="btn btn-sm btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Create Coupon</button>
+    <div class="card-header">
+        <x-admin.filter-bar :action="route('admin.promo-coupons')" placeholder="Search code or description" :count="$coupons->total()" noun="coupon">
+            <x-admin.filter-select name="status" :options="['active' => 'Active', 'expired' => 'Expired', 'inactive' => 'Turned off']" all="All statuses" />
+            <x-admin.filter-select name="service" :options="$serviceLabels" all="All services" />
+        </x-admin.filter-bar>
     </div>
-    <p class="text-muted px-3 pt-3 mb-0" style="font-size:.85rem;">
-        Codes customers enter at checkout to get a discount on a ride, delivery, or moving order.
-    </p>
-    <div class="card-body p-0">
-        <table class="table table-hover mb-0">
-            <thead class="thead-light">
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap">
+            <thead>
                 <tr>
-                    <th>Code</th>
+                    <th>Coupon</th>
                     <th>Discount</th>
                     <th>Service</th>
                     <th>Usage</th>
-                    <th>Window</th>
+                    <th>Valid</th>
                     <th>Status</th>
-                    <th>Actions</th>
+                    <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse($coupons as $c)
-                <tr>
+            @forelse($coupons as $c)
+                @php
+                    $expired = $c->expires_at && $c->expires_at->isPast();
+                    [$state, $tone] = ! $c->active ? ['Turned off', 'muted'] : ($expired ? ['Expired', 'muted'] : ['Active', 'success']);
+                    $pct = $c->usage_limit ? min(100, round($c->used_count / $c->usage_limit * 100)) : null;
+                @endphp
+                <tr data-coupon="{{ json_encode([
+                        'id'             => $c->id,
+                        ...$c->only(['description_en', 'description_kh', 'description_zh']),
+                        'code'           => $c->code,
+                        'description'    => $c->description,
+                        'type'           => $c->type,
+                        'value'          => $c->value,
+                        'min_order'      => $c->min_order,
+                        'max_discount'   => $c->max_discount,
+                        'usage_limit'    => $c->usage_limit,
+                        'per_user_limit' => $c->per_user_limit,
+                        'service_type'   => $c->service_type,
+                        'active'         => $c->active,
+                        'starts_at'      => optional($c->starts_at)->format('Y-m-d\TH:i'),
+                        'expires_at'     => optional($c->expires_at)->format('Y-m-d\TH:i'),
+                    ]) }}">
                     <td>
-                        <div class="font-weight-bold">{{ $c->code }}</div>
+                        <span class="badge badge-primary" style="font-size:.78rem;letter-spacing:.06em;font-family:ui-monospace,monospace;">{{ $c->code }}</span>
                         @if($c->description)
-                            <small class="text-muted">{{ \Illuminate\Support\Str::limit($c->description, 50) }}</small>
+                            <div class="text-muted text-truncate tw:mt-1 tw:text-xs" style="max-width:240px;" title="{{ $c->description }}">{{ $c->description }}</div>
                         @endif
                     </td>
                     <td>
-                        @if($c->type === 'percent')
-                            <span class="badge badge-info">{{ $c->value }}%</span>
-                            @if($c->max_discount)
-                                <br><small class="text-muted">up to ៛{{ number_format($c->max_discount) }}</small>
-                            @endif
+                        <div style="font-weight:600;color:var(--ink-900);">{{ $c->type === 'percent' ? rtrim(rtrim(number_format($c->value, 2), '0'), '.') . '% off' : number_format($c->value) . ' ៛ off' }}</div>
+                        <div class="text-muted tw:text-xs">
+                            @if($c->type === 'percent' && $c->max_discount) up to {{ number_format($c->max_discount) }} ៛ @endif
+                            @if($c->min_order > 0) {{ $c->type === 'percent' && $c->max_discount ? '·' : '' }} min {{ number_format($c->min_order) }} ៛ @endif
+                        </div>
+                    </td>
+                    <td><span class="badge badge-secondary">{{ $serviceLabels[$c->service_type] ?? ucfirst((string) $c->service_type) }}</span></td>
+                    <td style="min-width:130px;">
+                        <div class="tw:text-xs"><b style="color:var(--ink-900);">{{ number_format($c->used_count) }}</b> / {{ $c->usage_limit ? number_format($c->usage_limit) : '∞' }} used</div>
+                        @if($pct !== null)
+                            <div class="svc-bar" style="height:5px;border-radius:9px;background:var(--ink-100);margin-top:4px;overflow:hidden;">
+                                <span style="display:block;height:100%;width:{{ $pct }}%;background:{{ $pct >= 90 ? 'var(--danger)' : 'var(--primary)' }};"></span>
+                            </div>
+                        @endif
+                        <div class="text-muted tw:text-xs">{{ $c->per_user_limit }} per customer</div>
+                    </td>
+                    <td>
+                        @if($c->starts_at || $c->expires_at)
+                            <div>{{ $c->starts_at?->format('d M Y') ?? 'Now' }} → {{ $c->expires_at?->format('d M Y') ?? 'No end' }}</div>
+                            @if($c->expires_at && ! $expired)<div class="text-muted tw:text-xs">ends {{ $c->expires_at->diffForHumans() }}</div>@endif
                         @else
-                            <span class="badge badge-info">៛{{ number_format($c->value) }}</span>
-                        @endif
-                        @if($c->min_order > 0)
-                            <br><small class="text-muted">min ៛{{ number_format($c->min_order) }}</small>
+                            <span class="text-muted">No limit</span>
                         @endif
                     </td>
-                    <td><span class="badge badge-secondary">{{ \App\Models\PromoCode::SERVICE_TYPES[$c->service_type] ?? ucfirst($c->service_type) }}</span></td>
-                    <td>
-                        <small>
-                            {{ $c->used_count }}{{ $c->usage_limit ? ' / ' . $c->usage_limit : ' / ∞' }} used
-                            <br class="d-none d-md-inline">
-                            <span class="text-muted">{{ $c->per_user_limit }} per user</span>
-                        </small>
-                    </td>
-                    <td>
-                        <small class="text-muted">
-                            @if($c->starts_at || $c->expires_at)
-                                {{ $c->starts_at?->format('d M Y') ?? '—' }} → {{ $c->expires_at?->format('d M Y') ?? '∞' }}
-                            @else
-                                Always
-                            @endif
-                        </small>
-                    </td>
-                    <td>
-                        @if($c->active)
-                            <span class="badge badge-success">Active</span>
-                        @else
-                            <span class="badge badge-secondary">Inactive</span>
-                        @endif
-                    </td>
-                    <td class="text-nowrap">
-                        <button class="btn btn-xs btn-info mr-1"
-                            data-coupon="{{ e(json_encode([
-                                'id'             => $c->id,
-                                ...$c->only(['description_en', 'description_kh', 'description_zh']),
-                                'code'           => $c->code,
-                                'description'    => $c->description,
-                                'type'           => $c->type,
-                                'value'          => $c->value,
-                                'min_order'      => $c->min_order,
-                                'max_discount'   => $c->max_discount,
-                                'usage_limit'    => $c->usage_limit,
-                                'per_user_limit' => $c->per_user_limit,
-                                'service_type'   => $c->service_type,
-                                'active'         => $c->active,
-                                'starts_at'      => optional($c->starts_at)->format('Y-m-d\TH:i'),
-                                'expires_at'     => optional($c->expires_at)->format('Y-m-d\TH:i'),
-                            ])) }}"
-                            onclick="openEdit(this)">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <form method="POST" action="{{ route('admin.promo-coupons.destroy', $c) }}" class="d-inline"
-                              onsubmit="return confirm('Delete coupon {{ $c->code }}? This cannot be undone.')">
-                            @csrf @method('DELETE')
-                            <button class="btn btn-xs btn-danger"><i class="fas fa-trash"></i></button>
-                        </form>
+                    <td><span class="status-pill tone-{{ $tone }}">{{ $state }}</span></td>
+                    <td class="text-center">
+                        <x-admin.row-actions edit="openEdit(this.closest('tr'))"
+                                             :delete="route('admin.promo-coupons.destroy', $c)" :confirm="'Delete coupon ' . $c->code . '? This cannot be undone.'" />
                     </td>
                 </tr>
-                @empty
-                <tr><td colspan="7" class="text-center text-muted py-4">No promo coupons yet.</td></tr>
-                @endforelse
+            @empty
+                <x-admin.empty-row colspan="7" icon="fa-ticket" title="No coupons yet"
+                                   hint="Create a code to give customers a discount." :clear="route('admin.promo-coupons')" />
+            @endforelse
             </tbody>
         </table>
     </div>
-    @if($coupons->hasPages())
-    <div class="card-footer">{{ $coupons->links() }}</div>
-    @endif
+    <x-admin.pagination :paginator="$coupons" />
 </div>
 
 <div class="modal fade" id="couponModal" tabindex="-1">
@@ -265,8 +257,8 @@ function openCreate() {
     $('#couponModal').modal('show');
 }
 
-function openEdit(btn) {
-    const c = JSON.parse(btn.getAttribute('data-coupon'));
+function openEdit(row) {
+    const c = JSON.parse(row.getAttribute('data-coupon'));
     document.getElementById('couponModalTitle').textContent = 'Edit Coupon';
     document.getElementById('couponForm').action = cUpdateBase + c.id;
     document.getElementById('couponMethod').value = 'PUT';

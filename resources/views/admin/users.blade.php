@@ -4,127 +4,103 @@
 
 @section('content')
 
-@include('admin.partials.search-box', [
-    'route' => route('admin.users'),
-    'search' => $search ?? '',
-    'placeholder' => 'Search by name, phone, or email…',
-    'extra' => ['role' => $role ?? ''],
-])
+<x-admin.page-toolbar subtitle="Everyone with an account — passengers, drivers, partners and admins.">
+    <button class="btn btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Create User</button>
+</x-admin.page-toolbar>
+
+@php
+    $roleMeta = [
+        'passenger' => ['Passengers', 'fa-user',          'info'],
+        'driver'    => ['Drivers',    'fa-id-card',       'success'],
+        'partner'   => ['Partners',   'fa-handshake',     'warning'],
+        'admin'     => ['Admins',     'fa-user-shield',   'danger'],
+    ];
+    $rc       = ['admin' => 'danger', 'driver' => 'success', 'partner' => 'warning', 'passenger' => 'info'];
+    $dtColor  = ['owner' => 'success', 'rental' => 'warning', 'employee' => 'info'];
+    $dtLabel  = ['owner' => 'Own vehicle', 'rental' => 'Rental', 'employee' => 'Employee'];
+    $initials = fn (?string $name) => collect(preg_split('/\s+/', trim((string) $name)))->filter()->take(2)
+        ->map(fn ($w) => mb_strtoupper(mb_substr($w, 0, 1)))->join('') ?: '?';
+@endphp
+
+<x-admin.stat-grid :cols="5">
+    <x-admin.stat-card label="All Users" :value="number_format($roleCounts->sum())" icon="fa-users" tone="primary"
+                       :href="route('admin.users', request()->only('search'))" :active="($role ?? '') === ''" />
+    @foreach($roleMeta as $key => [$label, $icon, $tone])
+        <x-admin.stat-card :label="$label" :value="number_format($roleCounts[$key] ?? 0)" :icon="$icon" :tone="$tone"
+                           :href="route('admin.users', array_filter(['role' => $key, 'search' => $search]))" :active="($role ?? '') === $key" />
+    @endforeach
+</x-admin.stat-grid>
 
 <div class="card">
     <div class="card-header">
-        <ul class="nav nav-tabs card-header-tabs">
-            @foreach([
-                ''         => 'All',
-                'admin'    => 'Admin',
-                'driver'   => 'Driver',
-                'passenger'=> 'Passenger',
-                'partner'  => 'Partner',
-            ] as $val => $label)
-            <li class="nav-item">
-                <a class="nav-link {{ ($role ?? '') === $val ? 'active' : '' }}"
-                   href="{{ route('admin.users', ['role' => $val, 'search' => $search]) }}">
-                    {{ $label }}
-                    @if($val !== '' && ($roleCounts[$val] ?? 0) > 0)
-                        <span class="badge badge-secondary ml-1">{{ $roleCounts[$val] }}</span>
-                    @endif
-                </a>
-            </li>
-            @endforeach
-        </ul>
-    </div>
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0">User list</h3>
-        <button class="btn btn-sm btn-primary" onclick="openCreate()">
-            <i class="fas fa-plus mr-1"></i> Create User
-        </button>
+        <x-admin.filter-bar :action="route('admin.users')" placeholder="Search name, phone or email" :count="$users->total()" noun="user">
+            <x-admin.filter-select name="role" :options="collect($roleMeta)->map(fn ($m) => $m[0])->all()" all="All roles" />
+        </x-admin.filter-bar>
     </div>
     <div class="card-body table-responsive p-0">
-        <table class="table table-hover text-nowrap mb-0">
+        <table class="table table-hover text-nowrap">
             <thead>
                 <tr>
-                    <th>#</th>
-                    <th></th>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Driver Type</th>
-                    <th>Company</th>
+                    <th>User</th>
                     <th>Phone</th>
-                    <th>Wallet</th>
-                    <th>Registered</th>
-                    <th>Actions</th>
+                    <th>Role</th>
+                    <th>Company</th>
+                    <th class="text-right">Wallet</th>
+                    <th>Joined</th>
+                    <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse($users as $user)
-                @php
-                    $dtColor = ['owner' => 'success', 'rental' => 'warning', 'employee' => 'info'];
-                    $dtLabel = ['owner' => 'Own Vehicle', 'rental' => 'Rental', 'employee' => 'Employee'];
-                @endphp
-                <tr>
-                    <td>{{ ($users->currentPage() - 1) * $users->perPage() + $loop->iteration }}</td>
+            @forelse($users as $user)
+                <tr data-id="{{ $user->id }}"
+                    data-name="{{ $user->name }}"
+                    data-email="{{ $user->email }}"
+                    data-phone="{{ $user->phone ?? '' }}"
+                    data-role="{{ $user->role ?? 'passenger' }}"
+                    data-driver-type="{{ $user->driver_type ?? '' }}"
+                    data-company-id="{{ $user->company_id ?? '' }}"
+                    data-salary="{{ $user->salary ?? '' }}"
+                    data-commission="{{ $user->commission_rate ?? '' }}"
+                    data-wallet="{{ $user->wallet_balance ?? 0 }}"
+                    data-avatar="{{ $user->avatar_url ?? '' }}">
                     <td>
-                        @if($user->avatar)
-                            <img src="{{ asset('storage/'.$user->avatar) }}" alt=""
-                                 style="width:36px;height:36px;border-radius:50%;object-fit:cover;">
-                        @else
-                            <div style="width:36px;height:36px;border-radius:50%;background:#e2e8f0;display:flex;align-items:center;justify-content:center;">
-                                <i class="fas fa-user" style="color:#94a3b8;font-size:.75rem;"></i>
+                        <div class="person">
+                            @if($user->avatar)
+                                <img src="{{ asset('storage/' . $user->avatar) }}" alt="" class="avatar-chip" style="object-fit:cover;" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'), { className: 'avatar-chip', textContent: {{ Illuminate\Support\Js::from($initials($user->name)) }} }))">
+                            @else
+                                <span class="avatar-chip">{{ $initials($user->name) }}</span>
+                            @endif
+                            <div class="tw:min-w-0">
+                                <div class="person-name" style="max-width:220px;">{{ $user->name }}</div>
+                                <div class="person-sub text-truncate" style="max-width:220px;">{{ $user->email }}</div>
                             </div>
-                        @endif
+                        </div>
                     </td>
-                    <td>{{ $user->name }}</td>
-                    <td>{{ $user->email }}</td>
+                    <td>{{ $user->phone ?? '—' }}</td>
                     <td>
-                        @php
-                            $rc = ['admin'=>'danger','driver'=>'success','partner'=>'warning','passenger'=>'primary'];
-                        @endphp
-                        <span class="badge badge-{{ $rc[$user->role] ?? 'secondary' }}">
-                            {{ ucfirst($user->role ?? 'passenger') }}
-                        </span>
-                    </td>
-                    <td>
+                        <span class="badge badge-{{ $rc[$user->role] ?? 'secondary' }}">{{ ucfirst($user->role ?? 'passenger') }}</span>
                         @if($user->role === 'driver' && $user->driver_type)
-                            <span class="badge badge-{{ $dtColor[$user->driver_type] ?? 'secondary' }}">
-                                {{ $dtLabel[$user->driver_type] ?? ucfirst($user->driver_type) }}
-                            </span>
-                        @else
-                            <span class="text-muted">—</span>
+                            <span class="badge badge-{{ $dtColor[$user->driver_type] ?? 'secondary' }}">{{ $dtLabel[$user->driver_type] ?? ucfirst($user->driver_type) }}</span>
                         @endif
                     </td>
                     <td>{{ $user->company?->name ?? '—' }}</td>
-                    <td>{{ $user->phone ?? '—' }}</td>
-                    <td>{{ number_format($user->wallet_balance ?? 0, 0) }} ៛</td>
-                    <td>{{ $user->created_at->format('Y-m-d') }}</td>
+                    <td class="text-right" style="font-weight:600;color:var(--ink-900);">{{ number_format($user->wallet_balance ?? 0) }} ៛</td>
                     <td>
-                        <button class="btn btn-xs btn-info mr-1"
-                            data-id="{{ $user->id }}"
-                            data-name="{{ $user->name }}"
-                            data-email="{{ $user->email }}"
-                            data-phone="{{ $user->phone ?? '' }}"
-                            data-role="{{ $user->role ?? 'passenger' }}"
-                            data-driver-type="{{ $user->driver_type ?? '' }}"
-                            data-company-id="{{ $user->company_id ?? '' }}"
-                            data-salary="{{ $user->salary ?? '' }}"
-                            data-commission="{{ $user->commission_rate ?? '' }}"
-                            data-wallet="{{ $user->wallet_balance ?? 0 }}"
-                            data-avatar="{{ $user->avatar_url ?? '' }}"
-                            onclick="openEdit(this)"><i class="fas fa-edit"></i></button>
-                        <form method="POST" action="{{ route('admin.users.destroy', $user) }}" class="d-inline"
-                              onsubmit="return confirm({{ Illuminate\Support\Js::from('Delete user ' . $user->name . '?') }})">
-                            @csrf @method('DELETE')
-                            <button class="btn btn-xs btn-danger"><i class="fas fa-trash"></i></button>
-                        </form>
+                        <div>{{ $user->created_at->format('d M Y') }}</div>
+                        <div class="text-muted tw:text-xs">{{ $user->created_at->diffForHumans() }}</div>
+                    </td>
+                    <td class="text-center">
+                        <x-admin.row-actions edit="openEdit(this.closest('tr'))"
+                                             :delete="route('admin.users.destroy', $user)" :confirm="'Delete user ' . $user->name . '?'" />
                     </td>
                 </tr>
-                @empty
-                <tr><td colspan="11" class="text-center text-muted py-4">No users found.</td></tr>
-                @endforelse
+            @empty
+                <x-admin.empty-row colspan="7" icon="fa-users" title="No users yet" :clear="route('admin.users')" />
+            @endforelse
             </tbody>
         </table>
     </div>
-    <div class="card-footer clearfix">{{ $users->links() }}</div>
+    <x-admin.pagination :paginator="$users" />
 </div>
 
 {{-- Modal --}}

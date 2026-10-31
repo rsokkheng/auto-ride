@@ -3,120 +3,118 @@
 @section('page-title', 'Surge Zones')
 
 @section('content')
+
+<x-admin.page-toolbar subtitle="Areas where fares are multiplied during busy times — always on, or on a schedule.">
+    <button class="btn btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Create Surge Zone</button>
+</x-admin.page-toolbar>
+
+<x-admin.stat-grid :cols="4">
+    <x-admin.stat-card label="Surge Zones" :value="number_format($stats['total'])" icon="fa-bolt" tone="primary"
+                       :href="route('admin.surge-zones')" :active="!request('status')" />
+    <x-admin.stat-card label="Active" :value="number_format($stats['active'])" icon="fa-toggle-on" tone="success"
+                       :href="route('admin.surge-zones', ['status' => 'active'])" :active="request('status') === 'active'" />
+    <x-admin.stat-card label="Highest Multiplier" :value="$stats['max_multiplier'] ? '×' . number_format($stats['max_multiplier'], 2) : '—'" icon="fa-arrow-trend-up" tone="danger"
+                       :sub="$stats['max_multiplier'] ? '+' . round(($stats['max_multiplier'] - 1) * 100) . '% on fares' : 'no active zones'" />
+    <x-admin.stat-card label="On a Schedule" :value="number_format($stats['scheduled'])" icon="fa-clock" tone="info" sub="set days and hours" />
+</x-admin.stat-grid>
+
+@php
+    $typeLabels = ['rides' => 'Rides', 'deliveries' => 'All deliveries', 'delivery' => 'Package delivery', 'moving' => 'Moving', 'both' => 'Rides + deliveries'];
+    $typeTones  = ['rides' => 'primary', 'deliveries' => 'warning', 'delivery' => 'info', 'moving' => 'secondary', 'both' => 'success'];
+@endphp
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0">
-            <i class="fas fa-bolt text-warning mr-2"></i> Surge Zone Management
-        </h3>
-        <button class="btn btn-sm btn-primary" onclick="openCreate()">
-            <i class="fas fa-plus mr-1"></i> Create Surge Zone
-        </button>
+    <div class="card-header">
+        <x-admin.filter-bar :action="route('admin.surge-zones')" placeholder="Search zone name or note" :count="$zones->total()" noun="zone">
+            <x-admin.filter-select name="status" :options="['active' => 'Active', 'inactive' => 'Inactive']" all="All statuses" />
+            <x-admin.filter-select name="type" :options="$typeLabels" all="All services" />
+        </x-admin.filter-bar>
     </div>
     <div class="card-body table-responsive p-0">
-        <table class="table table-hover mb-0">
+        <table class="table table-hover text-nowrap">
             <thead>
                 <tr>
-                    <th>#</th>
-                    <th>Name</th>
-                    <th>Type</th>
+                    <th>Zone</th>
+                    <th>Applies to</th>
                     <th>Multiplier</th>
-                    <th>Radius</th>
-                    <th>Center</th>
+                    <th>Area</th>
                     <th>Schedule</th>
                     <th>Status</th>
-                    <th>Actions</th>
+                    <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse($zones as $z)
-                <tr>
-                    <td>{{ ($zones->currentPage() - 1) * $zones->perPage() + $loop->iteration }}</td>
+            @forelse($zones as $z)
+                <tr data-zone="{{ json_encode([
+                        'id'                  => $z->id,
+                        ...$z->only(['name_en', 'name_kh', 'name_zh', 'description_en', 'description_kh', 'description_zh']),
+                        'name'                => $z->name,
+                        'description'         => $z->description ?? '',
+                        'center_lat'          => $z->center_lat,
+                        'center_lng'          => $z->center_lng,
+                        'radius_km'           => $z->radius_km,
+                        'multiplier'          => $z->multiplier,
+                        'type'                => $z->type,
+                        'active'              => $z->active,
+                        'starts_at'           => $z->starts_at ? $z->starts_at->format('Y-m-d\TH:i') : '',
+                        'ends_at'             => $z->ends_at   ? $z->ends_at->format('Y-m-d\TH:i')   : '',
+                        'schedule_days'       => $z->schedule_days ?? [],
+                        'schedule_start_time' => $z->schedule_start_time ? substr($z->schedule_start_time, 0, 5) : '',
+                        'schedule_end_time'   => $z->schedule_end_time   ? substr($z->schedule_end_time, 0, 5)   : '',
+                    ]) }}">
                     <td>
-                        <div class="font-weight-bold">{{ $z->name }}</div>
+                        <div class="text-truncate" style="max-width:240px;font-weight:600;color:var(--ink-900);" title="{{ $z->name }}">{{ $z->name }}</div>
                         @if($z->description)
-                            <small class="text-muted">{{ Str::limit($z->description, 40) }}</small>
+                            <div class="text-muted text-truncate tw:text-xs" style="max-width:240px;" title="{{ $z->description }}">{{ $z->description }}</div>
                         @endif
                     </td>
+                    <td><span class="badge badge-{{ $typeTones[$z->type] ?? 'secondary' }}">{{ $typeLabels[$z->type] ?? ucfirst($z->type) }}</span></td>
                     <td>
-                        @php
-                            $tc = ['rides'=>'primary','deliveries'=>'warning','delivery'=>'info','moving'=>'purple','both'=>'success'];
-                            $tl = ['rides'=>'Rides','deliveries'=>'All Deliveries','delivery'=>'Package Delivery','moving'=>'Moving','both'=>'Rides + All'];
-                        @endphp
-                        <span class="badge badge-{{ $tc[$z->type] ?? 'secondary' }}" style="{{ $z->type === 'moving' ? 'background:#6f42c1' : '' }}">
-                            {{ $tl[$z->type] ?? ucfirst($z->type) }}
-                        </span>
+                        <span class="badge badge-danger" style="font-size:.8rem;">×{{ number_format($z->multiplier, 2) }}</span>
+                        <span class="text-muted tw:text-xs ml-1">+{{ round(($z->multiplier - 1) * 100) }}%</span>
                     </td>
                     <td>
-                        <span class="badge badge-danger" style="font-size:.85rem;">
-                            x{{ number_format($z->multiplier, 2) }}
-                        </span>
-                        <small class="text-muted ml-1">+{{ round(($z->multiplier - 1) * 100) }}%</small>
+                        <div>{{ rtrim(rtrim(number_format($z->radius_km, 2), '0'), '.') }} km radius</div>
+                        <a class="text-muted tw:text-xs" target="_blank" rel="noopener" href="https://www.google.com/maps?q={{ $z->center_lat }},{{ $z->center_lng }}">
+                            {{ number_format($z->center_lat, 4) }}, {{ number_format($z->center_lng, 4) }} <i class="fas fa-arrow-up-right-from-square" style="font-size:.6rem;"></i>
+                        </a>
                     </td>
-                    <td>{{ $z->radius_km }} km</td>
-                    <td><code style="font-size:.75rem;">{{ number_format($z->center_lat,5) }}, {{ number_format($z->center_lng,5) }}</code></td>
                     <td>
-                        <div style="font-size:.8rem;">
-                            @if($z->schedule_label === 'Always')
-                                <span class="text-muted">Always on</span>
-                            @else
-                                <i class="fas fa-clock text-info mr-1"></i>{{ $z->schedule_label }}
-                            @endif
-                        </div>
+                        @if($z->schedule_label === 'Always')
+                            <span class="text-muted">Always on</span>
+                        @else
+                            <i class="fas fa-clock mr-1" style="color:var(--info);"></i>{{ $z->schedule_label }}
+                        @endif
                     </td>
                     <td>
                         @if($z->isActiveNow())
-                            <span class="badge badge-success"><i class="fas fa-circle mr-1" style="font-size:.45rem;"></i> Active now</span>
+                            <span class="status-pill tone-success">Surging now</span>
                         @elseif($z->active)
-                            <span class="badge badge-warning">Scheduled</span>
+                            <span class="status-pill tone-warning">Scheduled</span>
                         @else
-                            <span class="badge badge-secondary">Inactive</span>
+                            <span class="status-pill tone-muted">Inactive</span>
                         @endif
                     </td>
-                    <td class="text-nowrap">
-                        <form method="POST" action="{{ route('admin.surge-zones.toggle', $z) }}" class="d-inline">
-                            @csrf
-                            <button class="btn btn-xs {{ $z->active ? 'btn-warning' : 'btn-success' }} mr-1"
-                                    title="{{ $z->active ? 'Deactivate' : 'Activate' }}">
-                                <i class="fas {{ $z->active ? 'fa-pause' : 'fa-play' }}"></i>
-                            </button>
-                        </form>
-
-                        <button class="btn btn-xs btn-info mr-1"
-                            data-zone="{{ e(json_encode([
-                                'id'                  => $z->id,
-                                ...$z->only(['name_en', 'name_kh', 'name_zh', 'description_en', 'description_kh', 'description_zh']),
-                                'name'                => $z->name,
-                                'description'         => $z->description ?? '',
-                                'center_lat'          => $z->center_lat,
-                                'center_lng'          => $z->center_lng,
-                                'radius_km'           => $z->radius_km,
-                                'multiplier'          => $z->multiplier,
-                                'type'                => $z->type,
-                                'active'              => $z->active,
-                                'starts_at'           => $z->starts_at ? $z->starts_at->format('Y-m-d\TH:i') : '',
-                                'ends_at'             => $z->ends_at   ? $z->ends_at->format('Y-m-d\TH:i')   : '',
-                                'schedule_days'       => $z->schedule_days ?? [],
-                                'schedule_start_time' => $z->schedule_start_time ? substr($z->schedule_start_time,0,5) : '',
-                                'schedule_end_time'   => $z->schedule_end_time   ? substr($z->schedule_end_time,0,5)   : '',
-                            ])) }}"
-                            onclick="openEdit(this)">
-                            <i class="fas fa-edit"></i>
-                        </button>
-
-                        <form method="POST" action="{{ route('admin.surge-zones.destroy', $z) }}" class="d-inline"
-                              onsubmit="return confirm({{ Illuminate\Support\Js::from('Delete "' . $z->name . '"?') }})">
-                            @csrf @method('DELETE')
-                            <button class="btn btn-xs btn-danger"><i class="fas fa-trash"></i></button>
-                        </form>
+                    <td class="text-center">
+                        <x-admin.row-actions edit="openEdit(this.closest('tr'))"
+                                             :delete="route('admin.surge-zones.destroy', $z)" :confirm="'Delete surge zone “' . $z->name . '”?'">
+                            <form method="POST" action="{{ route('admin.surge-zones.toggle', $z) }}" class="m-0">
+                                @csrf
+                                <button class="btn btn-sm btn-icon {{ $z->active ? 'btn-outline-warning' : 'btn-outline-success' }}"
+                                        title="{{ $z->active ? 'Turn off' : 'Turn on' }}" data-toggle="tooltip">
+                                    <i class="fas {{ $z->active ? 'fa-pause' : 'fa-play' }}"></i>
+                                </button>
+                            </form>
+                        </x-admin.row-actions>
                     </td>
                 </tr>
-                @empty
-                <tr><td colspan="9" class="text-center text-muted py-4">No surge zones yet.</td></tr>
-                @endforelse
+            @empty
+                <x-admin.empty-row colspan="7" icon="fa-bolt" title="No surge zones yet"
+                                   hint="Create a zone to raise fares in busy areas." :clear="route('admin.surge-zones')" />
+            @endforelse
             </tbody>
         </table>
     </div>
-    <div class="card-footer clearfix">{{ $zones->links() }}</div>
+    <x-admin.pagination :paginator="$zones" />
 </div>
 
 {{-- Create / Edit Modal --}}
@@ -308,8 +306,8 @@ function openCreate() {
     $('#formModal').modal('show');
 }
 
-function openEdit(btn) {
-    const z = JSON.parse(btn.getAttribute('data-zone'));
+function openEdit(row) {
+    const z = JSON.parse(row.getAttribute('data-zone'));
 
     document.getElementById('modalTitle').textContent   = 'Edit Surge Zone #' + z.id;
     document.getElementById('surgeForm').action         = updateBase + z.id;

@@ -4,94 +4,88 @@
 
 @section('content')
 
-@if(session('success'))
-<div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
-    <i class="fas fa-check-circle mr-2"></i>{{ session('success') }}
-    <button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>
-</div>
-@endif
+<x-admin.page-toolbar subtitle="Announcements pushed to app users. Saving an active event sends the push straight away, in each user's language.">
+    <button class="btn btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Create Event</button>
+</x-admin.page-toolbar>
 
+<x-admin.stat-grid :cols="4">
+    <x-admin.stat-card label="Total Events" :value="number_format($stats['total'])" icon="fa-bullhorn" tone="primary"
+                       :href="route('admin.promo-events')" :active="!request('status')" />
+    <x-admin.stat-card label="Active" :value="number_format($stats['active'])" icon="fa-toggle-on" tone="success"
+                       :href="route('admin.promo-events', ['status' => 'active'])" :active="request('status') === 'active'" />
+    <x-admin.stat-card label="Pushed" :value="number_format($stats['sent'])" icon="fa-paper-plane" tone="info" sub="sent at least once"
+                       :href="route('admin.promo-events', ['status' => 'sent'])" :active="request('status') === 'sent'" />
+    <x-admin.stat-card label="Pushed This Month" :value="number_format($stats['this_month'])" icon="fa-calendar-check" tone="violet"
+                       :sub="now()->format('F Y')" />
+</x-admin.stat-grid>
+
+@php $audiences = ['all' => 'Everyone', 'passenger' => 'Passengers', 'driver' => 'Drivers']; @endphp
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0"><i class="fas fa-bullhorn text-warning mr-2"></i> Promo Events</h3>
-        <button class="btn btn-sm btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Create Event</button>
+    <div class="card-header">
+        <x-admin.filter-bar :action="route('admin.promo-events')" placeholder="Search title or message" :count="$events->total()" noun="event">
+            <x-admin.filter-select name="status" :options="['active' => 'Active', 'inactive' => 'Inactive', 'sent' => 'Pushed', 'unsent' => 'Not pushed yet']" all="All statuses" />
+            <x-admin.filter-select name="audience" :options="$audiences" all="All audiences" />
+        </x-admin.filter-bar>
     </div>
-    <p class="text-muted px-3 pt-3 mb-0" style="font-size:.85rem;">
-        Creating an active event immediately pushes a notification to the target audience's mobile app.
-    </p>
-    <div class="card-body p-0">
-        <table class="table table-hover mb-0">
-            <thead class="thead-light">
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap">
+            <thead>
                 <tr>
-                    <th>Image</th>
-                    <th>Title</th>
-                    <th>Body</th>
-                    <th>Target</th>
+                    <th>Event</th>
+                    <th>Audience</th>
                     <th>Status</th>
                     <th>Pushed</th>
-                    <th>Actions</th>
+                    <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse($events as $e)
-                <tr>
+            @forelse($events as $e)
+                @php $aTone = ['all' => 'primary', 'passenger' => 'info', 'driver' => 'warning'][$e->target_role] ?? 'secondary'; @endphp
+                <tr data-event="{{ json_encode([
+                        'id'          => $e->id,
+                        ...$e->only(['title_en', 'title_kh', 'title_zh', 'body_en', 'body_kh', 'body_zh']),
+                        'title'       => $e->title,
+                        'body'        => $e->body,
+                        'target_role' => $e->target_role,
+                        'active'      => $e->active,
+                        'image_url'   => $e->image_url,
+                    ]) }}">
                     <td>
-                        @if($e->image)
-                        <img src="{{ $e->image_url }}" style="height:44px;width:70px;object-fit:cover;border-radius:4px;">
-                        @else
-                        <span class="text-muted">—</span>
-                        @endif
+                        <div class="tw:flex tw:items-center tw:gap-3">
+                            @if($e->image)
+                                <img src="{{ $e->image_url }}" alt="" loading="lazy" class="thumb" style="width:64px;"
+                                     onerror="this.outerHTML='<span class=&quot;thumb-placeholder&quot; style=&quot;width:64px&quot;><i class=&quot;fas fa-bullhorn&quot;></i></span>'">
+                            @else
+                                <span class="thumb-placeholder" style="width:64px;"><i class="fas fa-bullhorn"></i></span>
+                            @endif
+                            <div class="tw:min-w-0">
+                                <div class="text-truncate" style="max-width:320px;font-weight:600;color:var(--ink-900);" title="{{ $e->title }}">{{ $e->title }}</div>
+                                <div class="text-muted text-truncate tw:text-xs" style="max-width:320px;" title="{{ $e->body }}">{{ $e->body }}</div>
+                            </div>
+                        </div>
                     </td>
-                    <td class="font-weight-bold">{{ $e->title }}</td>
-                    <td><small>{{ \Illuminate\Support\Str::limit($e->body, 60) }}</small></td>
-                    <td>
-                        @php $tc = ['all'=>'success','passenger'=>'primary','driver'=>'warning']; @endphp
-                        <span class="badge badge-{{ $tc[$e->target_role] ?? 'secondary' }}">{{ ucfirst($e->target_role) }}</span>
-                    </td>
-                    <td>
-                        @if($e->active)
-                            <span class="badge badge-success">Active</span>
-                        @else
-                            <span class="badge badge-secondary">Inactive</span>
-                        @endif
-                    </td>
+                    <td><span class="badge badge-{{ $aTone }}">{{ $audiences[$e->target_role] ?? ucfirst($e->target_role) }}</span></td>
+                    <td><span class="status-pill tone-{{ $e->active ? 'success' : 'muted' }}">{{ $e->active ? 'Active' : 'Inactive' }}</span></td>
                     <td>
                         @if($e->sent_at)
-                            <small class="text-muted" title="{{ $e->sent_at }}"><i class="fas fa-paper-plane text-success mr-1"></i>{{ $e->sent_at->diffForHumans() }}</small>
+                            <div title="{{ $e->sent_at->format('d M Y H:i') }}"><i class="fas fa-paper-plane mr-1" style="color:var(--success);"></i>{{ $e->sent_at->diffForHumans() }}</div>
                         @else
-                            <small class="text-muted">Not sent</small>
+                            <span class="text-muted">Not pushed yet</span>
                         @endif
                     </td>
-                    <td class="text-nowrap">
-                        <button class="btn btn-xs btn-info mr-1"
-                            data-event="{{ e(json_encode([
-                                'id'          => $e->id,
-                                ...$e->only(['title_en', 'title_kh', 'title_zh', 'body_en', 'body_kh', 'body_zh']),
-                                'title'       => $e->title,
-                                'body'        => $e->body,
-                                'target_role' => $e->target_role,
-                                'active'      => $e->active,
-                                'image_url'   => $e->image_url,
-                            ])) }}"
-                            onclick="openEdit(this)">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <form method="POST" action="{{ route('admin.promo-events.destroy', $e) }}" class="d-inline"
-                              onsubmit="return confirm('Delete this event?')">
-                            @csrf @method('DELETE')
-                            <button class="btn btn-xs btn-danger"><i class="fas fa-trash"></i></button>
-                        </form>
+                    <td class="text-center">
+                        <x-admin.row-actions edit="openEdit(this.closest('tr'))"
+                                             :delete="route('admin.promo-events.destroy', $e)" :confirm="'Delete event “' . $e->title . '”?'" />
                     </td>
                 </tr>
-                @empty
-                <tr><td colspan="7" class="text-center text-muted py-4">No promo events yet.</td></tr>
-                @endforelse
+            @empty
+                <x-admin.empty-row colspan="5" icon="fa-bullhorn" title="No promo events yet"
+                                   hint="Create one to announce an offer to your users." :clear="route('admin.promo-events')" />
+            @endforelse
             </tbody>
         </table>
     </div>
-    @if($events->hasPages())
-    <div class="card-footer">{{ $events->links() }}</div>
-    @endif
+    <x-admin.pagination :paginator="$events" />
 </div>
 
 <div class="modal fade" id="eventModal" tabindex="-1">
@@ -177,8 +171,8 @@ function openCreate() {
     $('#eventModal').modal('show');
 }
 
-function openEdit(btn) {
-    const ev = JSON.parse(btn.getAttribute('data-event'));
+function openEdit(row) {
+    const ev = JSON.parse(row.getAttribute('data-event'));
     document.getElementById('eventModalTitle').textContent = 'Edit Event';
     document.getElementById('eventForm').action = eUpdateBase + ev.id;
     document.getElementById('eventMethod').value = 'PUT';

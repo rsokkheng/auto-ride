@@ -4,369 +4,193 @@
 
 @section('content')
 
-{{-- ── Tabs ─────────────────────────────────────────────────────────────── --}}
-<ul class="nav nav-tabs mb-3" style="border-bottom:2px solid #e2e8f0;">
-    @foreach([
-        ['key'=>'all',      'label'=>'All Orders',  'icon'=>'fa-layer-group',  'color'=>'#64748b'],
-        ['key'=>'delivery', 'label'=>'Delivery',     'icon'=>'fa-box',          'color'=>'#3b82f6'],
-        ['key'=>'moving',   'label'=>'Moving',       'icon'=>'fa-truck-moving', 'color'=>'#f59e0b'],
-    ] as $tab)
-    <li class="nav-item">
-        <a href="{{ route('admin.deliveries', ['type' => $tab['key']]) }}"
-           class="nav-link d-flex align-items-center {{ $activeType === $tab['key'] ? 'active font-weight-bold' : '' }}"
-           style="{{ $activeType === $tab['key'] ? 'color:'.$tab['color'].';border-bottom:3px solid '.$tab['color'].';' : 'color:#64748b;' }}">
-            <i class="fas {{ $tab['icon'] }} mr-1" style="font-size:.8rem;"></i>
-            {{ $tab['label'] }}
-            <span class="badge badge-secondary ml-1"
-                  style="{{ $activeType === $tab['key'] ? 'background:'.$tab['color'].';' : '' }}">
-                {{ $counts[$tab['key']] }}
-            </span>
-        </a>
-    </li>
-    @endforeach
-</ul>
+<x-admin.page-toolbar subtitle="Package deliveries and moving jobs, including orders sent in by partner businesses.">
+    <button class="btn btn-secondary" onclick="openCreate('moving')"><i class="fas fa-truck-moving mr-1"></i> New Moving Order</button>
+    <button class="btn btn-primary" onclick="openCreate('delivery')"><i class="fas fa-plus mr-1"></i> New Delivery</button>
+</x-admin.page-toolbar>
 
-{{-- ── Filter Bar ───────────────────────────────────────────────────────── --}}
-<div class="card mb-3">
-    <div class="card-body py-2">
-        <form method="GET" action="{{ route('admin.deliveries') }}" class="form-inline flex-wrap" style="gap:6px">
-            <input type="hidden" name="type" value="{{ $activeType }}">
+<x-admin.stat-grid :cols="5">
+    <x-admin.stat-card label="All Orders" :value="number_format($counts['all'])" icon="fa-layer-group" tone="primary"
+                       :href="route('admin.deliveries')" :active="$activeType === 'all' && ! request('unassigned')" />
+    <x-admin.stat-card label="Deliveries" :value="number_format($counts['delivery'])" icon="fa-box" tone="info"
+                       :href="route('admin.deliveries', ['type' => 'delivery'])" :active="$activeType === 'delivery'" />
+    <x-admin.stat-card label="Moving Jobs" :value="number_format($counts['moving'])" icon="fa-truck-moving" tone="warning"
+                       :href="route('admin.deliveries', ['type' => 'moving'])" :active="$activeType === 'moving'" />
+    <x-admin.stat-card label="In Progress" :value="number_format($counts['active'])" icon="fa-route" tone="violet" sub="not finished yet" />
+    <x-admin.stat-card label="Need a Driver" :value="number_format($counts['unassigned'])" icon="fa-user-plus" tone="danger"
+                       :href="route('admin.deliveries', ['unassigned' => 1])" :active="request()->boolean('unassigned')" />
+</x-admin.stat-grid>
 
-            <input type="text" name="search" class="form-control form-control-sm"
-                   placeholder="Recipient name / phone / ref…"
-                   value="{{ $search ?? '' }}" style="min-width:200px">
-
-            <select name="status" class="form-control form-control-sm">
-                <option value="">All Statuses</option>
-                @foreach([
-                    'created','assigned','accepted','picked_up','in_transit','delivered','completed',
-                    'requested','pending','in_progress','cancelled'
-                ] as $s)
-                    <option value="{{ $s }}" {{ ($activeStatus ?? '') == $s ? 'selected' : '' }}>
-                        {{ ucfirst(str_replace('_',' ',$s)) }}
-                    </option>
-                @endforeach
-            </select>
-
-            @if(count($partners) > 0)
-            <select name="partner_id" class="form-control form-control-sm">
-                <option value="">All Partners</option>
-                @foreach($partners as $p)
-                    <option value="{{ $p->id }}" {{ ($activePartner ?? '') == $p->id ? 'selected' : '' }}>
-                        {{ $p->name }}
-                    </option>
-                @endforeach
-            </select>
-            @endif
-
-            <button class="btn btn-sm btn-primary"><i class="fas fa-search mr-1"></i>Search</button>
-            <a href="{{ route('admin.deliveries', ['type' => $activeType]) }}" class="btn btn-sm btn-secondary">Reset</a>
-        </form>
-    </div>
-</div>
-
-{{-- ── Table ────────────────────────────────────────────────────────────── --}}
+@php
+    $statusTone = [
+        'requested' => 'muted', 'pending' => 'warning', 'accepted' => 'info', 'in_progress' => 'primary', 'completed' => 'success', 'cancelled' => 'danger',
+        'created' => 'muted', 'assigned' => 'warning', 'picked_up' => 'primary', 'in_transit' => 'violet', 'delivered' => 'success',
+    ];
+    $methodLabels = ['cash' => 'Cash', 'wallet' => 'Wallet', 'aba' => 'ABA', 'wing' => 'Wing', 'other_online' => 'Online'];
+    $payTone      = ['unpaid' => 'secondary', 'pending' => 'warning', 'paid' => 'success', 'refunded' => 'danger'];
+    $sizeTone     = ['small' => 'success', 'medium' => 'warning', 'large' => 'danger', 'extra_large' => 'dark'];
+    $statuses     = ['created','assigned','accepted','picked_up','in_transit','delivered','completed','requested','pending','in_progress','cancelled'];
+@endphp
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0">
-            @if($activeType === 'moving')
-                <i class="fas fa-truck-moving text-warning mr-2"></i>Moving Orders
-            @elseif($activeType === 'delivery')
-                <i class="fas fa-box text-primary mr-2"></i>Delivery Orders
-            @else
-                <i class="fas fa-layer-group text-muted mr-2"></i>All Orders
+    <div class="card-header">
+        <x-admin.filter-bar :action="route('admin.deliveries')" placeholder="Recipient, sender, phone or partner ref" :count="$deliveries->total()" noun="order">
+            <input type="hidden" name="type" value="{{ $activeType }}">
+            <x-admin.filter-select name="status" :options="collect($statuses)->mapWithKeys(fn ($s) => [$s => ucfirst(str_replace('_', ' ', $s))])->all()" all="All statuses" />
+            @if(count($partners) > 0)
+                <x-admin.filter-select name="partner_id" :options="$partners->pluck('name', 'id')->all()" all="All partners" />
             @endif
-            <span class="badge badge-secondary ml-1">{{ $deliveries->total() }}</span>
-        </h3>
-        <button class="btn btn-sm btn-primary"
-                onclick="openCreate('{{ $activeType === 'all' ? 'delivery' : $activeType }}')">
-            <i class="fas fa-plus mr-1"></i>
-            Create {{ $activeType === 'moving' ? 'Moving Order' : 'Delivery' }}
-        </button>
+        </x-admin.filter-bar>
     </div>
 
     <div class="card-body table-responsive p-0">
-        <table class="table table-hover text-nowrap mb-0">
+        <table class="table table-hover text-nowrap">
             <thead>
                 <tr>
-                    <th>#</th>
-                    <th>Type</th>
-                    <th>Partner</th>
-                    <th>Sender</th>
-                    <th>Recipient</th>
-                    <th>Phone</th>
-                    <th>Details</th>
+                    <th>Order</th>
+                    <th>Sender → Recipient</th>
+                    <th>Package</th>
                     <th>Driver</th>
-                    <th>Address</th>
                     <th>Status</th>
-                    <th>Delivery Fee</th>
-                    <th>Pkg Amount</th>
-                    <th>Net Driver</th>
-                    <th>Paid By</th>
-                    <th>Method</th>
-                    <th>Pay Status</th>
-                    <th>Scheduled</th>
-                    <th>Assigned</th>
-                    <th>Date</th>
-                    <th>Actions</th>
+                    <th class="text-right">Money</th>
+                    <th>Payment</th>
+                    <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse($deliveries as $d)
+            @forelse($deliveries as $d)
                 @php
-                    $isMoving = ($d->service_type ?? 'delivery') === 'moving';
-                    $sc = [
-                        // Regular delivery/moving statuses
-                        'requested'   => 'secondary',
-                        'pending'     => 'warning',
-                        'accepted'    => 'info',
-                        'in_progress' => 'primary',
-                        'completed'   => 'success',
-                        'cancelled'   => 'danger',
-                        // Partner delivery statuses
-                        'created'     => 'light',
-                        'assigned'    => 'warning',
-                        'picked_up'   => 'primary',
-                        'in_transit'  => 'dark',
-                        'delivered'   => 'success',
-                    ];
-                    $canComplete = !in_array($d->status, ['completed', 'cancelled']);
-                    $comm = $d->driver?->commission_rate ?? $d->driver?->company?->platform_commission_rate ?? ($commissionPct ?? 20);
-                    $netDriver = $d->fee ? max(0, round($d->fee * (1 - $comm / 100))) : null;
+                    $isMoving    = ($d->service_type ?? 'delivery') === 'moving';
+                    $canComplete = ! in_array($d->status, ['completed', 'cancelled']);
+                    $comm        = $d->driver?->commission_rate ?? $d->driver?->company?->platform_commission_rate ?? ($commissionPct ?? 20);
+                    $netDriver   = $d->fee ? max(0, round($d->fee * (1 - $comm / 100))) : null;
                 @endphp
-                <tr>
-                    <td>{{ ($deliveries->currentPage() - 1) * $deliveries->perPage() + $loop->iteration }}</td>
+                <tr data-delivery="{{ json_encode([
+                        'id'                => $d->id,
+                        'service_type'      => $d->service_type ?? 'delivery',
+                        'sender_id'         => $d->sender_id,
+                        'sender_name'       => $d->sender_name ?? '',
+                        'recipient_name'    => $d->recipient_name ?? '',
+                        'recipient_phone'   => $d->recipient_phone ?? '',
+                        'package_size'      => $d->package_size ?? 'small',
+                        'driver_id'         => $d->driver_id,
+                        'pickup_address'    => $d->pickup_address,
+                        'dropoff_address'   => $d->dropoff_address,
+                        'status'            => $d->status,
+                        'fee'               => $d->fee ?? '',
+                        'package_amount'    => $d->package_amount ?? '',
+                        'payment_by'        => $d->payment_by ?? 'sender',
+                        'payment_method'    => $d->payment_method ?? 'cash',
+                        'scheduled_at'      => $d->scheduled_at?->format('Y-m-d\TH:i') ?? '',
+                        'package_details'   => $d->package_details ?? '',
+                        'notes'             => $d->notes ?? '',
+                        'floor_pickup'      => $d->floor_pickup ?? 0,
+                        'floor_dropoff'     => $d->floor_dropoff ?? 0,
+                        'has_elevator'      => (bool) $d->has_elevator,
+                        'needs_stairs_carry'=> (bool) $d->needs_stairs_carry,
+                        'heavy_items'       => (bool) $d->heavy_items,
+                        'requires_helpers'  => $d->requires_helpers ?? 0,
+                        'helper_type'       => $d->helper_type ?? 'normal_carry',
+                        'helper_fee'        => $d->helper_fee ?? '',
+                        'floor_fee'         => $d->floor_fee ?? '',
+                        'payment_model'     => $d->payment_model ?? 'customer_pays',
+                        'split_pct_customer'=> $d->split_pct_customer ?? 50,
+                        'partner_reference' => $d->partner_reference ?? '',
+                    ]) }}">
+                    <td>
+                        <div class="tw:flex tw:items-center tw:gap-3">
+                            <span class="stat-icon tone-{{ $isMoving ? 'warning' : 'info' }}" style="width:36px;height:36px;font-size:.85rem;">
+                                <i class="fas {{ $isMoving ? 'fa-truck-moving' : 'fa-box' }}"></i>
+                            </span>
+                            <div>
+                                <a href="{{ route('admin.deliveries.show', $d->id) }}" style="font-weight:600;">#{{ $d->id }}</a>
+                                <span class="text-muted tw:text-xs">{{ $isMoving ? 'Moving' : 'Delivery' }}</span>
+                                <div class="text-muted tw:text-xs">
+                                    {{ $d->created_at->format('d M Y') }}
+                                    @if($d->scheduled_at) · <i class="far fa-calendar"></i> {{ $d->scheduled_at->format('d M H:i') }}@endif
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <div>{{ $d->sender_name ?? $d->sender?->name ?? '—' }} <i class="fas fa-arrow-right mx-1 text-muted" style="font-size:.6rem;"></i> {{ $d->recipient_name ?? '—' }}</div>
+                        <div class="text-muted tw:text-xs">
+                            {{ $d->recipient_phone ?? '' }}
+                            @if($d->partner) · <i class="fas fa-handshake"></i> {{ $d->partner->name }}@endif
+                            @if($d->partner_reference) · ref {{ $d->partner_reference }}@endif
+                        </div>
+                        <button type="button" class="btn btn-link p-0 tw:text-xs"
+                            data-pickup-address="{{ $d->pickup_address }}" data-pickup-lat="{{ $d->pickup_lat }}" data-pickup-lng="{{ $d->pickup_lng }}"
+                            data-sender-name="{{ $d->sender_name ?? $d->sender?->name }}" data-sender-phone="{{ $d->sender_phone ?? $d->sender?->phone }}"
+                            data-dropoff-address="{{ $d->dropoff_address }}" data-dropoff-lat="{{ $d->dropoff_lat }}" data-dropoff-lng="{{ $d->dropoff_lng }}"
+                            data-recipient-name="{{ $d->recipient_name }}" data-recipient-phone="{{ $d->recipient_phone }}"
+                            data-tracking-url="{{ $d->tracking_url }}"
+                            data-completed-at="{{ $d->status === 'completed' ? $d->updated_at?->format('Y-m-d H:i') : '' }}"
+                            onclick="openAddress(this)">
+                            <i class="fas fa-map-location-dot mr-1"></i>View addresses
+                        </button>
+                    </td>
                     <td>
                         @if($isMoving)
-                            <span class="badge" style="background:#fef3c7;color:#d97706;border:1px solid #fde68a;">
-                                <i class="fas fa-truck-moving mr-1"></i>Moving
-                            </span>
+                            <div class="tw:text-xs"><i class="fas fa-building mr-1" style="color:var(--warning);"></i>Floor {{ $d->floor_pickup ?? 0 }} → {{ $d->floor_dropoff ?? 0 }}
+                                <span class="badge badge-{{ $d->has_elevator ? 'success' : 'secondary' }} ml-1">{{ $d->has_elevator ? 'Lift' : 'Stairs' }}</span></div>
+                            <div class="text-muted tw:text-xs"><i class="fas fa-users mr-1"></i>{{ $d->requires_helpers ?? 0 }} {{ Str::plural('helper', $d->requires_helpers ?? 0) }}
+                                @if($d->heavy_items)<span class="badge badge-danger ml-1">Heavy</span>@endif</div>
                         @else
-                            <span class="badge badge-light" style="border:1px solid #e2e8f0;">
-                                <i class="fas fa-box mr-1 text-primary"></i>Delivery
-                            </span>
-                        @endif
-                    </td>
-                    <td>
-                        @if($d->partner)
-                            <div class="font-weight-bold small">{{ $d->partner->name }}</div>
-                            <small class="text-muted">{{ $d->partner->phone }}</small>
-                        @else
-                            <span class="text-muted small">—</span>
-                        @endif
-                    </td>
-                    <td>
-                        <div>{{ $d->sender_name ?? $d->sender?->name ?? '—' }}</div>
-                        <small class="text-muted">{{ $d->sender?->email }}</small>
-                    </td>
-                    <td>{{ $d->recipient_name ?? '—' }}</td>
-                    <td>{{ $d->recipient_phone ?? '—' }}</td>
-                    <td>
-                        @if($isMoving)
-                            @php $maxFloor = max($d->floor_pickup ?? 0, $d->floor_dropoff ?? 0); @endphp
-                            <small>
-                                <i class="fas fa-building text-warning mr-1"></i>
-                                F{{ $d->floor_pickup ?? 0 }} → F{{ $d->floor_dropoff ?? 0 }}
-                                @if($d->has_elevator)
-                                    <span class="badge badge-success ml-1" style="font-size:.65rem;">Lift</span>
-                                @else
-                                    <span class="badge badge-secondary ml-1" style="font-size:.65rem;">Stairs</span>
-                                @endif
-                            </small><br>
-                            <small>
-                                <i class="fas fa-users text-muted mr-1"></i>{{ $d->requires_helpers ?? 0 }} helper(s)
-                                @if($d->heavy_items)
-                                    &nbsp;<span class="badge badge-danger" style="font-size:.65rem;">Heavy</span>
-                                @endif
-                            </small>
-                        @else
-                            @php $pc = ['small'=>'success','medium'=>'warning','large'=>'danger','extra_large'=>'dark']; @endphp
-                            <span class="badge badge-{{ $pc[$d->package_size] ?? 'secondary' }}">
-                                {{ ucfirst(str_replace('_', ' ', $d->package_size ?? '—')) }}
-                            </span>
+                            <span class="badge badge-{{ $sizeTone[$d->package_size] ?? 'secondary' }}">{{ ucfirst(str_replace('_', ' ', $d->package_size ?? '—')) }}</span>
                         @endif
                     </td>
                     <td>
                         @if($d->driver)
-                            <div><i class="fas fa-user-check text-success mr-1"></i>{{ $d->driver->name }}</div>
-                            @if($d->driver->phone)
-                                <small class="text-muted">{{ $d->driver->phone }}</small>
-                            @endif
+                            <div>{{ $d->driver->name }}</div>
+                            <div class="text-muted tw:text-xs">{{ $d->driver->phone }}@if($d->assigned_at) · {{ $d->assigned_at->format('d M H:i') }}@endif</div>
                         @else
-                            <span class="text-muted mr-1">Unassigned</span>
-                            <button class="btn btn-xs btn-success"
-                                data-id="{{ $d->id }}"
-                                data-driver=""
-                                data-label="#{{ $d->id }} — {{ Str::limit($d->pickup_address, 22) }}"
-                                onclick="openAssign(this)">
+                            <button class="btn btn-sm btn-outline-success" data-id="{{ $d->id }}" data-driver=""
+                                    data-label="#{{ $d->id }} — {{ Str::limit($d->pickup_address, 22) }}" onclick="openAssign(this)">
                                 <i class="fas fa-user-plus mr-1"></i>Assign
                             </button>
                         @endif
                     </td>
-                    <td>
-                        <button type="button" class="btn btn-xs btn-outline-primary"
-                            data-pickup-address="{{ $d->pickup_address }}"
-                            data-pickup-lat="{{ $d->pickup_lat }}"
-                            data-pickup-lng="{{ $d->pickup_lng }}"
-                            data-sender-name="{{ $d->sender_name ?? $d->sender?->name }}"
-                            data-sender-phone="{{ $d->sender_phone ?? $d->sender?->phone }}"
-                            data-dropoff-address="{{ $d->dropoff_address }}"
-                            data-dropoff-lat="{{ $d->dropoff_lat }}"
-                            data-dropoff-lng="{{ $d->dropoff_lng }}"
-                            data-recipient-name="{{ $d->recipient_name }}"
-                            data-recipient-phone="{{ $d->recipient_phone }}"
-                            data-tracking-url="{{ $d->tracking_url }}"
-                            data-completed-at="{{ $d->status === 'completed' ? $d->updated_at?->format('Y-m-d H:i') : '' }}"
-                            onclick="openAddress(this)">
-                            <i class="fas fa-map-marker-alt mr-1"></i>View
-                        </button>
-                    </td>
-                    <td>
-                        <span class="badge badge-{{ $sc[$d->status] ?? 'secondary' }} {{ in_array($d->status, ['created','light']) ? 'text-dark' : '' }}">
-                            {{ ucfirst(str_replace('_', ' ', $d->status)) }}
-                        </span>
-                    </td>
-                    {{-- Customer Fee --}}
-                    <td>
-                        @if($d->fee)
-                            <strong class="text-primary">{{ number_format($d->fee) }} ៛</strong>
-                            @if($isMoving && ($d->helper_fee || $d->floor_fee))
-                                <br>
-                                @if($d->helper_fee)
-                                    <small class="text-muted">Helpers: {{ number_format($d->helper_fee) }} ៛</small><br>
-                                @endif
-                                @if($d->floor_fee)
-                                    <small class="text-muted">Floor: {{ number_format($d->floor_fee) }} ៛</small>
-                                @endif
-                            @endif
-                        @else
-                            <strong class="text-muted">0 ៛</strong>
-                        @endif
-                    </td>
-
-                    {{-- Package Amount (COD) --}}
-                    <td>
+                    <td><span class="status-pill tone-{{ $statusTone[$d->status] ?? 'muted' }}">{{ ucfirst(str_replace('_', ' ', $d->status)) }}</span></td>
+                    <td class="text-right" style="line-height:1.45;">
+                        <div title="Delivery Fee"><span class="text-muted tw:text-xs">Delivery Fee</span> <b style="color:var(--ink-900);">{{ number_format($d->fee ?? 0) }} ៛</b></div>
                         @if(($d->package_amount ?? 0) > 0)
-                            <span class="badge badge-secondary" style="font-size:.85rem;">
-                                <i class="fas fa-box mr-1"></i>{{ number_format($d->package_amount) }} ៛
-                            </span>
-                        @else
-                            <span class="text-muted">—</span>
+                            <div title="Pkg Amount (COD)"><span class="text-muted tw:text-xs">Pkg Amount</span> {{ number_format($d->package_amount) }} ៛</div>
                         @endif
-                    </td>
-
-                    {{-- Net Driver --}}
-                    <td>
-                        @if($netDriver !== null)
-                            <span class="text-success font-weight-bold">{{ number_format($netDriver) }} ៛</span>
-                            <div><small class="text-muted">{{ round(100 - $comm) }}% of fee</small></div>
-                        @else
-                            <span class="text-muted">0 ៛</span>
+                        <div title="Net Driver"><span class="text-muted tw:text-xs">Net Driver</span> <b style="color:var(--success);">{{ number_format($netDriver ?? 0) }} ៛</b></div>
+                        @if($isMoving && ($d->helper_fee || $d->floor_fee))
+                            <div class="text-muted tw:text-xs">incl. helpers {{ number_format($d->helper_fee ?? 0) }} · floors {{ number_format($d->floor_fee ?? 0) }}</div>
                         @endif
                     </td>
                     <td>
-                        @if($d->payment_by === 'recipient')
-                            <span class="badge badge-warning">Recipient (COD)</span>
-                        @else
-                            <span class="badge badge-info">Sender</span>
-                        @endif
+                        <span class="badge badge-{{ $payTone[$d->payment_status ?? 'unpaid'] ?? 'secondary' }}">{{ ucfirst($d->payment_status ?? 'unpaid') }}</span>
+                        <div class="text-muted tw:text-xs tw:mt-1">{{ $methodLabels[$d->payment_method ?? 'cash'] ?? ucfirst($d->payment_method) }} · {{ $d->payment_by === 'recipient' ? 'recipient pays (COD)' : 'sender pays' }}</div>
                     </td>
-                    <td>
-                        @php
-                            $mc=['cash'=>'secondary','wallet'=>'primary','aba'=>'success','wing'=>'info','other_online'=>'warning'];
-                            $ml=['cash'=>'Cash','wallet'=>'Wallet','aba'=>'ABA','wing'=>'Wing','other_online'=>'Online'];
-                        @endphp
-                        <span class="badge badge-{{ $mc[$d->payment_method ?? 'cash'] ?? 'secondary' }}">
-                            {{ $ml[$d->payment_method ?? 'cash'] ?? ucfirst($d->payment_method) }}
-                        </span>
-                    </td>
-                    <td>
-                        @php $ps=['unpaid'=>'secondary','pending'=>'warning','paid'=>'success','refunded'=>'danger']; @endphp
-                        <span class="badge badge-{{ $ps[$d->payment_status ?? 'unpaid'] ?? 'secondary' }}">
-                            {{ ucfirst($d->payment_status ?? 'unpaid') }}
-                        </span>
-                    </td>
-                    <td>{{ $d->scheduled_at?->format('Y-m-d H:i') ?? '—' }}</td>
-                    <td>
-                        @if($d->assigned_at)
-                            <span class="text-success">
-                                <i class="fas fa-check-circle mr-1"></i>{{ $d->assigned_at->format('Y-m-d H:i') }}
-                            </span>
-                        @else
-                            <span class="text-muted">—</span>
-                        @endif
-                    </td>
-                    <td>{{ $d->created_at->format('Y-m-d') }}</td>
-                    <td class="text-nowrap">
-                        <a href="{{ route('admin.deliveries.show', $d->id) }}" class="btn btn-xs btn-primary mr-1" title="View Detail">
-                            <i class="fas fa-eye"></i>
-                        </a>
-                        @if($canComplete)
-                        <form method="POST" action="{{ route('admin.deliveries.complete', $d) }}" class="d-inline"
-                              onsubmit="return confirm('Mark order #{{ $d->id }} as completed?')">
-                            @csrf
-                            <button class="btn btn-xs btn-success mr-1" title="Mark Completed">
-                                <i class="fas fa-check"></i>
-                            </button>
-                        </form>
-                        @endif
-                        <button class="btn btn-xs btn-info mr-1"
-                            data-delivery="{{ e(json_encode([
-                                'id'                => $d->id,
-                                'service_type'      => $d->service_type ?? 'delivery',
-                                'sender_id'         => $d->sender_id,
-                                'sender_name'       => $d->sender_name ?? '',
-                                'recipient_name'    => $d->recipient_name ?? '',
-                                'recipient_phone'   => $d->recipient_phone ?? '',
-                                'package_size'      => $d->package_size ?? 'small',
-                                'driver_id'         => $d->driver_id,
-                                'pickup_address'    => $d->pickup_address,
-                                'dropoff_address'   => $d->dropoff_address,
-                                'status'            => $d->status,
-                                'fee'               => $d->fee ?? '',
-                                'package_amount'    => $d->package_amount ?? '',
-                                'payment_by'        => $d->payment_by ?? 'sender',
-                                'payment_method'    => $d->payment_method ?? 'cash',
-                                'scheduled_at'      => $d->scheduled_at?->format('Y-m-d\TH:i') ?? '',
-                                'package_details'   => $d->package_details ?? '',
-                                'notes'             => $d->notes ?? '',
-                                'floor_pickup'      => $d->floor_pickup ?? 0,
-                                'floor_dropoff'     => $d->floor_dropoff ?? 0,
-                                'has_elevator'      => (bool)$d->has_elevator,
-                                'needs_stairs_carry'=> (bool)$d->needs_stairs_carry,
-                                'heavy_items'       => (bool)$d->heavy_items,
-                                'requires_helpers'  => $d->requires_helpers ?? 0,
-                                'helper_type'       => $d->helper_type ?? 'normal_carry',
-                                'helper_fee'        => $d->helper_fee ?? '',
-                                'floor_fee'         => $d->floor_fee ?? '',
-                                'payment_model'     => $d->payment_model ?? 'customer_pays',
-                                'split_pct_customer'=> $d->split_pct_customer ?? 50,
-                                'partner_reference' => $d->partner_reference ?? '',
-                            ])) }}"
-                            onclick="openEdit(this)">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <form method="POST" action="{{ route('admin.deliveries.destroy', $d) }}" class="d-inline"
-                              onsubmit="return confirm('Delete order #{{ $d->id }}?')">
-                            @csrf @method('DELETE')
-                            <button class="btn btn-xs btn-danger"><i class="fas fa-trash"></i></button>
-                        </form>
+                    <td class="text-center">
+                        <x-admin.row-actions edit="openEdit(this.closest('tr'))"
+                                             :delete="route('admin.deliveries.destroy', $d)" :confirm="'Delete order #' . $d->id . '?'">
+                            <a href="{{ route('admin.deliveries.show', $d->id) }}" class="btn btn-sm btn-outline-secondary btn-icon" title="View details" data-toggle="tooltip"><i class="fas fa-eye"></i></a>
+                            @if($canComplete)
+                                <form method="POST" action="{{ route('admin.deliveries.complete', $d) }}" class="m-0"
+                                      onsubmit="return confirm({{ Illuminate\Support\Js::from('Mark order #' . $d->id . ' as completed?') }})">
+                                    @csrf
+                                    <button class="btn btn-sm btn-outline-success btn-icon" title="Mark completed" data-toggle="tooltip"><i class="fas fa-check"></i></button>
+                                </form>
+                            @endif
+                        </x-admin.row-actions>
                     </td>
                 </tr>
-                @empty
-                <tr><td colspan="20" class="text-center text-muted py-4">No orders found.</td></tr>
-                @endforelse
+            @empty
+                <x-admin.empty-row colspan="8" icon="fa-box" title="No orders yet" :clear="route('admin.deliveries')" />
+            @endforelse
             </tbody>
         </table>
     </div>
-    <div class="card-footer d-flex align-items-center justify-content-between flex-wrap">
-        <small class="text-muted">
-            <strong>Delivery Fee:</strong> ថ្លៃសេវាដឹកដែលក្រុមហ៊ុនគិត (យកពីអ្នក Booking) &nbsp;|&nbsp;
-            <strong>Pkg Amount:</strong> តម្លៃកញ្ចប់ទំនិញដែលអ្នក Booking បញ្ចូល (COD) &nbsp;|&nbsp;
-            <strong>Net Driver:</strong> ទឹកប្រាក់ដែលអ្នកដឹករកបានក្នុង ១ជើងនេះពីក្រុមហ៊ុន (បន្ទាប់ពីកាត់ Commission {{ $commissionPct ?? 20 }}%)
-        </small>
-        {{ $deliveries->links() }}
+    <div class="card-footer text-muted tw:text-xs">
+        <strong>Delivery Fee:</strong> ថ្លៃសេវាដឹកដែលក្រុមហ៊ុនគិត (យកពីអ្នក Booking) ·
+        <strong>Pkg Amount:</strong> តម្លៃកញ្ចប់ទំនិញដែលអ្នក Booking បញ្ចូល (COD) ·
+        <strong>Net Driver:</strong> ទឹកប្រាក់ដែលអ្នកដឹករកបានក្នុង ១ជើងនេះពីក្រុមហ៊ុន (បន្ទាប់ពីកាត់ Commission {{ $commissionPct ?? 20 }}%)
     </div>
+    <x-admin.pagination :paginator="$deliveries" />
 </div>
 
 {{-- ════════════════ Create / Edit Modal ════════════════ --}}

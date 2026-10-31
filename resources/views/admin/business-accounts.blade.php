@@ -4,81 +4,73 @@
 
 @section('content')
 
-@include('admin.partials.search-box', [
-    'route' => route('admin.business-accounts'),
-    'search' => $search ?? '',
-    'placeholder' => 'Search by account name, contact name/phone/email…',
-])
+<x-admin.page-toolbar subtitle="Companies that book rides for their staff on a monthly credit line." />
+
+<x-admin.stat-grid :cols="4">
+    <x-admin.stat-card label="Business Accounts" :value="number_format($stats['total'])" icon="fa-briefcase" tone="primary"
+                       :href="route('admin.business-accounts')" :active="!request('status')" />
+    <x-admin.stat-card label="Active" :value="number_format($stats['active'])" icon="fa-circle-check" tone="success"
+                       :href="route('admin.business-accounts', ['status' => 'active'])" :active="request('status') === 'active'" />
+    <x-admin.stat-card label="Credit Extended" :value="number_format($stats['limit']) . ' ៛'" icon="fa-credit-card" tone="info" sub="monthly limits, active accounts" />
+    <x-admin.stat-card label="Credit Used" :value="number_format($stats['used']) . ' ៛'" icon="fa-chart-pie" tone="violet"
+                       :sub="$stats['limit'] ? round($stats['used'] / $stats['limit'] * 100) . '% of the limit' : '—'" />
+</x-admin.stat-grid>
 
 <div class="card">
     <div class="card-header">
-        <h3 class="card-title mb-0"><i class="fas fa-building text-info mr-2"></i> Business Accounts</h3>
+        <x-admin.filter-bar :action="route('admin.business-accounts')" placeholder="Search account, contact name, phone or email" :count="$accounts->total()" noun="account">
+            <x-admin.filter-select name="status" :options="['active' => 'Active', 'inactive' => 'Inactive']" all="All statuses" />
+        </x-admin.filter-bar>
     </div>
-    <div class="card-body p-0">
-        <table class="table table-hover mb-0">
-            <thead class="thead-light">
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap">
+            <thead>
                 <tr>
-                    <th>Company</th>
-                    <th>Code</th>
+                    <th>Account</th>
                     <th>Owner</th>
-                    <th>Members</th>
-                    <th>Credit Limit</th>
-                    <th>Used</th>
+                    <th class="text-center">Members</th>
+                    <th>Credit Used</th>
                     <th>Billing</th>
                     <th>Status</th>
-                    <th>Actions</th>
+                    <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse($accounts as $account)
+            @forelse($accounts as $account)
+                @php $pct = $account->monthly_credit_limit_khr > 0 ? min(100, round($account->used_credit_khr / $account->monthly_credit_limit_khr * 100)) : 0; @endphp
                 <tr>
                     <td>
-                        <strong>{{ $account->name }}</strong>
-                        @if($account->industry)
-                            <br><small class="text-muted">{{ $account->industry }}</small>
-                        @endif
+                        <a href="{{ route('admin.business-accounts.show', $account) }}" style="font-weight:600;">{{ $account->name }}</a>
+                        <div class="text-muted tw:text-xs"><code>{{ $account->code }}</code>@if($account->industry) · {{ $account->industry }}@endif</div>
                     </td>
-                    <td><code>{{ $account->code }}</code></td>
                     <td>
-                        {{ $account->owner->name ?? '—' }}<br>
-                        <small class="text-muted">{{ $account->owner->email ?? '' }}</small>
+                        <div>{{ $account->owner->name ?? '—' }}</div>
+                        <div class="text-muted tw:text-xs">{{ $account->owner->email ?? '' }}</div>
                     </td>
-                    <td class="text-center">
-                        <span class="badge badge-secondary">{{ $account->members_count }}</span>
-                    </td>
-                    <td>{{ number_format($account->monthly_credit_limit_khr) }} ៛</td>
-                    <td>
-                        @php $pct = $account->monthly_credit_limit_khr > 0 ? round($account->used_credit_khr / $account->monthly_credit_limit_khr * 100) : 0; @endphp
-                        <div class="progress" style="height:6px;min-width:80px">
-                            <div class="progress-bar bg-{{ $pct >= 90 ? 'danger' : ($pct >= 70 ? 'warning' : 'success') }}"
-                                 style="width:{{ $pct }}%"></div>
+                    <td class="text-center"><span class="badge badge-secondary"><i class="fas fa-users mr-1"></i>{{ $account->members_count }}</span></td>
+                    <td style="min-width:170px;">
+                        <div class="tw:text-xs"><b style="color:var(--ink-900);">{{ number_format($account->used_credit_khr) }}</b> / {{ number_format($account->monthly_credit_limit_khr) }} ៛</div>
+                        <div style="height:5px;border-radius:9px;background:var(--ink-100);margin-top:4px;overflow:hidden;">
+                            <span style="display:block;height:100%;width:{{ $pct }}%;background:{{ $pct >= 90 ? 'var(--danger)' : ($pct >= 70 ? 'var(--warning)' : 'var(--success)') }};"></span>
                         </div>
-                        <small>{{ number_format($account->used_credit_khr) }} ៛ ({{ $pct }}%)</small>
+                        <div class="text-muted tw:text-xs">{{ $pct }}% used</div>
                     </td>
                     <td>{{ ucfirst($account->billing_cycle) }}</td>
-                    <td>
-                        <span class="badge badge-{{ $account->active ? 'success' : 'secondary' }}">
-                            {{ $account->active ? 'Active' : 'Inactive' }}
-                        </span>
-                    </td>
-                    <td>
-                        <a href="{{ route('admin.business-accounts.show', $account) }}" class="btn btn-xs btn-outline-info">
-                            <i class="fas fa-eye"></i>
-                        </a>
-                        <button class="btn btn-xs btn-outline-primary" onclick="openEdit({{ $account->id }}, {{ $account->monthly_credit_limit_khr }}, {{ $account->active ? 1 : 0 }})">
-                            <i class="fas fa-edit"></i>
-                        </button>
+                    <td><span class="status-pill tone-{{ $account->active ? 'success' : 'muted' }}">{{ $account->active ? 'Active' : 'Inactive' }}</span></td>
+                    <td class="text-center">
+                        <x-admin.row-actions :edit="'openEdit(' . $account->id . ', ' . (int) $account->monthly_credit_limit_khr . ', ' . ($account->active ? 1 : 0) . ')'">
+                            <a href="{{ route('admin.business-accounts.show', $account) }}" class="btn btn-sm btn-outline-secondary btn-icon" title="View" data-toggle="tooltip"><i class="fas fa-eye"></i></a>
+                        </x-admin.row-actions>
                     </td>
                 </tr>
-                @empty
-                <tr><td colspan="9" class="text-center text-muted py-4">No business accounts yet.</td></tr>
-                @endforelse
+            @empty
+                <x-admin.empty-row colspan="7" icon="fa-briefcase" title="No business accounts yet"
+                                   hint="Accounts appear here when a company signs up in the app." :clear="route('admin.business-accounts')" />
+            @endforelse
             </tbody>
         </table>
     </div>
-    @if($accounts->hasPages())
-    <div class="card-footer">{{ $accounts->links() }}</div>
-    @endif
+    <x-admin.pagination :paginator="$accounts" />
 </div>
 
 {{-- Edit Modal --}}

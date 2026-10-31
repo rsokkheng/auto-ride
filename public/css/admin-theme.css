@@ -186,6 +186,7 @@ hr { border-top-color: var(--ink-200); }
 }
 .table td { border-top: 1px solid var(--ink-100) !important; padding: .75rem .9rem; vertical-align: middle; }
 .table-sm td, .table-sm th { padding: .5rem .7rem; }
+.thead-dark th, .table .thead-dark th,
 .thead-light th, .table .thead-light th { background: var(--ink-50) !important; color: var(--ink-500) !important; border-color: var(--ink-200) !important; }
 .table-hover tbody tr { transition: background .1s; }
 .table-hover tbody tr:hover { background: #f8fafc !important; }
@@ -363,6 +364,7 @@ a.stat-card:hover { border-color: var(--ink-300); box-shadow: var(--shadow-md); 
 a.stat-card.is-active { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary) inset; }
 .stat-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
 .stat-label { font-size: .72rem; font-weight: 500; color: var(--ink-500); text-transform: uppercase; letter-spacing: .05em; }
+.stat-sub { font-size: .74rem; color: var(--ink-500); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stat-card .stat-value { font-size: 1.3rem; font-weight: 700; color: var(--ink-900); line-height: 1.2; font-variant-numeric: tabular-nums; }
 .tone-primary { background: var(--primary-soft); color: var(--primary); }
 .tone-success { background: var(--success-soft); color: var(--success); }
@@ -370,6 +372,7 @@ a.stat-card.is-active { border-color: var(--primary); box-shadow: 0 0 0 1px var(
 .tone-danger  { background: var(--danger-soft);  color: var(--danger); }
 .tone-info    { background: var(--info-soft);    color: var(--info); }
 .tone-muted   { background: var(--ink-100);      color: var(--ink-600); }
+.tone-violet  { background: #ede9fe;             color: var(--violet); }
 
 .filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 .filter-bar .form-control { width: auto; min-width: 150px; }

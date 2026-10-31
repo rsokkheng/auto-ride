@@ -16,6 +16,7 @@
 /* Only admin templates are scanned. */
 @source not '../../vendor';
 @source '../views/admin';
+@source '../views/components/admin';
 
 @theme inline {
     --font-sans: 'Inter', 'Kantumruy Pro', system-ui, -apple-system, 'Segoe UI', sans-serif;

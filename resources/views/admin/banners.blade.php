@@ -3,86 +3,106 @@
 @section('page-title', 'Promotional Banners')
 
 @section('content')
+
+<x-admin.page-toolbar subtitle="Image banners shown at the top of the passenger and driver apps.">
+    <button class="btn btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Create Banner</button>
+</x-admin.page-toolbar>
+
+<x-admin.stat-grid :cols="4">
+    <x-admin.stat-card label="Total Banners" :value="number_format($stats['total'])" icon="fa-images" tone="primary"
+                       :href="route('admin.banners')" :active="!request('status')" />
+    <x-admin.stat-card label="Live Now" :value="number_format($stats['live'])" icon="fa-circle-play" tone="success" sub="active and in date"
+                       :href="route('admin.banners', ['status' => 'live'])" :active="request('status') === 'live'" />
+    <x-admin.stat-card label="Scheduled" :value="number_format($stats['scheduled'])" icon="fa-calendar-days" tone="info" sub="start in the future"
+                       :href="route('admin.banners', ['status' => 'scheduled'])" :active="request('status') === 'scheduled'" />
+    <x-admin.stat-card label="Expired" :value="number_format($stats['expired'])" icon="fa-hourglass-end" tone="muted" sub="past their end date"
+                       :href="route('admin.banners', ['status' => 'expired'])" :active="request('status') === 'expired'" />
+</x-admin.stat-grid>
+
+@php
+    $now = now();
+    $audiences = ['all' => 'Everyone', 'passenger' => 'Passengers', 'driver' => 'Drivers'];
+@endphp
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0"><i class="fas fa-images text-warning mr-2"></i> Banners</h3>
-        <button class="btn btn-sm btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Create Banner</button>
+    <div class="card-header">
+        <x-admin.filter-bar :action="route('admin.banners')" placeholder="Search title or deeplink" :count="$banners->total()" noun="banner">
+            <x-admin.filter-select name="status" :options="['live' => 'Live now', 'scheduled' => 'Scheduled', 'expired' => 'Expired', 'inactive' => 'Turned off']" all="All statuses" />
+            <x-admin.filter-select name="audience" :options="$audiences" all="All audiences" />
+        </x-admin.filter-bar>
     </div>
-    <div class="card-body p-0">
-        <table class="table table-hover mb-0">
-            <thead class="thead-light">
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap">
+            <thead>
                 <tr>
-                    <th>Order</th>
-                    <th>Preview</th>
-                    <th>Title</th>
-                    <th>Target</th>
-                    <th>Deeplink</th>
+                    <th>Banner</th>
+                    <th>Audience</th>
                     <th>Validity</th>
+                    <th class="text-center">Order</th>
                     <th>Status</th>
-                    <th>Actions</th>
+                    <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse($banners as $b)
-                <tr>
-                    <td class="text-center"><span class="badge badge-light border">{{ $b->sort_order }}</span></td>
+            @forelse($banners as $b)
+                @php
+                    [$state, $tone] = match (true) {
+                        ! $b->active                                  => ['Turned off', 'secondary'],
+                        $b->valid_until && $b->valid_until->lt($now)  => ['Expired', 'secondary'],
+                        $b->valid_from && $b->valid_from->gt($now)    => ['Scheduled', 'info'],
+                        default                                       => ['Live', 'success'],
+                    };
+                    $aTone = ['all' => 'primary', 'passenger' => 'info', 'driver' => 'warning'][$b->target_role] ?? 'secondary';
+                @endphp
+                <tr data-banner="{{ json_encode([
+                        'id'          => $b->id,
+                        ...$b->only(['title_en', 'title_kh', 'title_zh']),
+                        'title'       => $b->title,
+                        'deeplink'    => $b->deeplink ?? '',
+                        'target_role' => $b->target_role,
+                        'sort_order'  => $b->sort_order,
+                        'active'      => $b->active,
+                        'valid_from'  => $b->valid_from?->format('Y-m-d\TH:i') ?? '',
+                        'valid_until' => $b->valid_until?->format('Y-m-d\TH:i') ?? '',
+                    ]) }}">
                     <td>
-                        <img src="{{ asset('storage/' . $b->image) }}" style="height:50px;width:90px;object-fit:cover;border-radius:4px;">
+                        <div class="tw:flex tw:items-center tw:gap-3">
+                            <img src="{{ asset('storage/' . $b->image) }}" alt="" loading="lazy"
+                                 style="width:88px;height:48px;object-fit:cover;border-radius:8px;border:1px solid var(--ink-200);background:var(--ink-50);"
+                                 onerror="this.style.visibility='hidden'">
+                            <div class="tw:min-w-0">
+                                <div class="text-truncate" style="max-width:280px;font-weight:600;color:var(--ink-900);" title="{{ $b->title }}">{{ $b->title }}</div>
+                                <div class="text-muted text-truncate tw:text-xs" style="max-width:280px;" title="{{ $b->deeplink }}">
+                                    <i class="fas fa-link mr-1"></i>{{ $b->deeplink ?: 'No link' }}
+                                </div>
+                            </div>
+                        </div>
                     </td>
-                    <td class="font-weight-bold">{{ $b->title }}</td>
+                    <td><span class="badge badge-{{ $aTone }}">{{ $audiences[$b->target_role] ?? ucfirst($b->target_role) }}</span></td>
                     <td>
-                        @php $tc = ['all'=>'success','passenger'=>'primary','driver'=>'warning']; @endphp
-                        <span class="badge badge-{{ $tc[$b->target_role] ?? 'secondary' }}">{{ ucfirst($b->target_role) }}</span>
-                    </td>
-                    <td><small class="text-muted">{{ $b->deeplink ?? '—' }}</small></td>
-                    <td>
-                        <small>
-                            @if($b->valid_from || $b->valid_until)
-                                {{ $b->valid_from?->format('d M Y') ?? '∞' }} → {{ $b->valid_until?->format('d M Y') ?? '∞' }}
-                            @else
-                                <span class="text-muted">Always</span>
+                        @if($b->valid_from || $b->valid_until)
+                            <div>{{ $b->valid_from?->format('d M Y') ?? 'Any time' }} → {{ $b->valid_until?->format('d M Y') ?? 'No end' }}</div>
+                            @if($b->valid_until && $b->valid_until->gte($now))
+                                <div class="text-muted tw:text-xs">ends {{ $b->valid_until->diffForHumans() }}</div>
                             @endif
-                        </small>
-                    </td>
-                    <td>
-                        @if($b->active)
-                            <span class="badge badge-success">Active</span>
                         @else
-                            <span class="badge badge-secondary">Inactive</span>
+                            <span class="text-muted">Always on</span>
                         @endif
                     </td>
-                    <td class="text-nowrap">
-                        <button class="btn btn-xs btn-info mr-1"
-                            data-banner="{{ e(json_encode([
-                                'id'          => $b->id,
-                                ...$b->only(['title_en', 'title_kh', 'title_zh']),
-                                'title'       => $b->title,
-                                'deeplink'    => $b->deeplink ?? '',
-                                'target_role' => $b->target_role,
-                                'sort_order'  => $b->sort_order,
-                                'active'      => $b->active,
-                                'valid_from'  => $b->valid_from?->format('Y-m-d\TH:i') ?? '',
-                                'valid_until' => $b->valid_until?->format('Y-m-d\TH:i') ?? '',
-                            ])) }}"
-                            onclick="openEdit(this)">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <form method="POST" action="{{ route('admin.banners.destroy', $b) }}" class="d-inline"
-                              onsubmit="return confirm('Delete banner?')">
-                            @csrf @method('DELETE')
-                            <button class="btn btn-xs btn-danger"><i class="fas fa-trash"></i></button>
-                        </form>
+                    <td class="text-center"><span class="badge badge-light">{{ $b->sort_order }}</span></td>
+                    <td><span class="status-pill tone-{{ ['success' => 'success', 'info' => 'info', 'secondary' => 'muted'][$tone] }}">{{ $state }}</span></td>
+                    <td class="text-center">
+                        <x-admin.row-actions edit="openEdit(this.closest('tr'))"
+                                             :delete="route('admin.banners.destroy', $b)" :confirm="'Delete banner “' . $b->title . '”?'" />
                     </td>
                 </tr>
-                @empty
-                <tr><td colspan="8" class="text-center text-muted py-4">No banners yet.</td></tr>
-                @endforelse
+            @empty
+                <x-admin.empty-row colspan="6" icon="fa-images" title="No banners yet"
+                                   hint="Create one to promote offers in the app." :clear="route('admin.banners')" />
+            @endforelse
             </tbody>
         </table>
     </div>
-    @if($banners->hasPages())
-    <div class="card-footer">{{ $banners->links() }}</div>
-    @endif
+    <x-admin.pagination :paginator="$banners" />
 </div>
 
 <div class="modal fade" id="bannerModal" tabindex="-1">
@@ -174,8 +194,8 @@ function openCreate() {
     $('#bannerModal').modal('show');
 }
 
-function openEdit(btn) {
-    const b = JSON.parse(btn.getAttribute('data-banner'));
+function openEdit(row) {
+    const b = JSON.parse(row.getAttribute('data-banner'));
     document.getElementById('bannerModalTitle').textContent = 'Edit Banner';
     document.getElementById('bannerForm').action = updateBase + b.id;
     document.getElementById('bannerMethod').value = 'PUT';

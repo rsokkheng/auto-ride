@@ -4,103 +4,100 @@
 
 @section('content')
 
-@include('admin.partials.search-box', [
-    'route' => route('admin.vehicles'),
-    'search' => $search ?? '',
-    'placeholder' => 'Search by license plate, driver name, or phone…',
-])
+<x-admin.page-toolbar subtitle="Vehicles registered to drivers, with their photos and service status.">
+    <button class="btn btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Add Vehicle</button>
+</x-admin.page-toolbar>
+
+@php
+    $statusMeta = ['active' => ['Active', 'fa-circle-check', 'success'], 'maintenance' => ['Maintenance', 'fa-screwdriver-wrench', 'warning'], 'inactive' => ['Inactive', 'fa-circle-pause', 'muted']];
+    $typeLabels = \App\Models\CarRental::VEHICLE_TYPE_LABELS;
+@endphp
+<x-admin.stat-grid :cols="4">
+    <x-admin.stat-card label="All Vehicles" :value="number_format($counts->sum())" icon="fa-car-side" tone="primary"
+                       :href="route('admin.vehicles')" :active="!request('status')" />
+    @foreach($statusMeta as $key => [$label, $icon, $tone])
+        <x-admin.stat-card :label="$label" :value="number_format($counts[$key] ?? 0)" :icon="$icon" :tone="$tone"
+                           :href="route('admin.vehicles', ['status' => $key])" :active="request('status') === $key" />
+    @endforeach
+</x-admin.stat-grid>
 
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0">Vehicle fleet</h3>
-        <button class="btn btn-sm btn-primary" onclick="openCreate()">
-            <i class="fas fa-plus mr-1"></i> Create Vehicle
-        </button>
+    <div class="card-header">
+        <x-admin.filter-bar :action="route('admin.vehicles')" placeholder="Search plate, driver name or phone" :count="$vehicles->total()" noun="vehicle">
+            <x-admin.filter-select name="status" :options="collect($statusMeta)->map(fn ($m) => $m[0])->all()" all="All statuses" />
+            <x-admin.filter-select name="type" :options="$typeLabels" all="All types" />
+        </x-admin.filter-bar>
     </div>
     <div class="card-body table-responsive p-0">
-        <table class="table table-hover text-nowrap mb-0">
+        <table class="table table-hover text-nowrap">
             <thead>
                 <tr>
-                    <th></th>
-                    <th>#</th>
-                    <th>Driver</th>
+                    <th>Vehicle</th>
                     <th>Plate</th>
-                    <th>Make / Model</th>
-                    <th>Year</th>
+                    <th>Driver</th>
                     <th>Type</th>
-                    <th>Capacity</th>
+                    <th class="text-center">Seats</th>
                     <th>Status</th>
-                    <th>Actions</th>
+                    <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse($vehicles as $v)
-                <tr>
-                    <td style="width:50px;">
-                        @if($v->primary_image_url)
-                            <img src="{{ $v->primary_image_url }}" alt=""
-                                 style="width:44px;height:44px;border-radius:8px;object-fit:cover;">
-                        @else
-                            <div style="width:44px;height:44px;border-radius:8px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;">
-                                <i class="fas fa-car" style="color:#94a3b8;"></i>
+            @forelse($vehicles as $v)
+                @php [$sLabel, , $sTone] = $statusMeta[$v->status] ?? [ucfirst($v->status), null, 'muted']; @endphp
+                <tr data-id="{{ $v->id }}"
+                    data-user="{{ $v->user_id }}"
+                    data-plate="{{ $v->license_plate }}"
+                    data-make="{{ $v->make }}"
+                    data-model="{{ $v->model }}"
+                    data-year="{{ $v->year }}"
+                    data-type="{{ $v->type }}"
+                    data-status="{{ $v->status }}"
+                    data-capacity="{{ $v->capacity }}"
+                    data-details="{{ $v->details ?? '' }}">
+                    <td>
+                        <div class="tw:flex tw:items-center tw:gap-3">
+                            @if($v->primary_image_url)
+                                <img src="{{ $v->primary_image_url }}" alt="" class="thumb" loading="lazy"
+                                     onerror="this.outerHTML='<span class=&quot;thumb-placeholder&quot;><i class=&quot;fas fa-car-side&quot;></i></span>'">
+                            @else
+                                <span class="thumb-placeholder"><i class="fas fa-car-side"></i></span>
+                            @endif
+                            <div>
+                                <div style="font-weight:600;color:var(--ink-900);">{{ trim($v->make . ' ' . $v->model) ?: 'Vehicle #' . $v->id }}</div>
+                                <div class="text-muted tw:text-xs">{{ $v->year ?: '—' }} · {{ count($v->images ?? []) }} {{ Str::plural('photo', count($v->images ?? [])) }}</div>
                             </div>
+                        </div>
+                    </td>
+                    <td><span class="badge badge-light" style="font-size:.78rem;letter-spacing:.04em;font-family:ui-monospace,monospace;">{{ $v->license_plate }}</span></td>
+                    <td>
+                        @if($v->driver)
+                            <a href="{{ route('admin.drivers.show', $v->driver) }}">{{ $v->driver->name }}</a>
+                            <div class="text-muted tw:text-xs">{{ $v->driver->phone }}</div>
+                        @else
+                            <span class="text-muted">Unassigned</span>
                         @endif
                     </td>
-                    <td>{{ ($vehicles->currentPage() - 1) * $vehicles->perPage() + $loop->iteration }}</td>
-                    <td>{{ $v->driver?->name ?? '—' }}</td>
-                    <td><strong>{{ $v->license_plate }}</strong></td>
-                    <td>{{ $v->make }} {{ $v->model }}</td>
-                    <td>{{ $v->year }}</td>
-                    <td>{{ ucfirst($v->type) }}</td>
-                    <td>{{ $v->capacity }}</td>
-                    <td>
-                        <span class="badge badge-{{ $v->status === 'active' ? 'success' : ($v->status === 'maintenance' ? 'warning' : 'secondary') }}">
-                            {{ ucfirst($v->status) }}
-                        </span>
-                    </td>
-                    <td>
-                        <button class="btn btn-xs btn-info mr-1"
-                            data-id="{{ $v->id }}"
-                            data-user="{{ $v->user_id }}"
-                            data-plate="{{ $v->license_plate }}"
-                            data-make="{{ $v->make }}"
-                            data-model="{{ $v->model }}"
-                            data-year="{{ $v->year }}"
-                            data-type="{{ $v->type }}"
-                            data-status="{{ $v->status }}"
-                            data-capacity="{{ $v->capacity }}"
-                            data-details="{{ $v->details ?? '' }}"
-                            onclick="openEdit(this)">
-                            <i class="fas fa-edit"></i>
-                        </button>
-
-                        {{-- Photos button --}}
-                        <button class="btn btn-xs btn-warning mr-1"
-                            data-id="{{ $v->id }}"
-                            data-images="{{ e(json_encode($v->image_urls)) }}"
-                            data-paths="{{ e(json_encode($v->images ?? [])) }}"
-                            onclick="openPhotos(this)"
-                            title="Manage Photos">
-                            <i class="fas fa-images"></i>
-                            @if(count($v->images ?? []) > 0)
-                                <span class="ml-1">{{ count($v->images) }}</span>
-                            @endif
-                        </button>
-
-                        <form method="POST" action="{{ route('admin.vehicles.destroy', $v) }}" class="d-inline"
-                              onsubmit="return confirm({{ Illuminate\Support\Js::from('Delete vehicle ' . $v->license_plate . '?') }})">
-                            @csrf @method('DELETE')
-                            <button class="btn btn-xs btn-danger"><i class="fas fa-trash"></i></button>
-                        </form>
+                    <td>{{ $typeLabels[$v->type] ?? ucfirst(str_replace('_', ' ', $v->type)) }}</td>
+                    <td class="text-center">{{ $v->capacity }}</td>
+                    <td><span class="status-pill tone-{{ $sTone }}">{{ $sLabel }}</span></td>
+                    <td class="text-center">
+                        <x-admin.row-actions edit="openEdit(this.closest('tr'))"
+                                             :delete="route('admin.vehicles.destroy', $v)" :confirm="'Delete vehicle ' . $v->license_plate . '?'">
+                            <button class="btn btn-sm btn-outline-secondary btn-icon" title="Photos" data-toggle="tooltip"
+                                    data-id="{{ $v->id }}" data-images="{{ json_encode($v->image_urls) }}" data-paths="{{ json_encode($v->images ?? []) }}"
+                                    onclick="openPhotos(this)">
+                                <i class="fas fa-images"></i>
+                            </button>
+                        </x-admin.row-actions>
                     </td>
                 </tr>
-                @empty
-                <tr><td colspan="10" class="text-center text-muted py-4">No vehicles found.</td></tr>
-                @endforelse
+            @empty
+                <x-admin.empty-row colspan="7" icon="fa-car-side" title="No vehicles yet" hint="Add a driver's vehicle with the button above." :clear="route('admin.vehicles')" />
+            @endforelse
             </tbody>
         </table>
     </div>
-    <div class="card-footer clearfix">{{ $vehicles->links() }}</div>
+    <x-admin.pagination :paginator="$vehicles" />
 </div>
 
 {{-- Edit / Create Modal --}}

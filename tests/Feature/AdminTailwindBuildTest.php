@@ -22,6 +22,7 @@ class AdminTailwindBuildTest extends TestCase
         $css = File::get(public_path('build/' . $entry));
 
         $classes = collect(File::allFiles(resource_path('views/admin')))
+            ->merge(File::allFiles(resource_path('views/components/admin')))
             ->flatMap(function ($file) {
                 preg_match_all('/class="([^"]*)"/', $file->getContents(), $m);
                 return collect($m[1])->flatMap(fn ($attr) => preg_split('/\s+/', $attr));

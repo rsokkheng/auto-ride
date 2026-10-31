@@ -3,69 +3,111 @@
 @section('page-title', 'Charging Stations')
 
 @section('content')
+
+<x-admin.page-toolbar subtitle="EV charging points shown to drivers and passengers in the app.">
+    <button class="btn btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Add Station</button>
+</x-admin.page-toolbar>
+
+<x-admin.stat-grid :cols="4">
+    <x-admin.stat-card label="Total Stations" :value="number_format($stats['stations'])" icon="fa-charging-station" tone="primary"
+                       :sub="$stats['operators'] . ' ' . Str::plural('operator', $stats['operators'])" />
+    <x-admin.stat-card label="Total Ports" :value="number_format($stats['ports'])" icon="fa-plug" tone="success"
+                       :sub="$stats['stations'] ? number_format($stats['ports'] / $stats['stations'], 1) . ' per station' : '—'" />
+    <x-admin.stat-card label="Average Rating" :value="$stats['rating'] ? number_format($stats['rating'], 1) . ' / 5' : '—'" icon="fa-star" tone="warning"
+                       :sub="'from ' . $stats['rated'] . ' rated ' . Str::plural('station', $stats['rated'])" />
+    <x-admin.stat-card label="Phnom Penh Locations" :value="number_format($stats['phnom_penh'])" icon="fa-location-dot" tone="violet"
+                       :sub="$stats['stations'] ? round($stats['phnom_penh'] / $stats['stations'] * 100) . '% of all stations' : '—'"
+                       :href="route('admin.charging-stations', ['province' => 'Phnom Penh'])" :active="request('province') === 'Phnom Penh'" />
+</x-admin.stat-grid>
+
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0">Charging stations</h3>
-        <button class="btn btn-sm btn-primary" onclick="openCreate()">
-            <i class="fas fa-plus mr-1"></i> Create Station
-        </button>
+    <div class="card-header">
+        <x-admin.filter-bar :action="route('admin.charging-stations')" placeholder="Search name, address or operator"
+                            :count="$stations->total()" noun="station">
+            <x-admin.filter-select name="province" :options="$provinces" all="All provinces" />
+            <x-admin.filter-select name="operator" :options="$operators" all="All operators" />
+        </x-admin.filter-bar>
     </div>
+
     <div class="card-body table-responsive p-0">
-        <table class="table table-hover text-nowrap mb-0">
+        <table class="table table-hover text-nowrap">
             <thead>
                 <tr>
-                    <th>#</th>
-                    <th>Name</th>
-                    <th>Address</th>
+                    <th>Station</th>
+                    <th>Location</th>
                     <th>Operator</th>
                     <th>Ports</th>
                     <th>Rating</th>
-                    <th>Coordinates</th>
-                    <th>Actions</th>
+                    <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse($stations as $s)
-                <tr>
-                    <td>{{ $s->id }}</td>
-                    <td>{{ $s->name }}</td>
-                    <td>{{ \Illuminate\Support\Str::limit($s->address, 30) }}</td>
-                    <td>{{ $s->operator ?? '—' }}</td>
-                    <td><span class="badge badge-info">{{ $s->available_ports }}</span></td>
+            @forelse($stations as $s)
+                @php
+                    $details    = is_array($s->details) ? $s->details : (json_decode((string) $s->details, true) ?: []);
+                    $connectors = array_slice((array) ($details['connector_types'] ?? []), 0, 2);
+                    $more       = max(0, count((array) ($details['connector_types'] ?? [])) - 2);
+                    $maxKw      = collect($details['power_kw'] ?? [])->max();
+                    $province   = $s->province();
+                    $payload    = [
+                        'id' => $s->id, 'name' => $s->name, 'address' => $s->address,
+                        'localized' => $s->only(['name_en', 'name_kh', 'name_zh', 'address_en', 'address_kh', 'address_zh']),
+                        'latitude' => $s->latitude, 'longitude' => $s->longitude, 'available_ports' => $s->available_ports,
+                        'operator' => $s->operator ?? '', 'rating' => $s->rating ?? '', 'details' => $s->getAttributes()['details'] ?? '',
+                    ];
+                @endphp
+                <tr data-station="{{ json_encode($payload, JSON_UNESCAPED_UNICODE) }}">
                     <td>
-                        @if($s->rating)
-                            <i class="fas fa-star text-warning" style="font-size:.75rem;"></i> {{ number_format($s->rating,1) }}
-                        @else —
+                        <div class="tw:flex tw:items-center tw:gap-3">
+                            <span class="stat-icon tone-success" style="width:38px;height:38px;font-size:.9rem;"><i class="fas fa-charging-station"></i></span>
+                            <div class="tw:min-w-0">
+                                <div class="text-truncate" style="max-width:200px;font-weight:600;color:var(--ink-900);" title="{{ $s->name }}">{{ $s->name }}</div>
+                                <div class="text-muted tw:text-xs">
+                                    #{{ $s->id }}@if($maxKw) · up to {{ rtrim(rtrim(number_format($maxKw, 1), '0'), '.') }} kW @endif
+                                    @if(!empty($details['open_hours'])) · {{ $details['open_hours'] }} @endif
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="text-truncate" style="max-width:210px;" title="{{ $s->address }}">{{ $s->address }}</div>
+                        <div class="text-muted tw:text-xs">
+                            @if($province)<i class="fas fa-location-dot mr-1"></i>{{ $province }} · @endif
+                            <a href="https://www.google.com/maps?q={{ $s->latitude }},{{ $s->longitude }}" target="_blank" rel="noopener" class="text-muted">
+                                {{ number_format($s->latitude, 4) }}, {{ number_format($s->longitude, 4) }} <i class="fas fa-arrow-up-right-from-square" style="font-size:.6rem;"></i>
+                            </a>
+                        </div>
+                    </td>
+                    <td><div class="text-truncate" style="max-width:150px;" title="{{ $s->operator }}">{{ $s->operator ?? '—' }}</div></td>
+                    <td>
+                        <span class="badge badge-success"><i class="fas fa-plug mr-1"></i>{{ $s->available_ports }} {{ Str::plural('port', $s->available_ports) }}</span>
+                        @if($connectors)
+                            <div class="text-muted tw:mt-1 tw:text-xs">{{ implode(' · ', $connectors) }}@if($more) +{{ $more }}@endif</div>
                         @endif
                     </td>
-                    <td style="font-size:.8rem;">{{ number_format($s->latitude,4) }}, {{ number_format($s->longitude,4) }}</td>
                     <td>
-                        <button class="btn btn-xs btn-info mr-1" onclick="openEdit({
-                            id: {{ $s->id }},
-                            name: {{ Illuminate\Support\Js::from($s->name) }},
-                            address: {{ Illuminate\Support\Js::from($s->address) }},
-                            localized: {{ Illuminate\Support\Js::from($s->only(['name_en', 'name_kh', 'name_zh', 'address_en', 'address_kh', 'address_zh'])) }},
-                            latitude: '{{ $s->latitude }}',
-                            longitude: '{{ $s->longitude }}',
-                            available_ports: '{{ $s->available_ports }}',
-                            operator: {{ Illuminate\Support\Js::from($s->operator ?? '') }},
-                            rating: '{{ $s->rating ?? '' }}',
-                            details: {{ Illuminate\Support\Js::from($s->details ?? '') }}
-                        })"><i class="fas fa-edit"></i></button>
-                        <form method="POST" action="{{ route('admin.charging-stations.destroy', $s) }}" class="d-inline"
-                              onsubmit="return confirm({{ Illuminate\Support\Js::from('Delete station ' . $s->name . '?') }})">
-                            @csrf @method('DELETE')
-                            <button class="btn btn-xs btn-danger"><i class="fas fa-trash"></i></button>
-                        </form>
+                        @if($s->rating)
+                            @php $r = (float) $s->rating; $tone = $r >= 4.5 ? 'success' : ($r >= 4 ? 'warning' : 'secondary'); @endphp
+                            <span class="badge badge-{{ $tone }}"><i class="fas fa-star mr-1"></i>{{ number_format($r, 1) }}</span>
+                        @else
+                            <span class="text-muted">—</span>
+                        @endif
+                    </td>
+                    <td class="text-center">
+                        <x-admin.row-actions edit="openEdit(JSON.parse(this.closest('tr').dataset.station))"
+                                             :delete="route('admin.charging-stations.destroy', $s)"
+                                             :confirm="'Delete station ' . $s->name . '?'" />
                     </td>
                 </tr>
-                @empty
-                <tr><td colspan="8" class="text-center text-muted py-4">No stations found.</td></tr>
-                @endforelse
+            @empty
+                <x-admin.empty-row colspan="6" icon="fa-charging-station" title="No charging stations yet"
+                                   hint="Add the first station with the button above." :clear="route('admin.charging-stations')" />
+            @endforelse
             </tbody>
         </table>
     </div>
-    <div class="card-footer clearfix">{{ $stations->links() }}</div>
+
+    <x-admin.pagination :paginator="$stations" />
 </div>
 
 {{-- Modal --}}

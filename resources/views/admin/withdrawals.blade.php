@@ -4,65 +4,35 @@
 
 @section('content')
 
-{{-- Flash messages --}}
-@if(session('success'))
-<div class="alert alert-success alert-dismissible fade show">
-    <i class="fas fa-check-circle mr-2"></i>{{ session('success') }}
-    <button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>
-</div>
-@endif
-@if(session('error'))
-<div class="alert alert-danger alert-dismissible fade show">
-    <i class="fas fa-exclamation-circle mr-2"></i>{{ session('error') }}
-    <button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>
-</div>
-@endif
+@php $exportQuery = array_merge(['status' => $status], array_filter(['search' => $search, 'method' => $method, 'date_from' => $dateFrom, 'date_to' => $dateTo])); @endphp
+<x-admin.page-toolbar subtitle="Drivers cashing out their wallet balance. Pay the driver first, then approve to deduct it from their wallet.">
+    <a href="{{ route('admin.withdrawals.export', $exportQuery) }}" class="btn btn-secondary"><i class="fas fa-file-csv mr-1"></i> Export CSV</a>
+</x-admin.page-toolbar>
 
-{{-- Tabs --}}
-<div class="card mb-0">
-    <div class="card-header p-0 pt-1">
-        <ul class="nav nav-tabs">
-            @foreach(['pending' => ['warning','clock'], 'approved' => ['success','check-circle'], 'rejected' => ['danger','times-circle']] as $tab => [$color, $icon])
-            <li class="nav-item">
-                <a class="nav-link {{ $status === $tab ? 'active' : '' }}"
-                   href="{{ route('admin.withdrawals', ['status' => $tab]) }}">
-                    <i class="fas fa-{{ $icon }} text-{{ $color }} mr-1"></i>
-                    {{ ucfirst($tab) }}
-                    @if($counts[$tab] > 0)
-                        <span class="badge badge-{{ $color }} ml-1">{{ $counts[$tab] }}</span>
-                    @endif
-                </a>
-            </li>
-            @endforeach
-        </ul>
-    </div>
+<x-admin.stat-grid :cols="4">
+    <x-admin.stat-card label="Pending" :value="number_format($counts['pending'])" icon="fa-hourglass-half" tone="warning"
+                       :sub="number_format($amounts['pending']) . ' ៛ requested'" :href="route('admin.withdrawals', ['status' => 'pending'])" :active="$status === 'pending'" />
+    <x-admin.stat-card label="Approved" :value="number_format($counts['approved'])" icon="fa-circle-check" tone="success"
+                       :href="route('admin.withdrawals', ['status' => 'approved'])" :active="$status === 'approved'" />
+    <x-admin.stat-card label="Rejected" :value="number_format($counts['rejected'])" icon="fa-circle-xmark" tone="danger"
+                       :href="route('admin.withdrawals', ['status' => 'rejected'])" :active="$status === 'rejected'" />
+    <x-admin.stat-card label="Paid Out This Month" :value="number_format($amounts['approved_month']) . ' ៛'" icon="fa-money-bill-transfer" tone="violet"
+                       :sub="'≈ $' . number_format($amounts['approved_month'] / 4000, 2)" />
+</x-admin.stat-grid>
 
-    {{-- Search & Filter bar --}}
-    <div class="card-body py-2 border-bottom">
-        <form method="GET" action="{{ route('admin.withdrawals') }}" class="form-inline flex-wrap" style="gap:6px">
+<div class="card">
+    <div class="card-header">
+        <x-admin.filter-bar :action="route('admin.withdrawals')" placeholder="Driver name or phone" :count="$withdrawals->total()" :noun="$status . ' request'">
             <input type="hidden" name="status" value="{{ $status }}">
-            <input type="text" name="search" class="form-control form-control-sm"
-                   placeholder="Driver name or phone…" value="{{ $search ?? '' }}" style="min-width:180px">
-            <select name="method" class="form-control form-control-sm">
-                <option value="">All Methods</option>
-                @foreach(['bank_transfer' => 'Bank Transfer','aba' => 'ABA','wing' => 'Wing','acleda' => 'ACLEDA'] as $val => $label)
-                    <option value="{{ $val }}" {{ ($method ?? '') == $val ? 'selected' : '' }}>{{ $label }}</option>
-                @endforeach
-            </select>
-            <input type="date" name="date_from" class="form-control form-control-sm" value="{{ $dateFrom ?? '' }}" title="From date">
-            <input type="date" name="date_to"   class="form-control form-control-sm" value="{{ $dateTo ?? '' }}"   title="To date">
-            <button class="btn btn-sm btn-primary"><i class="fas fa-search mr-1"></i>Filter</button>
-            <a href="{{ route('admin.withdrawals', ['status' => $status]) }}" class="btn btn-sm btn-secondary">Reset</a>
-            <a href="{{ route('admin.withdrawals.export', array_merge(['status' => $status], array_filter(['search' => $search, 'method' => $method, 'date_from' => $dateFrom, 'date_to' => $dateTo]))) }}"
-               class="btn btn-sm btn-outline-success ml-auto">
-                <i class="fas fa-file-csv mr-1"></i>Export CSV
-            </a>
-        </form>
+            <x-admin.filter-select name="method" :options="['bank_transfer' => 'Bank transfer', 'aba' => 'ABA', 'wing' => 'Wing', 'acleda' => 'ACLEDA']" all="All methods" />
+            <input type="date" name="date_from" class="form-control form-control-sm" value="{{ $dateFrom }}" title="From" aria-label="From date" style="min-width:0;width:145px;">
+            <input type="date" name="date_to" class="form-control form-control-sm" value="{{ $dateTo }}" title="To" aria-label="To date" style="min-width:0;width:145px;">
+        </x-admin.filter-bar>
     </div>
 
     {{-- Bulk action bar (pending only) --}}
     @if($status === 'pending')
-    <div class="card-body py-2 border-bottom bg-light" id="bulkBar" style="display:none">
+    <div class="card-body py-2" id="bulkBar" style="display:none;background:var(--primary-soft);border-bottom:1px solid var(--ink-200);">
         <div class="d-flex align-items-center" style="gap:8px">
             <span class="text-muted small"><span id="selectedCount">0</span> selected</span>
             <button type="button" class="btn btn-sm btn-success" onclick="openBulkApprove()">
@@ -76,16 +46,15 @@
     </div>
     @endif
 
-    <div class="card-body p-0">
-        <table class="table table-hover mb-0">
-            <thead class="thead-light">
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap">
+            <thead>
                 <tr>
                     @if($status === 'pending')
                     <th style="width:36px">
                         <input type="checkbox" id="selectAll" title="Select all on this page">
                     </th>
                     @endif
-                    <th>#</th>
                     <th>Driver</th>
                     <th>Amount</th>
                     <th>Method</th>
@@ -108,37 +77,22 @@
                         <input type="checkbox" class="row-check" value="{{ $w->id }}">
                     </td>
                     @endif
-                    <td class="text-muted small">{{ ($withdrawals->currentPage() - 1) * $withdrawals->perPage() + $loop->iteration }}</td>
                     <td>
-                        <div class="font-weight-bold">{{ $w->driver->name }}</div>
-                        <small class="text-muted">{{ $w->driver->phone }}</small>
-                        <div>
-                            <small class="badge badge-light text-dark">
-                                Balance: {{ number_format($w->driver->wallet_balance) }} ៛
-                            </small>
-                        </div>
+                        <div style="font-weight:600;color:var(--ink-900);">{{ $w->driver->name }}</div>
+                        <div class="text-muted tw:text-xs">{{ $w->driver->phone }} · wallet {{ number_format($w->driver->wallet_balance) }} ៛</div>
                     </td>
                     <td>
-                        <span class="font-weight-bold text-success" style="font-size:1rem">
-                            {{ number_format($w->amount_khr) }} ៛
-                        </span>
-                        <div><small class="text-muted">≈ ${{ number_format($w->amount_khr / 4000, 2) }}</small></div>
+                        <div style="font-weight:700;color:var(--ink-900);">{{ number_format($w->amount_khr) }} ៛</div>
+                        <div class="text-muted tw:text-xs">≈ ${{ number_format($w->amount_khr / 4000, 2) }}</div>
                     </td>
+                    <td><span class="badge badge-light">{{ ['bank_transfer' => 'Bank transfer', 'aba' => 'ABA', 'wing' => 'Wing', 'acleda' => 'ACLEDA'][$w->payment_method] ?? strtoupper(str_replace('_', ' ', $w->payment_method)) }}</span></td>
                     <td>
-                        <span class="badge badge-secondary">
-                            {{ str_replace('_', ' ', strtoupper($w->payment_method)) }}
-                        </span>
-                    </td>
-                    <td>
-                        <div class="font-weight-bold">{{ $w->account_name ?? '—' }}</div>
-                        <small class="text-muted">{{ $w->account_number ?? '—' }}</small>
-                        @if($w->bank_name)
-                            <div><small class="text-muted"><i class="fas fa-university mr-1"></i>{{ $w->bank_name }}</small></div>
-                        @endif
+                        <div>{{ $w->account_name ?? '—' }}</div>
+                        <div class="text-muted tw:text-xs">{{ $w->account_number ?? '—' }}@if($w->bank_name) · {{ $w->bank_name }}@endif</div>
                     </td>
                     <td>
                         <div>{{ $w->created_at->format('d M Y') }}</div>
-                        <small class="text-muted">{{ $w->created_at->format('H:i') }}</small>
+                        <div class="text-muted tw:text-xs">{{ $w->created_at->format('H:i') }} · {{ $w->created_at->diffForHumans() }}</div>
                     </td>
                     @if($status !== 'pending')
                         <td>
@@ -149,36 +103,34 @@
                                 <span class="text-muted">—</span>
                             @endif
                         </td>
-                        <td><small class="text-muted">{{ $w->admin_note ?? '—' }}</small></td>
+                        <td><div class="text-muted text-truncate tw:text-xs" style="max-width:200px;" title="{{ $w->admin_note }}">{{ $w->admin_note ?? '—' }}</div></td>
                     @endif
                     @if($status === 'pending')
                         <td class="text-nowrap">
-                            <button class="btn btn-sm btn-success mr-1"
+                            <div class="action-group">
+                            <button class="btn btn-sm btn-success"
                                 onclick="openApprove({{ $w->id }}, {{ Illuminate\Support\Js::from($w->driver->name) }}, {{ $w->amount_khr }})">
                                 <i class="fas fa-check mr-1"></i>Approve
                             </button>
                             <button class="btn btn-sm btn-outline-danger"
                                 onclick="openReject({{ $w->id }}, {{ Illuminate\Support\Js::from($w->driver->name) }})">
-                                <i class="fas fa-times mr-1"></i>Reject
+                                <i class="fas fa-xmark mr-1"></i>Reject
                             </button>
+                            </div>
                         </td>
                     @endif
                 </tr>
                 @empty
-                <tr>
-                    <td colspan="10" class="text-center text-muted py-5">
-                        <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
-                        No {{ $status }} withdrawal requests.
-                    </td>
-                </tr>
+                <x-admin.empty-row colspan="10" icon="fa-money-bill-transfer"
+                                   :title="$status === 'pending' ? 'No withdrawals waiting' : 'No ' . $status . ' withdrawals'"
+                                   :hint="$status === 'pending' ? 'Driver cash-out requests will appear here.' : null"
+                                   :clear="route('admin.withdrawals', ['status' => $status])" />
                 @endforelse
             </tbody>
         </table>
     </div>
 
-    @if($withdrawals->hasPages())
-    <div class="card-footer">{{ $withdrawals->links() }}</div>
-    @endif
+    <x-admin.pagination :paginator="$withdrawals" />
 </div>
 
 {{-- Single Approve modal --}}

@@ -3,149 +3,134 @@
 @section('page-title', 'Driver Approvals')
 
 @section('content')
-<div class="card mb-3">
-    <div class="card-body py-2">
-        <form method="GET" action="{{ route('admin.drivers') }}" class="form-inline flex-wrap" style="gap:6px">
-            <input type="hidden" name="status" value="{{ $status }}">
-            <input type="text" name="search" class="form-control form-control-sm"
-                   placeholder="Search by name, phone, or email…"
-                   value="{{ $search ?? '' }}" style="min-width:260px">
-            <button class="btn btn-sm btn-primary"><i class="fas fa-search mr-1"></i>Search</button>
-            @if(($search ?? '') !== '')
-                <a href="{{ route('admin.drivers', ['status' => $status]) }}" class="btn btn-sm btn-secondary">Reset</a>
-            @endif
-        </form>
-    </div>
-</div>
+
+<x-admin.page-toolbar subtitle="Review new driver applications and their documents, and manage penalties.">
+    <a href="{{ route('admin.users', ['role' => 'driver']) }}" class="btn btn-secondary"><i class="fas fa-users mr-1"></i> Driver accounts</a>
+</x-admin.page-toolbar>
+
+@php
+    $cards = [
+        'all'       => ['All Drivers', 'fa-id-card',            'primary'],
+        'pending'   => ['Pending Review', 'fa-hourglass-half',   'warning'],
+        'approved'  => ['Approved', 'fa-circle-check',           'success'],
+        'rejected'  => ['Rejected', 'fa-circle-xmark',           'muted'],
+        'penalized' => ['Penalized', 'fa-ban',                   'danger'],
+    ];
+    $dtLabel  = ['owner' => 'Own vehicle', 'rental' => 'Rental', 'employee' => 'Employee'];
+    $initials = fn (?string $name) => collect(preg_split('/\s+/', trim((string) $name)))->filter()->take(2)
+        ->map(fn ($w) => mb_strtoupper(mb_substr($w, 0, 1)))->join('') ?: '?';
+    $required = 4;
+@endphp
+
+<x-admin.stat-grid :cols="5">
+    @foreach($cards as $key => [$label, $icon, $tone])
+        <x-admin.stat-card :label="$label" :value="number_format($counts[$key])" :icon="$icon" :tone="$tone"
+                           :href="route('admin.drivers', array_filter(['status' => $key, 'search' => $search]))" :active="$status === $key" />
+    @endforeach
+</x-admin.stat-grid>
 
 <div class="card">
     <div class="card-header">
-        <ul class="nav nav-tabs card-header-tabs">
-            <li class="nav-item">
-                <a class="nav-link {{ $status === 'pending' ? 'active' : '' }}" href="{{ route('admin.drivers', ['status' => 'pending', 'search' => $search]) }}">
-                    Pending
-                    @if($counts['pending'] > 0)
-                        <span class="badge badge-danger ml-1">{{ $counts['pending'] }}</span>
-                    @endif
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {{ $status === 'approved' ? 'active' : '' }}" href="{{ route('admin.drivers', ['status' => 'approved', 'search' => $search]) }}">
-                    Approved
-                    @if($counts['approved'] > 0)
-                        <span class="badge badge-success ml-1">{{ $counts['approved'] }}</span>
-                    @endif
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {{ $status === 'rejected' ? 'active' : '' }}" href="{{ route('admin.drivers', ['status' => 'rejected', 'search' => $search]) }}">
-                    Rejected
-                    @if($counts['rejected'] > 0)
-                        <span class="badge badge-secondary ml-1">{{ $counts['rejected'] }}</span>
-                    @endif
-                </a>
-            </li>
-        </ul>
+        <x-admin.filter-bar :action="route('admin.drivers')" placeholder="Search name, phone or email" :count="$drivers->total()" noun="driver">
+            <x-admin.filter-select name="status" :options="collect($cards)->except('all')->map(fn ($c) => $c[0])->all()" all="All statuses"
+                                  :value="$status === 'all' ? '' : $status" />
+        </x-admin.filter-bar>
     </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover mb-0">
-                <thead class="thead-light">
-                    <tr>
-                        <th>#</th>
-                        <th>Driver</th>
-                        <th>Phone</th>
-                        <th>City</th>
-                        <th>Service Zone</th>
-                        <th>Driver Type</th>
-                        <th>Documents</th>
-                        <th>Penalty</th>
-                        <th>Registered</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($drivers as $driver)
-                    <tr>
-                        <td>{{ ($drivers->currentPage() - 1) * $drivers->perPage() + $loop->iteration }}</td>
-                        <td>
-                            <div class="d-flex align-items-center">
-                                @if($driver->avatar)
-                                    <img src="{{ asset('storage/' . $driver->avatar) }}" class="img-circle mr-2" style="width:32px;height:32px;object-fit:cover;">
-                                @else
-                                    <div class="img-circle mr-2 bg-secondary d-flex align-items-center justify-content-center text-white" style="width:32px;height:32px;font-size:.75rem;">
-                                        {{ strtoupper(substr($driver->name, 0, 1)) }}
-                                    </div>
-                                @endif
-                                <div>
-                                    <div class="font-weight-bold">{{ $driver->name }}</div>
-                                    <small class="text-muted">{{ $driver->email }}</small>
-                                </div>
-                            </div>
-                        </td>
-                        <td>{{ $driver->phone ?? '—' }}</td>
-                        <td>{{ $driver->city ?? '—' }}</td>
-                        <td>{{ $driver->service_zone ?? '—' }}</td>
-                        <td>
-                            <span class="badge badge-info">{{ $driver->driver_type ?? 'N/A' }}</span>
-                        </td>
-                        <td>
-                            @php
-                                $docCount = $driver->driver_documents_count;
-                                $required = 4;
-                            @endphp
-                            <span class="badge {{ $docCount >= $required ? 'badge-success' : 'badge-warning' }}">
-                                {{ $docCount }} / {{ $required }}
-                            </span>
-                        </td>
-                        <td>
-                            @if($driver->isPenalized())
-                                <span class="badge badge-danger" title="{{ $driver->penalty_reason }}">
-                                    Until {{ $driver->penalty_until->format('d M, g:i A') }}
-                                </span>
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap">
+            <thead>
+                <tr>
+                    <th>Driver</th>
+                    <th>Phone</th>
+                    <th>Area</th>
+                    <th>Type</th>
+                    <th>Documents</th>
+                    <th>Status</th>
+                    <th>Applied</th>
+                    <th class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            @forelse($drivers as $driver)
+                @php
+                    $docs = $driver->driver_documents_count;
+                    [$sLabel, $sTone] = match ($driver->approval_status) {
+                        'approved' => ['Approved', 'success'], 'rejected' => ['Rejected', 'muted'], default => ['Pending', 'warning'],
+                    };
+                @endphp
+                <tr>
+                    <td>
+                        <div class="person">
+                            @if($driver->avatar)
+                                <img src="{{ asset('storage/' . $driver->avatar) }}" alt="" class="avatar-chip" style="object-fit:cover;" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'), { className: 'avatar-chip', textContent: {{ Illuminate\Support\Js::from($initials($driver->name)) }} }))">
                             @else
-                                <span class="text-muted">—</span>
+                                <span class="avatar-chip">{{ $initials($driver->name) }}</span>
                             @endif
-                        </td>
-                        <td>{{ $driver->created_at->format('d M Y') }}</td>
-                        <td class="text-nowrap">
-                            <a href="{{ route('admin.drivers.show', $driver->id) }}" class="btn btn-sm btn-primary mb-1">
+                            <div class="tw:min-w-0">
+                                <a href="{{ route('admin.drivers.show', $driver->id) }}" class="person-name d-block" style="max-width:200px;">{{ $driver->name }}</a>
+                                <div class="person-sub text-truncate" style="max-width:200px;">{{ $driver->email }}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>{{ $driver->phone ?? '—' }}</td>
+                    <td>
+                        <div>{{ $driver->city ?? '—' }}</div>
+                        @if($driver->service_zone)<div class="text-muted tw:text-xs">{{ $driver->service_zone }}</div>@endif
+                    </td>
+                    <td>
+                        @if($driver->driver_type)
+                            <span class="badge badge-info">{{ $dtLabel[$driver->driver_type] ?? ucfirst($driver->driver_type) }}</span>
+                        @else
+                            <span class="text-muted">—</span>
+                        @endif
+                    </td>
+                    <td style="min-width:110px;">
+                        <div class="tw:text-xs"><b style="color:var(--ink-900);">{{ $docs }}</b> / {{ $required }} uploaded</div>
+                        <div style="height:5px;border-radius:9px;background:var(--ink-100);margin-top:4px;overflow:hidden;">
+                            <span style="display:block;height:100%;width:{{ min(100, $docs / $required * 100) }}%;background:{{ $docs >= $required ? 'var(--success)' : 'var(--warning)' }};"></span>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="status-pill tone-{{ $sTone }}">{{ $sLabel }}</span>
+                        @if($driver->isPenalized())
+                            <div class="tw:mt-1"><span class="badge badge-danger" title="{{ $driver->penalty_reason }}" data-toggle="tooltip">
+                                <i class="fas fa-ban mr-1"></i>Penalized until {{ $driver->penalty_until->format('d M, H:i') }}
+                            </span></div>
+                        @endif
+                    </td>
+                    <td>
+                        <div>{{ $driver->created_at->format('d M Y') }}</div>
+                        <div class="text-muted tw:text-xs">{{ $driver->created_at->diffForHumans() }}</div>
+                    </td>
+                    <td class="text-center">
+                        <div class="action-group">
+                            <a href="{{ route('admin.drivers.show', $driver->id) }}" class="btn btn-sm btn-primary">
                                 <i class="fas fa-eye mr-1"></i> Review
                             </a>
                             @if($driver->isPenalized())
-                                <form method="POST" action="{{ route('admin.drivers.penalty.clear', $driver) }}" class="d-inline"
-                                      onsubmit="return confirm('Clear the penalty for {{ $driver->name }}?')">
+                                <form method="POST" action="{{ route('admin.drivers.penalty.clear', $driver) }}" class="m-0"
+                                      onsubmit="return confirm({{ Illuminate\Support\Js::from('Clear the penalty for ' . $driver->name . '?') }})">
                                     @csrf @method('DELETE')
-                                    <button class="btn btn-sm btn-outline-secondary mb-1"><i class="fas fa-undo mr-1"></i>Clear</button>
+                                    <button class="btn btn-sm btn-outline-secondary btn-icon" title="Clear penalty" data-toggle="tooltip"><i class="fas fa-rotate-left"></i></button>
                                 </form>
                             @else
-                                <button class="btn btn-sm btn-warning mb-1"
-                                    onclick="openPenalize({{ $driver->id }}, {{ Illuminate\Support\Js::from($driver->name) }})">
-                                    <i class="fas fa-ban mr-1"></i>Penalize
+                                <button class="btn btn-sm btn-outline-warning btn-icon" title="Penalize" data-toggle="tooltip"
+                                        onclick="openPenalize({{ $driver->id }}, {{ Illuminate\Support\Js::from($driver->name) }})">
+                                    <i class="fas fa-ban"></i>
                                 </button>
                             @endif
-                        </td>
-                    </tr>
-                    @empty
-                    <tr>
-                        <td colspan="10" class="text-center text-muted py-4">
-                            @if(($search ?? '') !== '')
-                                No {{ $status }} drivers found matching "{{ $search }}".
-                            @else
-                                No {{ $status }} drivers found.
-                            @endif
-                        </td>
-                    </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
+                        </div>
+                    </td>
+                </tr>
+            @empty
+                <x-admin.empty-row colspan="8" icon="fa-id-card"
+                                   :title="$status === 'pending' ? 'No drivers waiting for review' : 'No drivers here'"
+                                   :hint="$status === 'pending' ? 'New applications will appear here.' : null" :clear="route('admin.drivers', ['status' => 'all'])" />
+            @endforelse
+            </tbody>
+        </table>
     </div>
-    @if($drivers->hasPages())
-    <div class="card-footer">
-        {{ $drivers->appends(['status' => $status, 'search' => $search])->links() }}
-    </div>
-    @endif
+    <x-admin.pagination :paginator="$drivers" />
 </div>
 
 {{-- Penalize driver modal --}}

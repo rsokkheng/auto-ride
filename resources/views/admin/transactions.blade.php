@@ -4,156 +4,94 @@
 
 @section('content')
 
-{{-- Flash messages --}}
-@if(session('success'))
-<div class="alert alert-success alert-dismissible fade show">
-    <i class="fas fa-check-circle mr-2"></i>{{ session('success') }}
-    <button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>
-</div>
-@endif
-@if(session('error'))
-<div class="alert alert-danger alert-dismissible fade show">
-    <i class="fas fa-exclamation-circle mr-2"></i>{{ session('error') }}
-    <button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>
-</div>
-@endif
+<x-admin.page-toolbar subtitle="Every payment for rides, deliveries and moving jobs, with the platform's fee and the driver's share." />
 
+<x-admin.stat-grid :cols="4">
+    <x-admin.stat-card label="Total Collected" :value="number_format($stats->gross) . ' ៛'" icon="fa-sack-dollar" tone="primary"
+                       :sub="number_format($stats->n) . ' completed payments'" :href="route('admin.transactions', ['status' => 'completed'])" :active="request('status') === 'completed'" />
+    <x-admin.stat-card label="Platform Fees" :value="number_format($stats->fee) . ' ៛'" icon="fa-building-columns" tone="violet"
+                       :sub="$stats->gross ? round($stats->fee / $stats->gross * 100, 1) . '% of collected' : '—'" />
+    <x-admin.stat-card label="Paid to Drivers" :value="number_format($stats->driver) . ' ៛'" icon="fa-hand-holding-dollar" tone="success" />
+    <x-admin.stat-card label="Awaiting Confirmation" :value="number_format($pending_total)" icon="fa-hourglass-half" tone="warning"
+                       :sub="$pending_cash . ' cash · ' . $pending_online . ' online'" :href="route('admin.transactions', ['status' => 'pending'])" :active="request('status') === 'pending'" />
+</x-admin.stat-grid>
 
-{{-- Filters --}}
-<div class="card mb-3">
-    <div class="card-body py-2">
-        <form method="GET" action="{{ route('admin.transactions') }}" class="form-inline flex-wrap">
-            <input type="text" name="search" class="form-control form-control-sm mr-2 mb-1"
-                   placeholder="Search by transaction #, name, phone, or email…"
-                   value="{{ $search ?? '' }}" style="min-width:260px">
-            <select name="method" class="form-control form-control-sm mr-2">
-                <option value="">All Methods</option>
-                @foreach(\App\Models\TransactionRecord::$methodLabels as $val => $label)
-                    <option value="{{ $val }}" {{ request('method') == $val ? 'selected' : '' }}>{{ $label }}</option>
-                @endforeach
-            </select>
-            <select name="status" class="form-control form-control-sm mr-2">
-                <option value="">All Statuses</option>
-                <option value="pending"   {{ request('status') == 'pending'   ? 'selected' : '' }}>Pending</option>
-                <option value="completed" {{ request('status') == 'completed' ? 'selected' : '' }}>Completed</option>
-                <option value="cancelled" {{ request('status') == 'cancelled' ? 'selected' : '' }}>Cancelled</option>
-            </select>
-            <select name="type" class="form-control form-control-sm mr-2">
-                <option value="">All Types</option>
-                @foreach(\App\Models\TransactionRecord::$typeLabels as $val => $label)
-                    <option value="{{ $val }}" {{ request('type') == $val ? 'selected' : '' }}>{{ $label }}</option>
-                @endforeach
-            </select>
-            <button class="btn btn-sm btn-primary mr-1"><i class="fas fa-filter mr-1"></i>Filter</button>
-            <a href="{{ route('admin.transactions') }}" class="btn btn-sm btn-secondary">Reset</a>
-        </form>
-    </div>
-</div>
-
-{{-- Transaction table --}}
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0"><i class="fas fa-receipt mr-1"></i> All Transactions</h3>
-        <span class="badge badge-secondary">{{ $transactions->total() }} records</span>
+    <div class="card-header">
+        <x-admin.filter-bar :action="route('admin.transactions')" placeholder="Search #, payer or driver name, phone, email" :count="$transactions->total()" noun="transaction">
+            <x-admin.filter-select name="status" :options="['pending' => 'Pending', 'completed' => 'Completed', 'cancelled' => 'Cancelled']" all="All statuses" />
+            <x-admin.filter-select name="method" :options="\App\Models\TransactionRecord::$methodLabels" all="All methods" />
+            <x-admin.filter-select name="type" :options="\App\Models\TransactionRecord::$typeLabels" all="All types" />
+        </x-admin.filter-bar>
     </div>
     <div class="card-body table-responsive p-0">
-        <table class="table table-hover text-nowrap mb-0">
+        <table class="table table-hover text-nowrap">
             <thead>
                 <tr>
-                    <th>#</th>
-                    <th>Reference</th>
-                    <th>Payer</th>
-                    <th>Driver</th>
+                    <th>Transaction</th>
+                    <th>Payer → Driver</th>
                     <th>Method</th>
-                    <th>Paid By</th>
-                    <th>Total (KHR)</th>
-                    <th>Platform Fee</th>
-                    <th>Driver Earns</th>
+                    <th class="text-right">Total</th>
+                    <th class="text-right">Fee / Driver</th>
                     <th>Status</th>
-                    <th>Date</th>
-                    <th>Actions</th>
+                    <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse($transactions as $tx)
+            @forelse($transactions as $tx)
                 @php
-                    $icon  = \App\Models\TransactionRecord::$methodIcons[$tx->payment_method]  ?? 'fa-question';
-                    $color = \App\Models\TransactionRecord::$methodColors[$tx->payment_method] ?? 'secondary';
-                    $sColor = \App\Models\TransactionRecord::$statusColors[$tx->status] ?? 'secondary';
-
-                    if ($tx->type === 'ride_payment') {
-                        $srcLabel = 'Ride';
-                        $srcColor = 'primary';
-                        $srcIcon  = 'fa-car';
-                    } elseif ($tx->type === 'delivery_payment' && optional($tx->reference)->service_type === 'moving') {
-                        $srcLabel = 'Moving';
-                        $srcColor = 'warning';
-                        $srcIcon  = 'fa-truck';
-                    } elseif ($tx->type === 'delivery_payment') {
-                        $srcLabel = 'Delivery';
-                        $srcColor = 'info';
-                        $srcIcon  = 'fa-box';
-                    } else {
-                        $srcLabel = null;
-                    }
+                    $icon   = \App\Models\TransactionRecord::$methodIcons[$tx->payment_method] ?? 'fa-question';
+                    $sTone  = ['pending' => 'warning', 'completed' => 'success', 'cancelled' => 'muted'][$tx->status] ?? 'muted';
+                    [$srcLabel, $srcIcon, $srcTone] = match (true) {
+                        $tx->type === 'ride_payment' => ['Ride', 'fa-car-side', 'primary'],
+                        $tx->type === 'delivery_payment' && optional($tx->reference)->service_type === 'moving' => ['Moving', 'fa-truck', 'warning'],
+                        $tx->type === 'delivery_payment' => ['Delivery', 'fa-box', 'info'],
+                        default => [\App\Models\TransactionRecord::$typeLabels[$tx->type] ?? $tx->type, 'fa-receipt', 'muted'],
+                    };
                 @endphp
                 <tr id="row-{{ $tx->id }}">
-                    <td>{{ ($transactions->currentPage() - 1) * $transactions->perPage() + $loop->iteration }}</td>
                     <td>
-                        @if($srcLabel)
-                            <span class="badge badge-{{ $srcColor }}">
-                                <i class="fas {{ $srcIcon }} mr-1"></i>{{ $srcLabel }}
-                            </span>
-                        @else
-                            <span class="badge badge-light">
-                                {{ \App\Models\TransactionRecord::$typeLabels[$tx->type] ?? $tx->type }}
-                            </span>
-                        @endif
-                        <small class="text-muted d-block">#{{ $tx->reference_id }}</small>
-                    </td>
-                    <td>{{ $tx->payer?->name ?? '—' }}</td>
-                    <td>{{ $tx->payee?->name ?? '—' }}</td>
-                    <td>
-                        <span class="badge badge-{{ $color }}">
-                            <i class="fas {{ $icon }} mr-1"></i>
-                            {{ \App\Models\TransactionRecord::$methodLabels[$tx->payment_method] ?? $tx->payment_method }}
-                        </span>
+                        <div class="tw:flex tw:items-center tw:gap-3">
+                            <span class="stat-icon tone-{{ $srcTone }}" style="width:36px;height:36px;font-size:.85rem;"><i class="fas {{ $srcIcon }}"></i></span>
+                            <div>
+                                <div style="font-weight:600;color:var(--ink-900);">#{{ $tx->id }} · {{ $srcLabel }} #{{ $tx->reference_id }}</div>
+                                <div class="text-muted tw:text-xs">{{ $tx->created_at->format('d M Y, H:i') }}</div>
+                            </div>
+                        </div>
                     </td>
                     <td>
-                        @if($tx->payment_by === 'recipient')
-                            <span class="badge badge-warning">Recipient (COD)</span>
-                        @else
-                            <span class="badge badge-info">Sender</span>
-                        @endif
+                        <div>{{ $tx->payer?->name ?? '—' }} <i class="fas fa-arrow-right mx-1 text-muted" style="font-size:.65rem;"></i> {{ $tx->payee?->name ?? '—' }}</div>
+                        <div class="text-muted tw:text-xs">{{ $tx->payment_by === 'recipient' ? 'Paid by recipient (COD)' : 'Paid by sender' }}</div>
                     </td>
-                    <td><strong>{{ number_format($tx->gross_amount, 0) }} ៛</strong></td>
-                    <td class="text-danger">{{ number_format($tx->platform_fee, 0) }} ៛</td>
-                    <td class="text-success"><strong>{{ number_format($tx->driver_earning, 0) }} ៛</strong></td>
-                    <td>
-                        <span class="badge badge-{{ $sColor }}">{{ ucfirst($tx->status) }}</span>
-                        @if($tx->processedBy)
-                            <small class="text-muted d-block">by {{ $tx->processedBy->name }}</small>
-                        @endif
+                    <td><span class="badge badge-light"><i class="fas {{ $icon }} mr-1"></i>{{ \App\Models\TransactionRecord::$methodLabels[$tx->payment_method] ?? $tx->payment_method }}</span></td>
+                    <td class="text-right" style="font-weight:600;color:var(--ink-900);">{{ number_format($tx->gross_amount) }} ៛</td>
+                    <td class="text-right">
+                        <div style="color:var(--danger);">−{{ number_format($tx->platform_fee) }} ៛</div>
+                        <div style="color:var(--success);font-weight:600;">{{ number_format($tx->driver_earning) }} ៛</div>
                     </td>
-                    <td>{{ $tx->created_at->format('Y-m-d H:i') }}</td>
                     <td>
+                        <span class="status-pill tone-{{ $sTone }}">{{ ucfirst($tx->status) }}</span>
+                        @if($tx->processedBy)<div class="text-muted tw:text-xs tw:mt-1">by {{ $tx->processedBy->name }}</div>@endif
+                    </td>
+                    <td class="text-center">
                         @if($tx->isPending())
-                            <button type="button" class="btn btn-xs btn-danger"
-                                onclick="openCancel({{ $tx->id }})">
-                                <i class="fas fa-times"></i>
-                            </button>
+                            <div class="action-group">
+                                <button type="button" class="btn btn-sm btn-outline-danger btn-icon" title="Cancel transaction" data-toggle="tooltip" onclick="openCancel({{ $tx->id }})">
+                                    <i class="fas fa-xmark"></i>
+                                </button>
+                            </div>
                         @else
-                            <span class="text-muted small">—</span>
+                            <span class="text-muted">—</span>
                         @endif
                     </td>
                 </tr>
-                @empty
-                <tr><td colspan="13" class="text-center text-muted py-4">No transactions found.</td></tr>
-                @endforelse
+            @empty
+                <x-admin.empty-row colspan="7" icon="fa-receipt" title="No transactions yet" :clear="route('admin.transactions')" />
+            @endforelse
             </tbody>
         </table>
     </div>
-    <div class="card-footer clearfix">{{ $transactions->links() }}</div>
+    <x-admin.pagination :paginator="$transactions" />
 </div>
 
 {{-- Cancel modal --}}

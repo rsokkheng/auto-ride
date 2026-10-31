@@ -25,77 +25,50 @@ function rideDistanceKm($r): ?float {
 
 @section('content')
 
-@include('admin.partials.search-box', [
-    'route' => route('admin.rides'),
-    'search' => $search ?? '',
-    'placeholder' => 'Search by ride #, passenger, or driver name/phone…',
-])
+<x-admin.page-toolbar :subtitle="'Every ride booked in the app. Drivers keep ' . (100 - $commissionPct) . '% of the fare; ' . $commissionPct . '% is platform commission.'">
+    <button class="btn btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Create Ride</button>
+</x-admin.page-toolbar>
+
+@php
+    $tabs = [
+        'all'       => ['All Rides', 'fa-route',          'primary'],
+        'pending'   => ['In Progress', 'fa-spinner',      'info'],
+        'completed' => ['Completed', 'fa-flag-checkered', 'success'],
+        'cancelled' => ['Cancelled', 'fa-ban',            'danger'],
+    ];
+    $statusTone = ['requested' => 'muted', 'pending' => 'warning', 'accepted' => 'info', 'driver_arrived' => 'info', 'in_progress' => 'primary', 'completed' => 'success', 'cancelled' => 'danger'];
+@endphp
+<x-admin.stat-grid :cols="4">
+    @foreach($tabs as $key => [$label, $icon, $tone])
+        <x-admin.stat-card :label="$label" :value="number_format($counts[$key])" :icon="$icon" :tone="$tone"
+                           :href="route('admin.rides', array_filter(['tab' => $key, 'search' => $search]))" :active="($tab ?? 'all') === $key" />
+    @endforeach
+</x-admin.stat-grid>
 
 <div class="card">
     <div class="card-header">
-        <ul class="nav nav-tabs card-header-tabs">
-            <li class="nav-item">
-                <a class="nav-link {{ ($tab ?? 'all') === 'all' ? 'active' : '' }}" href="{{ route('admin.rides', ['tab' => 'all', 'search' => $search]) }}">
-                    All Ride
-                    <span class="badge badge-secondary ml-1">{{ $counts['all'] }}</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {{ ($tab ?? '') === 'completed' ? 'active' : '' }}" href="{{ route('admin.rides', ['tab' => 'completed', 'search' => $search]) }}">
-                    Complete Ride
-                    @if($counts['completed'] > 0)
-                        <span class="badge badge-success ml-1">{{ $counts['completed'] }}</span>
-                    @endif
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {{ ($tab ?? '') === 'pending' ? 'active' : '' }}" href="{{ route('admin.rides', ['tab' => 'pending', 'search' => $search]) }}">
-                    Pending Ride
-                    @if($counts['pending'] > 0)
-                        <span class="badge badge-warning ml-1">{{ $counts['pending'] }}</span>
-                    @endif
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {{ ($tab ?? '') === 'cancelled' ? 'active' : '' }}" href="{{ route('admin.rides', ['tab' => 'cancelled', 'search' => $search]) }}">
-                    Cancelled Ride
-                    @if($counts['cancelled'] > 0)
-                        <span class="badge badge-danger ml-1">{{ $counts['cancelled'] }}</span>
-                    @endif
-                </a>
-            </li>
-        </ul>
-    </div>
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0">Ride Orders</h3>
-        <button class="btn btn-sm btn-primary" onclick="openCreate()">
-            <i class="fas fa-plus mr-1"></i> Create Ride
-        </button>
+        <x-admin.filter-bar :action="route('admin.rides')" placeholder="Ride #, passenger or driver name / phone" :count="$rides->total()" noun="ride">
+            <x-admin.filter-select name="tab" :options="collect($tabs)->except('all')->map(fn ($t) => $t[0])->all()" all="All statuses" />
+        </x-admin.filter-bar>
     </div>
     <div class="card-body table-responsive p-0">
-        <table class="table table-hover text-nowrap mb-0">
-            <thead class="thead-dark">
+        <table class="table table-hover text-nowrap">
+            <thead>
                 <tr>
-                    <th>#</th>
-                    <th>Passenger</th>
-                    <th>Driver</th>
-                    <th>Address</th>
+                    <th>Ride</th>
+                    <th>Passenger → Driver</th>
+                    <th>Route</th>
                     <th>Status</th>
-                    <th class="text-right">Dist (km)</th>
-                    <th class="text-center">Est. Time</th>
-                    <th class="text-right">Fare ៛</th>
-                    <th class="text-right">Net Driver ៛</th>
-                    <th>Date &amp; Time</th>
-                    <th>Actions</th>
+                    <th class="text-right">Fare</th>
+                    <th class="text-right">Driver Net</th>
+                    <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse($rides as $r)
+            @forelse($rides as $r)
                 @php
-                    $sc = ['requested'=>'secondary','pending'=>'warning','accepted'=>'info','driver_arrived'=>'info','in_progress'=>'primary','completed'=>'success','cancelled'=>'danger'];
                     $distKm    = rideDistanceKm($r);
-                    $comm      = $commissionPct;
-                    $netDriver = $r->fare ? round($r->fare * (1 - $comm / 100)) : null;
+                    $netDriver = $r->fare ? round($r->fare * (1 - $commissionPct / 100)) : null;
 
                     // Duration: actual if completed, estimated from distance otherwise
                     $durationMin = null;
@@ -106,132 +79,74 @@ function rideDistanceKm($r): ?float {
                     } elseif ($distKm !== null) {
                         $durationMin = (int) ceil(($distKm / 30) * 60); // 30 km/h avg city speed
                     }
-                    // Format: "1 Hr 20 Min" or "45 Min" (or "< 1 Min" for a genuine sub-minute actual duration)
                     $durationLabel = null;
-                    if ($durationMin !== null && $durationMin === 0 && $durationActual) {
-                        $durationLabel = '< 1 Min';
-                    } elseif ($durationMin !== null && $durationMin > 0) {
-                        $hrs  = intdiv($durationMin, 60);
-                        $mins = $durationMin % 60;
-                        if ($hrs > 0 && $mins > 0)      $durationLabel = "{$hrs} Hr {$mins} Min";
-                        elseif ($hrs > 0)                $durationLabel = "{$hrs} Hour" . ($hrs > 1 ? 's' : '');
-                        else                             $durationLabel = "{$mins} Min";
+                    if ($durationMin === 0 && $durationActual) {
+                        $durationLabel = '< 1 min';
+                    } elseif ($durationMin) {
+                        $hrs = intdiv($durationMin, 60); $mins = $durationMin % 60;
+                        $durationLabel = $hrs ? $hrs . ' h' . ($mins ? ' ' . $mins . ' min' : '') : $mins . ' min';
                     }
-                    $stops    = $r->stops ?? collect();
-                    // Build route popup data
+                    $stops     = $r->stops ?? collect();
                     $routeData = [
                         'rideId'  => $r->id,
                         'pickup'  => ['address' => $r->pickup_address, 'lat' => $r->pickup_lat, 'lng' => $r->pickup_lng],
-                        'stops'   => $stops->map(fn($s) => ['address'=>$s->address,'lat'=>$s->lat,'lng'=>$s->lng,'arrived_at'=>$s->arrived_at?->format('d M H:i')])->values()->all(),
+                        'stops'   => $stops->map(fn ($s) => ['address' => $s->address, 'lat' => $s->lat, 'lng' => $s->lng, 'arrived_at' => $s->arrived_at?->format('d M H:i')])->values()->all(),
                         'dropoff' => ['address' => $r->dropoff_address, 'lat' => $r->dropoff_lat, 'lng' => $r->dropoff_lng],
                     ];
                 @endphp
-                <tr>
-                    <td>{{ ($rides->currentPage() - 1) * $rides->perPage() + $loop->iteration }}</td>
+                <tr data-ride="{{ json_encode([
+                        'id' => $r->id, 'passenger_id' => $r->passenger_id, 'driver_id' => $r->driver_id,
+                        'pickup_address' => $r->pickup_address, 'dropoff_address' => $r->dropoff_address ?? '',
+                        'status' => $r->status, 'fare' => $r->fare ?? '', 'service_type' => $r->service_type ?? '', 'notes' => $r->notes ?? '',
+                    ]) }}">
                     <td>
-                        <div>{{ $r->passenger?->name ?? '—' }}</div>
-                        @if($r->passenger_name)
-                        <small class="text-muted">for {{ $r->passenger_name }}</small>
-                        @endif
+                        <a href="{{ route('admin.rides.show', $r->id) }}" style="font-weight:600;">#{{ $r->id }}</a>
+                        <div class="text-muted tw:text-xs">{{ $r->created_at->format('d M Y, H:i') }}</div>
                     </td>
                     <td>
-                        @if($r->driver){{ $r->driver->name }}@else<span class="text-muted">Unassigned</span>@endif
+                        <div>{{ $r->passenger?->name ?? '—' }}@if($r->passenger_name) <span class="text-muted tw:text-xs">for {{ $r->passenger_name }}</span>@endif</div>
+                        <div class="text-muted tw:text-xs"><i class="fas fa-arrow-right mr-1" style="font-size:.6rem;"></i>{{ $r->driver?->name ?? 'No driver yet' }}</div>
                     </td>
-                    {{-- Address — merged pickup + dropoff (+ stops), following the Deliveries page style --}}
                     <td>
-                        <button type="button" class="btn btn-xs btn-outline-primary"
-                            data-route="{{ json_encode($routeData) }}"
-                            onclick="showStopsModal(JSON.parse(this.dataset.route))">
-                            <i class="fas fa-map-marker-alt mr-1"></i>View
+                        <button type="button" class="btn btn-sm btn-outline-primary" data-route="{{ json_encode($routeData) }}"
+                                onclick="showStopsModal(JSON.parse(this.dataset.route))">
+                            <i class="fas fa-map-location-dot mr-1"></i>{{ $distKm !== null ? $distKm . ' km' : 'Route' }}
                         </button>
-                        @if($stops->count() > 0)
-                            <span class="badge badge-warning ml-1">{{ $stops->count() + 1 }} stops</span>
-                        @endif
+                        <div class="text-muted tw:text-xs tw:mt-1">
+                            @if($durationLabel)<i class="fas fa-clock mr-1"></i>{{ $durationLabel }}{{ $durationActual ? '' : ' est.' }}@endif
+                            @if($stops->count()) · {{ $stops->count() }} {{ Str::plural('stop', $stops->count()) }}@endif
+                        </div>
                     </td>
-
-                    <td>
-                        <span class="badge badge-{{ $sc[$r->status] ?? 'secondary' }}">{{ ucfirst(str_replace('_',' ',$r->status)) }}</span>
-                    </td>
-
-                    {{-- Distance --}}
+                    <td><span class="status-pill tone-{{ $statusTone[$r->status] ?? 'muted' }}">{{ ucfirst(str_replace('_', ' ', $r->status)) }}</span></td>
                     <td class="text-right">
-                        @if($distKm !== null)
-                        <span class="text-info font-weight-bold">{{ $distKm }}</span> <small class="text-muted">km</small>
-                        @else
-                        <span class="text-muted">—</span>
-                        @endif
-                    </td>
-
-                    {{-- Est. Time --}}
-                    <td class="text-center">
-                        @if($durationLabel)
-                        <span class="{{ $durationActual ? 'text-success' : 'text-info' }}" style="font-size:.85rem;font-weight:600;">
-                            <i class="fas fa-clock mr-1" style="font-size:.75rem;"></i>{{ $durationLabel }}
-                        </span>
-                        @if(!$durationActual)
-                        <div><small class="text-muted" style="font-size:.7rem;">estimate</small></div>
-                        @endif
-                        @else
-                        <span class="text-muted">—</span>
-                        @endif
-                    </td>
-
-                    {{-- Fare --}}
-                    <td class="text-right font-weight-bold">
                         @if($r->fare)
-                        {{ number_format($r->fare) }}
-                        @if($r->discount_amount > 0)
-                        <div><small class="text-success">-{{ number_format($r->discount_amount) }} promo</small></div>
-                        @endif
+                            <div style="font-weight:600;color:var(--ink-900);">{{ number_format($r->fare) }} ៛</div>
+                            @if($r->discount_amount > 0)<div class="tw:text-xs" style="color:var(--success);">−{{ number_format($r->discount_amount) }} promo</div>@endif
                         @else
-                        <span class="text-muted">Metered</span>
+                            <span class="text-muted">Metered</span>
                         @endif
                     </td>
-
-                    {{-- Net Driver --}}
                     <td class="text-right">
                         @if($netDriver !== null)
-                        <span class="text-success font-weight-bold">{{ number_format($netDriver) }}</span>
-                        <div><small class="text-muted">{{ 100 - $comm }}% of fare</small></div>
+                            <div style="font-weight:600;color:var(--success);">{{ number_format($netDriver) }} ៛</div>
                         @else
-                        <span class="text-muted">—</span>
+                            <span class="text-muted">—</span>
                         @endif
                     </td>
-
-                    <td style="font-size:.82rem;white-space:nowrap;">
-                        {{ $r->created_at->format('j-m-Y') }}<br>
-                        <span class="text-muted">{{ $r->created_at->format('H:i:s') }}</span>
-                    </td>
-                    <td class="text-nowrap">
-                        <a href="{{ route('admin.rides.show', $r->id) }}" class="btn btn-xs btn-primary mr-1" title="View Detail"><i class="fas fa-eye"></i></a>
-                        <button class="btn btn-xs btn-info mr-1" onclick="openEdit({
-                            id: {{ $r->id }},
-                            passenger_id: {{ $r->passenger_id }},
-                            driver_id: {{ $r->driver_id ?? 'null' }},
-                            pickup_address: @json($r->pickup_address),
-                            dropoff_address: @json($r->dropoff_address ?? ''),
-                            status: @json($r->status),
-                            fare: '{{ $r->fare ?? '' }}',
-                            service_type: @json($r->service_type ?? ''),
-                            notes: @json($r->notes ?? '')
-                        })"><i class="fas fa-edit"></i></button>
-                        <form method="POST" action="{{ route('admin.rides.destroy', $r) }}" class="d-inline"
-                              onsubmit="return confirm('Delete ride #{{ $r->id }}?')">
-                            @csrf @method('DELETE')
-                            <button class="btn btn-xs btn-danger"><i class="fas fa-trash"></i></button>
-                        </form>
+                    <td class="text-center">
+                        <x-admin.row-actions edit="openEdit(JSON.parse(this.closest('tr').dataset.ride))"
+                                             :delete="route('admin.rides.destroy', $r)" :confirm="'Delete ride #' . $r->id . '?'">
+                            <a href="{{ route('admin.rides.show', $r->id) }}" class="btn btn-sm btn-outline-secondary btn-icon" title="View details" data-toggle="tooltip"><i class="fas fa-eye"></i></a>
+                        </x-admin.row-actions>
                     </td>
                 </tr>
-                @empty
-                <tr><td colspan="11" class="text-center text-muted py-4">No rides found.</td></tr>
-                @endforelse
+            @empty
+                <x-admin.empty-row colspan="7" icon="fa-route" title="No rides yet" :clear="route('admin.rides')" />
+            @endforelse
             </tbody>
         </table>
     </div>
-    <div class="card-footer d-flex align-items-center justify-content-between">
-        <small class="text-muted">Commission: {{ $commissionPct }}% &nbsp;|&nbsp; Net = Fare × {{ 100 - $commissionPct }}%</small>
-        {{ $rides->links() }}
-    </div>
+    <x-admin.pagination :paginator="$rides" />
 </div>
 
 {{-- ─── Stop Route Popup ────────────────────────────────────── --}}

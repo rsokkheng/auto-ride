@@ -4,113 +4,93 @@
 
 @section('content')
 
-{{-- Stats row --}}
-<div class="row mb-3">
-    <div class="col-md-4">
-        <div class="info-box bg-gradient-primary">
-            <span class="info-box-icon"><i class="fas fa-users"></i></span>
-            <div class="info-box-content">
-                <span class="info-box-text">Active Subscribers</span>
-                <span class="info-box-number">{{ number_format($stats['total_active']) }}</span>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="info-box bg-gradient-success">
-            <span class="info-box-icon"><i class="fas fa-dollar-sign"></i></span>
-            <div class="info-box-content">
-                <span class="info-box-text">Revenue This Month</span>
-                <span class="info-box-number">{{ number_format($stats['revenue_month']) }} ៛</span>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="info-box bg-gradient-warning">
-            <span class="info-box-icon"><i class="fas fa-times-circle"></i></span>
-            <div class="info-box-content">
-                <span class="info-box-text">Cancellations This Month</span>
-                <span class="info-box-number">{{ number_format($stats['cancelled_month']) }}</span>
-            </div>
-        </div>
-    </div>
-</div>
+<x-admin.page-toolbar subtitle="Paid memberships passengers can buy for ride credit, discounts and perks.">
+    <button class="btn btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Create Plan</button>
+</x-admin.page-toolbar>
+
+<x-admin.stat-grid :cols="4">
+    <x-admin.stat-card label="Plans" :value="number_format($stats['plans'])" icon="fa-layer-group" tone="primary"
+                       :sub="$stats['plans_active'] . ' active'" :href="route('admin.subscription-plans')" :active="!request('status')" />
+    <x-admin.stat-card label="Active Subscribers" :value="number_format($stats['total_active'])" icon="fa-users" tone="success" />
+    <x-admin.stat-card label="Revenue This Month" :value="number_format($stats['revenue_month']) . ' ៛'" icon="fa-sack-dollar" tone="violet" :sub="now()->format('F Y')" />
+    <x-admin.stat-card label="Cancellations" :value="number_format($stats['cancelled_month'])" icon="fa-user-xmark" tone="danger" sub="this month" />
+</x-admin.stat-grid>
 
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0"><i class="fas fa-layer-group text-primary mr-2"></i> Plans</h3>
-        <button class="btn btn-sm btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Create Plan</button>
+    <div class="card-header">
+        <x-admin.filter-bar :action="route('admin.subscription-plans')" placeholder="Search plan name" :count="$plans->total()" noun="plan">
+            <x-admin.filter-select name="status" :options="['active' => 'Active', 'inactive' => 'Inactive']" all="All statuses" />
+            <x-admin.filter-select name="cycle" :options="['weekly' => 'Weekly', 'monthly' => 'Monthly', 'yearly' => 'Yearly']" all="All billing cycles" />
+        </x-admin.filter-bar>
     </div>
-    <div class="card-body p-0">
-        <table class="table table-hover mb-0">
-            <thead class="thead-light">
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap">
+            <thead>
                 <tr>
-                    <th>#</th>
                     <th>Plan</th>
-                    <th>Price</th>
-                    <th>Cycle</th>
-                    <th>Ride Credit</th>
-                    <th>Discount</th>
-                    <th>Perks</th>
-                    <th>Subscribers</th>
+                    <th class="text-right">Price</th>
+                    <th>Benefits</th>
+                    <th class="text-center">Subscribers</th>
                     <th>Status</th>
-                    <th>Actions</th>
+                    <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse($plans as $plan)
+            @forelse($plans as $plan)
                 <tr>
-                    <td>{{ $plan->sort_order }}</td>
                     <td>
-                        <span class="badge" style="background:{{ $plan->badge_color }};color:#fff;font-size:.8rem;padding:.4em .7em">
-                            <i class="{{ $plan->icon }} mr-1"></i>{{ $plan->name }}
-                        </span>
-                        <br><small class="text-muted">{{ $plan->description }}</small>
+                        <div class="tw:flex tw:items-center tw:gap-3">
+                            <span class="stat-icon" style="width:38px;height:38px;font-size:.9rem;background:{{ $plan->badge_color }}1f;color:{{ $plan->badge_color }};">
+                                <i class="{{ $plan->icon ?: 'fas fa-crown' }}"></i>
+                            </span>
+                            <div class="tw:min-w-0">
+                                <div style="font-weight:600;color:var(--ink-900);">{{ $plan->name }}</div>
+                                <div class="text-muted text-truncate tw:text-xs" style="max-width:240px;" title="{{ $plan->description }}">{{ $plan->description ?: $plan->slug }}</div>
+                            </div>
+                        </div>
                     </td>
-                    <td><strong>{{ number_format($plan->price_khr) }} ៛</strong></td>
-                    <td>{{ ucfirst($plan->billing_cycle) }}</td>
-                    <td>{{ $plan->ride_credit_khr ? number_format($plan->ride_credit_khr) . ' ៛' : '—' }}</td>
-                    <td>
-                        @if($plan->ride_discount_pct) <span class="badge badge-info">{{ $plan->ride_discount_pct }}% ride</span> @endif
-                        @if($plan->delivery_discount_pct) <span class="badge badge-secondary">{{ $plan->delivery_discount_pct }}% delivery</span> @endif
-                        @if(!$plan->ride_discount_pct && !$plan->delivery_discount_pct) — @endif
+                    <td class="text-right">
+                        <div style="font-weight:600;color:var(--ink-900);">{{ number_format($plan->price_khr) }} ៛</div>
+                        <div class="text-muted tw:text-xs">per {{ ['weekly' => 'week', 'monthly' => 'month', 'yearly' => 'year'][$plan->billing_cycle] ?? $plan->billing_cycle }}</div>
                     </td>
-                    <td>
-                        @if($plan->surge_waived) <span class="badge badge-warning">No Surge</span> @endif
-                        @if($plan->priority_matching) <span class="badge badge-primary">Priority</span> @endif
-                        @if($plan->bonus_points_pct) <span class="badge badge-success">+{{ $plan->bonus_points_pct }}% pts</span> @endif
-                        @if($plan->free_cancellations === 0) <span class="badge badge-light border">∞ Cancel</span>
-                        @elseif($plan->free_cancellations > 0) <span class="badge badge-light border">{{ $plan->free_cancellations }} Cancel</span> @endif
+                    <td style="white-space:normal;min-width:240px;">
+                        <div class="tw:flex tw:flex-wrap tw:gap-1">
+                            @if($plan->ride_credit_khr)<span class="badge badge-primary">{{ number_format($plan->ride_credit_khr) }} ៛ credit</span>@endif
+                            @if($plan->ride_discount_pct)<span class="badge badge-info">{{ $plan->ride_discount_pct }}% off rides</span>@endif
+                            @if($plan->delivery_discount_pct)<span class="badge badge-info">{{ $plan->delivery_discount_pct }}% off delivery</span>@endif
+                            @if($plan->surge_waived)<span class="badge badge-warning">No surge</span>@endif
+                            @if($plan->priority_matching)<span class="badge badge-success">Priority matching</span>@endif
+                            @if($plan->bonus_points_pct)<span class="badge badge-success">+{{ $plan->bonus_points_pct }}% points</span>@endif
+                            @if($plan->free_cancellations === 0)<span class="badge badge-light">Unlimited cancels</span>
+                            @elseif($plan->free_cancellations > 0)<span class="badge badge-light">{{ $plan->free_cancellations }} free cancels</span>@endif
+                        </div>
                     </td>
                     <td class="text-center">
-                        <a href="{{ route('admin.subscription-plans.subscribers', $plan) }}" class="badge badge-secondary">
-                            {{ rescue(fn() => \App\Models\UserSubscription::where('subscription_plan_id',$plan->id)->where('status','active')->count(), 0, false) }}
+                        <a href="{{ route('admin.subscription-plans.subscribers', $plan) }}" class="badge badge-secondary" style="font-size:.78rem;">
+                            <i class="fas fa-users mr-1"></i>{{ number_format($plan->active_subscribers ?? 0) }}
                         </a>
                     </td>
-                    <td>
-                        <span class="badge badge-{{ $plan->active ? 'success' : 'secondary' }}">
-                            {{ $plan->active ? 'Active' : 'Inactive' }}
-                        </span>
-                    </td>
-                    <td>
-                        <button class="btn btn-xs btn-outline-primary" onclick="openEdit({{ $plan->id }})">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <form action="{{ route('admin.subscription-plans.destroy', $plan) }}" method="POST" class="d-inline"
-                              onsubmit="return confirm('Deactivate this plan?')">
-                            @csrf @method('DELETE')
-                            <button class="btn btn-xs btn-outline-danger"><i class="fas fa-ban"></i></button>
-                        </form>
+                    <td><span class="status-pill tone-{{ $plan->active ? 'success' : 'muted' }}">{{ $plan->active ? 'Active' : 'Inactive' }}</span></td>
+                    <td class="text-center">
+                        <x-admin.row-actions :edit="'openEdit(' . $plan->id . ')'">
+                            @if($plan->active)
+                                <form action="{{ route('admin.subscription-plans.destroy', $plan) }}" method="POST" class="m-0"
+                                      onsubmit="return confirm({{ Illuminate\Support\Js::from('Deactivate plan ' . $plan->name . '? New customers will no longer see it.') }})">
+                                    @csrf @method('DELETE')
+                                    <button class="btn btn-sm btn-outline-danger btn-icon" title="Deactivate" data-toggle="tooltip"><i class="fas fa-ban"></i></button>
+                                </form>
+                            @endif
+                        </x-admin.row-actions>
                     </td>
                 </tr>
-                @empty
-                <tr><td colspan="10" class="text-center text-muted py-4">No subscription plans yet.</td></tr>
-                @endforelse
+            @empty
+                <x-admin.empty-row colspan="6" icon="fa-layer-group" title="No subscription plans yet"
+                                   hint="Create a plan customers can subscribe to." :clear="route('admin.subscription-plans')" />
+            @endforelse
             </tbody>
         </table>
     </div>
-    @if($plans->hasPages())
-    <div class="card-footer">{{ $plans->links() }}</div>
-    @endif
+    <x-admin.pagination :paginator="$plans" />
 </div>
 
 {{-- Create Modal --}}

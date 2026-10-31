@@ -4,82 +4,90 @@
 
 @section('content')
 
-@include('admin.partials.search-box', [
-    'route' => route('admin.companies'),
-    'search' => $search ?? '',
-    'placeholder' => 'Search by name, phone, or email…',
-])
+<x-admin.page-toolbar subtitle="Fleet companies whose drivers work under a company commission and daily rental rate.">
+    <button class="btn btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Create Company</button>
+</x-admin.page-toolbar>
+
+<x-admin.stat-grid :cols="4">
+    <x-admin.stat-card label="Companies" :value="number_format($stats['total'])" icon="fa-building" tone="primary"
+                       :href="route('admin.companies')" :active="!request('status')" />
+    <x-admin.stat-card label="Active" :value="number_format($stats['active'])" icon="fa-circle-check" tone="success"
+                       :href="route('admin.companies', ['status' => 'active'])" :active="request('status') === 'active'" />
+    <x-admin.stat-card label="Fleet Drivers" :value="number_format($stats['drivers'])" icon="fa-id-card" tone="info" sub="drivers linked to a company" />
+    <x-admin.stat-card label="Avg. Company Cut" :value="number_format($stats['avg_cut'], 1) . '%'" icon="fa-percent" tone="violet" sub="active companies" />
+</x-admin.stat-grid>
 
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0">Fleet Companies</h3>
-        <button class="btn btn-sm btn-primary" onclick="openCreate()">
-            <i class="fas fa-plus mr-1"></i> Create Company
-        </button>
+    <div class="card-header">
+        <x-admin.filter-bar :action="route('admin.companies')" placeholder="Search name, phone or email" :count="$companies->total()" noun="company">
+            <x-admin.filter-select name="status" :options="['active' => 'Active', 'inactive' => 'Inactive']" all="All statuses" />
+        </x-admin.filter-bar>
     </div>
     <div class="card-body table-responsive p-0">
-        <table class="table table-hover text-nowrap mb-0">
+        <table class="table table-hover text-nowrap">
             <thead>
                 <tr>
-                    <th>#</th>
-                    <th>Name</th>
-                    <th>Phone</th>
-                    <th>Email</th>
-                    <th>Platform Fee</th>
-                    <th>Company Cut</th>
-                    <th>Daily Rental</th>
-                    <th>Drivers</th>
+                    <th>Company</th>
+                    <th>Contact</th>
+                    <th class="text-right">Platform Fee</th>
+                    <th class="text-right">Company Cut</th>
+                    <th class="text-right">Daily Rental</th>
+                    <th class="text-center">Drivers</th>
                     <th>Status</th>
-                    <th>Actions</th>
+                    <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse($companies as $c)
-                <tr>
-                    <td>{{ ($companies->currentPage() - 1) * $companies->perPage() + $loop->iteration }}</td>
-                    <td><strong>{{ $c->name }}</strong><br><small class="text-muted">{{ $c->address ?? '' }}</small></td>
-                    <td>{{ $c->phone ?? '—' }}</td>
-                    <td>{{ $c->email ?? '—' }}</td>
-                    <td>{{ $c->platform_commission_rate !== null ? $c->platform_commission_rate.'%' : '<span class="text-muted">default</span>' }}</td>
-                    <td>{{ $c->company_commission_rate }}%</td>
-                    <td>{{ $c->rental_daily_rate ? number_format($c->rental_daily_rate, 0).' ៛' : '—' }}</td>
-                    <td><span class="badge badge-secondary">{{ $c->drivers_count }}</span></td>
+            @forelse($companies as $c)
+                <tr data-company="{{ json_encode([
+                        'id'                       => $c->id,
+                        'name'                     => $c->name,
+                        'phone'                    => $c->phone ?? '',
+                        'email'                    => $c->email ?? '',
+                        'address'                  => $c->address ?? '',
+                        'platform_commission_rate' => $c->platform_commission_rate ?? '',
+                        'company_commission_rate'  => $c->company_commission_rate,
+                        'rental_daily_rate'        => $c->rental_daily_rate,
+                        'active'                   => $c->active,
+                    ]) }}">
                     <td>
-                        <span class="badge badge-{{ $c->active ? 'success' : 'secondary' }}">
-                            {{ $c->active ? 'Active' : 'Inactive' }}
-                        </span>
+                        <div class="tw:flex tw:items-center tw:gap-3">
+                            <span class="stat-icon tone-primary" style="width:36px;height:36px;font-size:.85rem;"><i class="fas fa-building"></i></span>
+                            <div class="tw:min-w-0">
+                                <a href="{{ route('admin.companies.show', $c) }}" class="d-block text-truncate" style="max-width:220px;font-weight:600;">{{ $c->name }}</a>
+                                <div class="text-muted text-truncate tw:text-xs" style="max-width:220px;" title="{{ $c->address }}">{{ $c->address ?: '—' }}</div>
+                            </div>
+                        </div>
                     </td>
                     <td>
-                        <a href="{{ route('admin.companies.show', $c) }}" class="btn btn-xs btn-secondary mr-1" title="View">
-                            <i class="fas fa-eye"></i>
-                        </a>
-                        <button class="btn btn-xs btn-info mr-1"
-                            data-company="{{ e(json_encode([
-                                'id'                       => $c->id,
-                                'name'                     => $c->name,
-                                'phone'                    => $c->phone ?? '',
-                                'email'                    => $c->email ?? '',
-                                'address'                  => $c->address ?? '',
-                                'platform_commission_rate' => $c->platform_commission_rate ?? '',
-                                'company_commission_rate'  => $c->company_commission_rate,
-                                'rental_daily_rate'        => $c->rental_daily_rate,
-                                'active'                   => $c->active,
-                            ])) }}"
-                            onclick="openEdit(this)" title="Edit"><i class="fas fa-edit"></i></button>
-                        <form method="POST" action="{{ route('admin.companies.destroy', $c) }}" class="d-inline"
-                              onsubmit="return confirm({{ Illuminate\Support\Js::from('Delete company ' . $c->name . '?') }})">
-                            @csrf @method('DELETE')
-                            <button class="btn btn-xs btn-danger" title="Delete"><i class="fas fa-trash"></i></button>
-                        </form>
+                        <div>{{ $c->phone ?? '—' }}</div>
+                        <div class="text-muted tw:text-xs">{{ $c->email ?? '' }}</div>
+                    </td>
+                    <td class="text-right">
+                        @if($c->platform_commission_rate !== null)
+                            {{ rtrim(rtrim(number_format($c->platform_commission_rate, 2), '0'), '.') }}%
+                        @else
+                            <span class="text-muted">Default</span>
+                        @endif
+                    </td>
+                    <td class="text-right">{{ rtrim(rtrim(number_format($c->company_commission_rate, 2), '0'), '.') }}%</td>
+                    <td class="text-right">{{ $c->rental_daily_rate ? number_format($c->rental_daily_rate) . ' ៛' : '—' }}</td>
+                    <td class="text-center"><span class="badge badge-secondary"><i class="fas fa-id-card mr-1"></i>{{ $c->drivers_count }}</span></td>
+                    <td><span class="status-pill tone-{{ $c->active ? 'success' : 'muted' }}">{{ $c->active ? 'Active' : 'Inactive' }}</span></td>
+                    <td class="text-center">
+                        <x-admin.row-actions edit="openEdit(this.closest('tr'))"
+                                             :delete="route('admin.companies.destroy', $c)" :confirm="'Delete company ' . $c->name . '?'">
+                            <a href="{{ route('admin.companies.show', $c) }}" class="btn btn-sm btn-outline-secondary btn-icon" title="View" data-toggle="tooltip"><i class="fas fa-eye"></i></a>
+                        </x-admin.row-actions>
                     </td>
                 </tr>
-                @empty
-                <tr><td colspan="10" class="text-center text-muted py-4">No companies found.</td></tr>
-                @endforelse
+            @empty
+                <x-admin.empty-row colspan="8" icon="fa-building" title="No companies yet" :clear="route('admin.companies')" />
+            @endforelse
             </tbody>
         </table>
     </div>
-    <div class="card-footer clearfix">{{ $companies->links() }}</div>
+    <x-admin.pagination :paginator="$companies" />
 </div>
 
 {{-- Modal --}}

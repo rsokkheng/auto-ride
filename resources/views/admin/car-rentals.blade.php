@@ -231,8 +231,6 @@
 
 @push('scripts')
 <script>
-$(function () { $('[data-toggle="tooltip"]').tooltip({ boundary: 'window' }); });
-
 function showConfirm(action, label, url) {
     const config = {
         confirm:  { title: 'Confirm rental ' + label + '?',  msg: 'The renter will be notified that the booking is confirmed.', icon: 'fa-check',        tone: 'tone-info',    btn: 'btn-info',    text: 'Confirm rental' },

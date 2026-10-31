@@ -3,59 +3,69 @@
 @section('page-title', 'Airport Trip Zones')
 
 @section('content')
+
+<x-admin.page-toolbar subtitle="Airports where trips get an airport surcharge and luggage fee when they start or end inside the zone.">
+    <button class="btn btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Add Airport</button>
+</x-admin.page-toolbar>
+
+<x-admin.stat-grid :cols="4">
+    <x-admin.stat-card label="Airport Zones" :value="number_format($stats['total'])" icon="fa-plane-departure" tone="primary"
+                       :href="route('admin.airport-zones')" :active="!request('status')" />
+    <x-admin.stat-card label="Active" :value="number_format($stats['active'])" icon="fa-circle-check" tone="success"
+                       :href="route('admin.airport-zones', ['status' => 'active'])" :active="request('status') === 'active'" />
+    <x-admin.stat-card label="Avg. Surcharge" :value="number_format($stats['avg_surcharge']) . ' ៛'" icon="fa-coins" tone="warning" sub="active zones" />
+    <x-admin.stat-card label="Avg. Luggage Fee" :value="number_format($stats['avg_luggage']) . ' ៛'" icon="fa-suitcase-rolling" tone="violet" sub="per bag" />
+</x-admin.stat-grid>
+
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0"><i class="fas fa-plane text-primary mr-2"></i> Airport Zones</h3>
-        <button class="btn btn-sm btn-primary" onclick="openCreate()"><i class="fas fa-plus mr-1"></i> Create Zone</button>
+    <div class="card-header">
+        <x-admin.filter-bar :action="route('admin.airport-zones')" placeholder="Search airport name or IATA code" :count="$zones->total()" noun="airport">
+            <x-admin.filter-select name="status" :options="['active' => 'Active', 'inactive' => 'Inactive']" all="All statuses" />
+        </x-admin.filter-bar>
     </div>
-    <div class="card-body p-0">
-        <table class="table table-hover mb-0">
-            <thead class="thead-light">
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap">
+            <thead>
                 <tr>
                     <th>Airport</th>
-                    <th>IATA</th>
-                    <th>Coordinates</th>
-                    <th>Radius</th>
-                    <th>Surcharge</th>
-                    <th>Luggage/bag</th>
+                    <th>Detection Area</th>
+                    <th class="text-right">Surcharge</th>
+                    <th class="text-right">Luggage / bag</th>
                     <th>Status</th>
-                    <th>Actions</th>
+                    <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse($zones as $zone)
+            @forelse($zones as $zone)
                 <tr>
-                    <td><strong>{{ $zone->name }}</strong></td>
-                    <td><span class="badge badge-primary">{{ $zone->iata_code }}</span></td>
-                    <td class="small text-muted">{{ $zone->latitude }}, {{ $zone->longitude }}</td>
-                    <td>{{ number_format($zone->radius_meters) }} m</td>
-                    <td>{{ number_format($zone->surcharge_khr) }} ៛</td>
-                    <td>{{ number_format($zone->luggage_fee_khr) }} ៛</td>
                     <td>
-                        <span class="badge badge-{{ $zone->active ? 'success' : 'secondary' }}">
-                            {{ $zone->active ? 'Active' : 'Inactive' }}
-                        </span>
+                        <div class="tw:flex tw:items-center tw:gap-3">
+                            <span class="badge badge-primary" style="font-size:.78rem;min-width:46px;letter-spacing:.06em;">{{ $zone->iata_code }}</span>
+                            <div class="text-truncate" style="max-width:300px;font-weight:600;color:var(--ink-900);" title="{{ $zone->name }}">{{ $zone->name }}</div>
+                        </div>
                     </td>
                     <td>
-                        <button class="btn btn-xs btn-outline-primary" onclick="openEdit({{ $zone->id }})">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <form action="{{ route('admin.airport-zones.destroy', $zone) }}" method="POST" class="d-inline"
-                              onsubmit="return confirm('Delete this airport zone?')">
-                            @csrf @method('DELETE')
-                            <button class="btn btn-xs btn-outline-danger"><i class="fas fa-trash"></i></button>
-                        </form>
+                        <div>{{ number_format($zone->radius_meters) }} m radius</div>
+                        <a class="text-muted tw:text-xs" target="_blank" rel="noopener" href="https://www.google.com/maps?q={{ $zone->latitude }},{{ $zone->longitude }}">
+                            {{ number_format($zone->latitude, 4) }}, {{ number_format($zone->longitude, 4) }} <i class="fas fa-arrow-up-right-from-square" style="font-size:.6rem;"></i>
+                        </a>
+                    </td>
+                    <td class="text-right" style="font-weight:600;color:var(--ink-900);">{{ number_format($zone->surcharge_khr) }} ៛</td>
+                    <td class="text-right">{{ number_format($zone->luggage_fee_khr) }} ៛</td>
+                    <td><span class="status-pill tone-{{ $zone->active ? 'success' : 'muted' }}">{{ $zone->active ? 'Active' : 'Inactive' }}</span></td>
+                    <td class="text-center">
+                        <x-admin.row-actions :edit="'openEdit(' . $zone->id . ')'"
+                                             :delete="route('admin.airport-zones.destroy', $zone)" :confirm="'Delete airport zone ' . $zone->name . '?'" />
                     </td>
                 </tr>
-                @empty
-                <tr><td colspan="8" class="text-center text-muted py-4">No airport zones defined yet.</td></tr>
-                @endforelse
+            @empty
+                <x-admin.empty-row colspan="6" icon="fa-plane-departure" title="No airport zones yet"
+                                   hint="Add an airport to charge the airport surcharge automatically." :clear="route('admin.airport-zones')" />
+            @endforelse
             </tbody>
         </table>
     </div>
-    @if($zones->hasPages())
-    <div class="card-footer">{{ $zones->links() }}</div>
-    @endif
+    <x-admin.pagination :paginator="$zones" />
 </div>
 
 {{-- Create Modal --}}
@@ -98,11 +108,6 @@
 </div>
 @endforeach
 
-@if(session('success'))
-<div class="alert alert-success alert-dismissible fade show position-fixed" style="bottom:20px;right:20px;z-index:9999">
-    {{ session('success') }}<button type="button" class="close" data-dismiss="alert">&times;</button>
-</div>
-@endif
 @endsection
 
 @push('scripts')

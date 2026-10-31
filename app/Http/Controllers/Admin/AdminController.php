@@ -115,6 +115,19 @@ class AdminController extends Controller
 
     // ─── Dashboard ───────────────────────────────────────────────────────────
 
+    /** Case-insensitive "contains" search across columns, for the admin list filter bars. */
+    private function applySearch($query, ?string $term, array $columns)
+    {
+        $term = trim((string) $term);
+        if ($term === '') return $query;
+
+        return $query->where(function ($q) use ($term, $columns) {
+            foreach ($columns as $col) {
+                $q->orWhere($col, 'like', "%{$term}%");
+            }
+        });
+    }
+
     public function dashboard(Request $request)
     {
         $today = now()->startOfDay();
@@ -477,10 +490,14 @@ class AdminController extends Controller
             });
         }
 
+        $query->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')))
+              ->when($request->filled('type'), fn ($q) => $q->where('type', $request->query('type')));
+
         return view('admin.vehicles', [
-            'vehicles' => $query->paginate(10)->appends(['search' => $search]),
+            'vehicles' => $query->paginate(10)->withQueryString(),
             'drivers'  => User::where('role', 'driver')->orderBy('name')->get(),
             'search'   => $search,
+            'counts'   => Vehicle::selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status'),
         ]);
     }
 
@@ -719,6 +736,9 @@ class AdminController extends Controller
         if ($partnerId) {
             $query->where('partner_id', $partnerId);
         }
+        if ($request->boolean('unassigned')) {
+            $query->whereNull('driver_id')->whereNotIn('status', ['completed', 'delivered', 'cancelled']);
+        }
 
         $deliveries = $query->paginate(10)->withQueryString();
         foreach ($deliveries as $delivery) {
@@ -736,9 +756,11 @@ class AdminController extends Controller
             'activePartner' => $partnerId,
             'commissionPct' => (float) \App\Models\PricingSetting::get('delivery_commission_pct', \App\Models\PricingSetting::get('driver_commission_pct', config('commission.platform_rate.owner', 25))),
             'counts'        => [
-                'all'      => Delivery::count(),
-                'delivery' => Delivery::where('service_type', 'delivery')->count(),
-                'moving'   => Delivery::where('service_type', 'moving')->count(),
+                'all'        => Delivery::count(),
+                'delivery'   => Delivery::where('service_type', 'delivery')->count(),
+                'moving'     => Delivery::where('service_type', 'moving')->count(),
+                'active'     => Delivery::whereNotIn('status', ['completed', 'delivered', 'cancelled'])->count(),
+                'unassigned' => Delivery::whereNull('driver_id')->whereNotIn('status', ['completed', 'delivered', 'cancelled'])->count(),
             ],
         ]);
     }
@@ -1490,10 +1512,21 @@ class AdminController extends Controller
 
     // ─── Surge Zones ─────────────────────────────────────────────────────────
 
-    public function surgeZones()
+    public function surgeZones(Request $request)
     {
+        $query = $this->applySearch(SurgeZone::query(), $request->query('search'), ['name', 'name_kh', 'name_zh', 'description'])
+            ->when($request->filled('type'), fn ($q) => $q->where('type', $request->query('type')))
+            ->when($request->query('status') === 'active', fn ($q) => $q->where('active', true))
+            ->when($request->query('status') === 'inactive', fn ($q) => $q->where('active', false));
+
         return view('admin.surge-zones', [
-            'zones' => SurgeZone::orderBy('active')->orderBy('multiplier')->paginate(10),
+            'zones' => $query->orderByDesc('active')->orderByDesc('multiplier')->paginate(10)->withQueryString(),
+            'stats' => [
+                'total'          => SurgeZone::count(),
+                'active'         => SurgeZone::where('active', true)->count(),
+                'max_multiplier' => (float) SurgeZone::where('active', true)->max('multiplier'),
+                'scheduled'      => SurgeZone::whereNotNull('schedule_days')->count(),
+            ],
         ]);
     }
 
@@ -1565,10 +1598,39 @@ class AdminController extends Controller
 
     // ─── Charging Stations ───────────────────────────────────────────────────
 
-    public function chargingStations()
+    public function chargingStations(Request $request)
     {
+        $search   = trim((string) $request->query('search', ''));
+        $province = $request->query('province');
+        $operator = $request->query('operator');
+
+        $stations = ChargingStation::query()
+            ->when($search !== '', fn ($q) => $q->where(function ($q) use ($search) {
+                foreach (['name', 'name_kh', 'name_zh', 'address', 'address_kh', 'address_zh', 'operator'] as $col) {
+                    $q->orWhere($col, 'like', "%{$search}%");
+                }
+            }))
+            ->when(filled($province) && isset(ChargingStation::PROVINCES[$province]), fn ($q) => $q->inProvince($province))
+            ->when(filled($operator), fn ($q) => $q->where('operator', $operator))
+            ->orderBy('name')
+            ->paginate(10)
+            ->withQueryString();
+
+        // Summary cards and filter options cover every station, not just this page.
+        $all = ChargingStation::get(['id', 'address', 'operator', 'available_ports', 'rating']);
+
         return view('admin.charging-stations', [
-            'stations' => ChargingStation::orderBy('created_at')->paginate(10),
+            'stations'  => $stations,
+            'stats'     => [
+                'stations'   => $all->count(),
+                'ports'      => (int) $all->sum('available_ports'),
+                'rating'     => $all->whereNotNull('rating')->avg('rating'),
+                'rated'      => $all->whereNotNull('rating')->count(),
+                'phnom_penh' => $all->filter(fn ($s) => $s->province() === 'Phnom Penh')->count(),
+                'operators'  => $all->pluck('operator')->filter()->unique()->count(),
+            ],
+            'provinces' => $all->map->province()->filter()->unique()->sort()->values(),
+            'operators' => $all->pluck('operator')->filter()->unique()->sort()->values(),
         ]);
     }
 
@@ -1853,6 +1915,10 @@ class AdminController extends Controller
             'pending_online' => TransactionRecord::where('status', 'pending')
                 ->whereIn('payment_method', ['aba', 'wing', 'other_online'])->count(),
             'search' => $search,
+            'stats'  => TransactionRecord::where('status', 'completed')
+                ->selectRaw('COUNT(*) as n, COALESCE(SUM(gross_amount),0) as gross, COALESCE(SUM(platform_fee),0) as fee, COALESCE(SUM(driver_earning),0) as driver')
+                ->first(),
+            'pending_total' => TransactionRecord::where('status', 'pending')->count(),
         ]);
     }
 
@@ -1920,9 +1986,18 @@ class AdminController extends Controller
             });
         }
 
+        $query->when($request->query('status') === 'active', fn ($q) => $q->where('active', true))
+              ->when($request->query('status') === 'inactive', fn ($q) => $q->where('active', false));
+
         return view('admin.companies', [
-            'companies' => $query->paginate(10)->appends(['search' => $search]),
+            'companies' => $query->paginate(10)->withQueryString(),
             'search'    => $search,
+            'stats'     => [
+                'total'   => Company::count(),
+                'active'  => Company::where('active', true)->count(),
+                'drivers' => User::where('role', 'driver')->whereNotNull('company_id')->count(),
+                'avg_cut' => (float) Company::where('active', true)->avg('company_commission_rate'),
+            ],
         ]);
     }
 
@@ -1983,12 +2058,29 @@ class AdminController extends Controller
 
     // ─── Wallet / Transactions ────────────────────────────────────────────────
 
-    public function walletTransactions()
+    public function walletTransactions(Request $request)
     {
+        $search = trim((string) $request->query('search', ''));
+        $month  = now()->startOfMonth();
+
+        $transactions = WalletTransaction::with('user')
+            ->when($search !== '', fn ($q) => $q->whereHas('user', fn ($u) => $this->applySearch($u, $search, ['name', 'phone', 'email'])))
+            ->when($request->filled('type'), fn ($q) => $q->where('type', $request->query('type')))
+            ->when(in_array($request->query('direction'), ['credit', 'debit'], true), fn ($q) => $q->where('direction', $request->query('direction')))
+            ->orderByDesc('created_at')
+            ->paginate(10)
+            ->withQueryString();
+
         return view('admin.wallet', [
-            'transactions' => WalletTransaction::with('user')
-                ->orderBy('created_at')
-                ->paginate(10),
+            'transactions' => $transactions,
+            'stats' => [
+                'balances'      => (int) User::where('role', 'driver')->sum('wallet_balance'),
+                'credit_month'  => (int) WalletTransaction::where('direction', 'credit')->where('created_at', '>=', $month)->sum('amount'),
+                'debit_month'   => (int) WalletTransaction::where('direction', 'debit')->where('created_at', '>=', $month)->sum('amount'),
+                'count_month'   => WalletTransaction::where('created_at', '>=', $month)->count(),
+            ],
+            'employeeDrivers' => User::where('role', 'driver')->where('driver_type', 'employee')->orderBy('name')->get(['id', 'name', 'phone', 'email']),
+            'drivers'         => User::where('role', 'driver')->orderBy('name')->get(['id', 'name', 'phone']),
         ]);
     }
 
@@ -2041,13 +2133,21 @@ class AdminController extends Controller
         $pendingQuery = TopUpRequest::with('user')->where('status', 'pending')->orderBy('created_at');
         $matchesSearch($pendingQuery);
 
-        $historyQuery = TopUpRequest::with(['user', 'approvedBy'])->whereIn('status', ['approved', 'rejected'])->orderBy('updated_at');
+        $historyQuery = TopUpRequest::with(['user', 'approvedBy'])
+            ->whereIn('status', in_array($request->query('status'), ['approved', 'rejected'], true) ? [$request->query('status')] : ['approved', 'rejected'])
+            ->orderByDesc('updated_at');
         $matchesSearch($historyQuery);
 
         return view('admin.topups', [
             'pending' => $pendingQuery->get(),
-            'history' => $historyQuery->paginate(10)->appends(['search' => $search]),
+            'history' => $historyQuery->paginate(10)->withQueryString(),
             'search'  => $search,
+            'stats'   => [
+                'pending_amount'  => (int) TopUpRequest::where('status', 'pending')->sum('amount'),
+                'approved_month'  => (int) TopUpRequest::where('status', 'approved')->where('approved_at', '>=', now()->startOfMonth())->sum('amount'),
+                'approved_count'  => TopUpRequest::where('status', 'approved')->where('approved_at', '>=', now()->startOfMonth())->count(),
+                'rejected_month'  => TopUpRequest::where('status', 'rejected')->where('updated_at', '>=', now()->startOfMonth())->count(),
+            ],
         ]);
     }
 
@@ -2203,6 +2303,8 @@ class AdminController extends Controller
 
         if (in_array($status, ['pending','approved','rejected'])) {
             $query->where('approval_status', $status);
+        } elseif ($status === 'penalized') {
+            $query->where('penalty_until', '>', now());
         }
 
         if ($search !== '') {
@@ -2218,9 +2320,11 @@ class AdminController extends Controller
             'status' => $status,
             'search' => $search,
             'counts' => [
-                'pending'  => User::where('role','driver')->where('approval_status','pending')->count(),
-                'approved' => User::where('role','driver')->where('approval_status','approved')->count(),
-                'rejected' => User::where('role','driver')->where('approval_status','rejected')->count(),
+                'all'       => User::where('role','driver')->count(),
+                'pending'   => User::where('role','driver')->where('approval_status','pending')->count(),
+                'approved'  => User::where('role','driver')->where('approval_status','approved')->count(),
+                'rejected'  => User::where('role','driver')->where('approval_status','rejected')->count(),
+                'penalized' => User::where('role','driver')->where('penalty_until', '>', now())->count(),
             ],
         ]);
     }
@@ -2352,6 +2456,10 @@ class AdminController extends Controller
                 'pending'  => rescue(fn () => WithdrawalRequest::where('status', 'pending')->count(), 0, false),
                 'approved' => rescue(fn () => WithdrawalRequest::where('status', 'approved')->count(), 0, false),
                 'rejected' => rescue(fn () => WithdrawalRequest::where('status', 'rejected')->count(), 0, false),
+            ],
+            'amounts' => [
+                'pending'        => rescue(fn () => (int) WithdrawalRequest::where('status', 'pending')->sum('amount_khr'), 0, false),
+                'approved_month' => rescue(fn () => (int) WithdrawalRequest::where('status', 'approved')->where('processed_at', '>=', now()->startOfMonth())->sum('amount_khr'), 0, false),
             ],
         ]);
     }
@@ -2546,16 +2654,34 @@ class AdminController extends Controller
 
     // ─── Banners ─────────────────────────────────────────────────────────────
 
-    public function banners()
+    public function banners(Request $request)
     {
         $emptyPage = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
+        $now = now();
+
+        $query = $this->applySearch(Banner::query(), $request->query('search'), ['title', 'title_kh', 'title_zh', 'deeplink'])
+            ->when($request->filled('audience'), fn ($q) => $q->where('target_role', $request->query('audience')))
+            ->when($request->query('status') === 'live', fn ($q) => $q->where('active', true)
+                ->where(fn ($q) => $q->whereNull('valid_from')->orWhere('valid_from', '<=', $now))
+                ->where(fn ($q) => $q->whereNull('valid_until')->orWhere('valid_until', '>=', $now)))
+            ->when($request->query('status') === 'scheduled', fn ($q) => $q->where('active', true)->where('valid_from', '>', $now))
+            ->when($request->query('status') === 'expired', fn ($q) => $q->where('valid_until', '<', $now))
+            ->when($request->query('status') === 'inactive', fn ($q) => $q->where('active', false));
 
         return view('admin.banners', [
             'banners' => rescue(
-                fn () => Banner::orderBy('sort_order')->orderByDesc('created_at')->paginate(10),
+                fn () => $query->orderBy('sort_order')->orderByDesc('created_at')->paginate(10)->withQueryString(),
                 $emptyPage,
                 false
             ),
+            'stats' => rescue(fn () => [
+                'total'     => Banner::count(),
+                'live'      => Banner::where('active', true)
+                    ->where(fn ($q) => $q->whereNull('valid_from')->orWhere('valid_from', '<=', $now))
+                    ->where(fn ($q) => $q->whereNull('valid_until')->orWhere('valid_until', '>=', $now))->count(),
+                'scheduled' => Banner::where('active', true)->where('valid_from', '>', $now)->count(),
+                'expired'   => Banner::where('valid_until', '<', $now)->count(),
+            ], ['total' => 0, 'live' => 0, 'scheduled' => 0, 'expired' => 0], false),
         ]);
     }
 
@@ -2616,16 +2742,29 @@ class AdminController extends Controller
 
     // ─── Promo Events (push notification announcements) ─────────────────────
 
-    public function promoEvents()
+    public function promoEvents(Request $request)
     {
         $emptyPage = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
 
+        $query = $this->applySearch(PromoEvent::query(), $request->query('search'), ['title', 'title_kh', 'title_zh', 'body'])
+            ->when($request->filled('audience'), fn ($q) => $q->where('target_role', $request->query('audience')))
+            ->when($request->query('status') === 'active', fn ($q) => $q->where('active', true))
+            ->when($request->query('status') === 'inactive', fn ($q) => $q->where('active', false))
+            ->when($request->query('status') === 'sent', fn ($q) => $q->whereNotNull('sent_at'))
+            ->when($request->query('status') === 'unsent', fn ($q) => $q->whereNull('sent_at'));
+
         return view('admin.promo-events', [
             'events' => rescue(
-                fn () => PromoEvent::orderByDesc('created_at')->paginate(10),
+                fn () => $query->orderByDesc('created_at')->paginate(10)->withQueryString(),
                 $emptyPage,
                 false
             ),
+            'stats' => rescue(fn () => [
+                'total'      => PromoEvent::count(),
+                'active'     => PromoEvent::where('active', true)->count(),
+                'sent'       => PromoEvent::whereNotNull('sent_at')->count(),
+                'this_month' => PromoEvent::where('sent_at', '>=', now()->startOfMonth())->count(),
+            ], ['total' => 0, 'active' => 0, 'sent' => 0, 'this_month' => 0], false),
         ]);
     }
 
@@ -2694,16 +2833,32 @@ class AdminController extends Controller
 
     // ─── Promo Coupons (discount codes) ───────────────────────────────────────
 
-    public function promoCoupons()
+    public function promoCoupons(Request $request)
     {
         $emptyPage = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
+        $Promo = \App\Models\PromoCode::class;
+        $now   = now();
+
+        $query = $this->applySearch($Promo::query(), $request->query('search'), ['code', 'description', 'description_kh', 'description_zh'])
+            ->when($request->filled('service'), fn ($q) => $q->where('service_type', $request->query('service')))
+            ->when($request->query('status') === 'active', fn ($q) => $q->where('active', true)
+                ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', $now)))
+            ->when($request->query('status') === 'expired', fn ($q) => $q->where('expires_at', '<=', $now))
+            ->when($request->query('status') === 'inactive', fn ($q) => $q->where('active', false));
 
         return view('admin.promo-coupons', [
             'coupons' => rescue(
-                fn () => \App\Models\PromoCode::orderByDesc('created_at')->paginate(10),
+                fn () => $query->orderByDesc('created_at')->paginate(10)->withQueryString(),
                 $emptyPage,
                 false
             ),
+            'stats' => rescue(fn () => [
+                'total'       => $Promo::count(),
+                'active'      => $Promo::where('active', true)->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', $now))->count(),
+                'expired'     => $Promo::where('expires_at', '<=', $now)->count(),
+                'redemptions' => (int) $Promo::sum('used_count'),
+            ], ['total' => 0, 'active' => 0, 'expired' => 0, 'redemptions' => 0], false),
+            'services' => rescue(fn () => $Promo::whereNotNull('service_type')->distinct()->orderBy('service_type')->pluck('service_type'), collect(), false),
         ]);
     }
 
@@ -2761,11 +2916,22 @@ class AdminController extends Controller
 
     // ─── Airport Zones ────────────────────────────────────────────────────────
 
-    public function airportZones()
+    public function airportZones(Request $request)
     {
         $emptyPage = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
+
+        $query = $this->applySearch(AirportZone::query(), $request->query('search'), ['name', 'name_kh', 'name_zh', 'iata_code'])
+            ->when($request->query('status') === 'active', fn ($q) => $q->where('active', true))
+            ->when($request->query('status') === 'inactive', fn ($q) => $q->where('active', false));
+
         return view('admin.airport-zones', [
-            'zones' => rescue(fn () => AirportZone::orderBy('sort_order')->orderBy('name')->paginate(10), $emptyPage, false),
+            'zones' => rescue(fn () => $query->orderBy('name')->paginate(10)->withQueryString(), $emptyPage, false),
+            'stats' => rescue(fn () => [
+                'total'         => AirportZone::count(),
+                'active'        => AirportZone::where('active', true)->count(),
+                'avg_surcharge' => (int) AirportZone::where('active', true)->avg('surcharge_khr'),
+                'avg_luggage'   => (int) AirportZone::where('active', true)->avg('luggage_fee_khr'),
+            ], ['total' => 0, 'active' => 0, 'avg_surcharge' => 0, 'avg_luggage' => 0], false),
         ]);
     }
 
@@ -2836,9 +3002,18 @@ class AdminController extends Controller
                     });
                 }
 
-                return $query->paginate(10)->appends(['search' => $search]);
+                return $query
+                    ->when(request('status') === 'active', fn ($q) => $q->where('active', true))
+                    ->when(request('status') === 'inactive', fn ($q) => $q->where('active', false))
+                    ->paginate(10)->withQueryString();
             }, $emptyPage, false),
             'search' => $search,
+            'stats'  => rescue(fn () => [
+                'total'   => BusinessAccount::count(),
+                'active'  => BusinessAccount::where('active', true)->count(),
+                'limit'   => (int) BusinessAccount::where('active', true)->sum('monthly_credit_limit_khr'),
+                'used'    => (int) BusinessAccount::where('active', true)->sum('used_credit_khr'),
+            ], ['total' => 0, 'active' => 0, 'limit' => 0, 'used' => 0], false),
         ]);
     }
 
@@ -2867,13 +3042,21 @@ class AdminController extends Controller
 
     // ─── Subscription Plans ───────────────────────────────────────────────────
 
-    public function subscriptionPlans()
+    public function subscriptionPlans(Request $request)
     {
         $emptyPage = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
 
-        $plans = rescue(fn () => SubscriptionPlan::orderBy('sort_order')->paginate(10), $emptyPage, false);
+        $query = $this->applySearch(SubscriptionPlan::query(), $request->query('search'), ['name', 'name_kh', 'name_zh', 'slug', 'description'])
+            ->when($request->filled('cycle'), fn ($q) => $q->where('billing_cycle', $request->query('cycle')))
+            ->when($request->query('status') === 'active', fn ($q) => $q->where('active', true))
+            ->when($request->query('status') === 'inactive', fn ($q) => $q->where('active', false));
+
+        $plans = rescue(fn () => $query->withCount(['subscriptions as active_subscribers' => fn ($q) => $q->where('status', 'active')])
+            ->orderBy('sort_order')->paginate(10)->withQueryString(), $emptyPage, false);
 
         $stats = [
+            'plans'             => rescue(fn () => SubscriptionPlan::count(), 0, false),
+            'plans_active'      => rescue(fn () => SubscriptionPlan::where('active', true)->count(), 0, false),
             'total_active'      => rescue(fn () => UserSubscription::where('status', 'active')->count(), 0, false),
             'revenue_month'     => rescue(fn () => \App\Models\SubscriptionTransaction::where('status', 'paid')
                 ->where('created_at', '>=', now()->startOfMonth())->sum('amount_khr'), 0, false),
@@ -3009,7 +3192,19 @@ class AdminController extends Controller
             });
         }
 
-        $contracts = $query->paginate(20)->appends(['search' => $search]);
+        $query->when($request->query('status') === 'active', fn ($q) => $q->where('is_active', true))
+              ->when($request->query('status') === 'inactive', fn ($q) => $q->where('is_active', false));
+
+        $contracts = $query->paginate(20)->withQueryString();
+
+        $partnerTotal = User::where('role', 'partner')->count();
+        $withContract = PartnerContract::where('is_active', true)->distinct()->count('partner_id');
+        $stats = [
+            'contracts' => PartnerContract::count(),
+            'active'    => PartnerContract::where('is_active', true)->count(),
+            'partners'  => $partnerTotal,
+            'defaults'  => max(0, $partnerTotal - $withContract),
+        ];
 
         $partners = User::where('role', 'partner')->orderBy('name')->get(['id', 'name', 'phone', 'email']);
 
@@ -3020,7 +3215,7 @@ class AdminController extends Controller
             'surcharge_extra_large' => (int) PricingSetting::get('partner_surcharge_extra_large', 5000),
         ];
 
-        return view('admin.partner-contracts', compact('contracts', 'partners', 'defaults', 'search'));
+        return view('admin.partner-contracts', compact('contracts', 'partners', 'defaults', 'search', 'stats'));
     }
 
     public function storePartnerContract(Request $request)

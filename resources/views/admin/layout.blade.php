@@ -245,12 +245,12 @@
             <div class="container-fluid">
                 <div class="row align-items-center">
                     <div class="col-sm-6">
-                        <h1>@yield('page-title', 'Dashboard')</h1>
+                        <h1>@yield('page-title', \Illuminate\Support\Str::before(\View::yieldContent('title', 'Dashboard'), ' |'))</h1>
                     </div>
                     <div class="col-sm-6">
                         <ol class="breadcrumb float-sm-right" style="background:transparent;padding:0;margin:0;font-size:.8rem;">
                             <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}"><i class="fas fa-house" style="font-size:.7rem;"></i></a></li>
-                            <li class="breadcrumb-item active">@yield('page-title', 'Dashboard')</li>
+                            <li class="breadcrumb-item active">@yield('page-title', \Illuminate\Support\Str::before(\View::yieldContent('title', 'Dashboard'), ' |'))</li>
                         </ol>
                     </div>
                 </div>
@@ -321,6 +321,10 @@
     @include('admin.partials.notification-script')
 @endif
 
+<script>
+    // Tooltips for icon-only buttons (row actions etc.).
+    $(function () { $('[data-toggle="tooltip"]').tooltip({ boundary: 'window', trigger: 'hover' }); });
+</script>
 @stack('scripts')
 </body>
 </html>
