@@ -25,6 +25,7 @@ class TripMeterService
 {
     private const MAX_SPEED_KMH = 130;
     private const MIN_STEP_M    = 15;
+    private const PICKUP_RADIUS_M = 500;
 
     public function __construct(private FareService $fare) {}
 
@@ -37,12 +38,24 @@ class TripMeterService
         $startedAt = $ride->started_at ?? $ride->updated_at;
 
         $points = [];
-        if ($ride->pickup_lat !== null && $ride->pickup_lng !== null) {
-            $points[] = [(float) $ride->pickup_lat, (float) $ride->pickup_lng, $startedAt->getTimestamp()];
-        }
         foreach ($ride->locations()->where('created_at', '>=', $startedAt)->orderBy('created_at')->orderBy('id')
                      ->get(['latitude', 'longitude', 'created_at']) as $loc) {
             $points[] = [(float) $loc->latitude, (float) $loc->longitude, $loc->created_at->getTimestamp()];
+        }
+
+        // The meter starts at the booked pickup when the trip started there
+        // (first fix nearby — the car has usually moved a little before the
+        // first post). When the driver tapped Start far from the pin — the
+        // passenger boarded elsewhere — it starts at the driver's first fix
+        // instead, so the drive *to* the pickup is never charged.
+        $origin = $this->firstInArea($points);
+        if ($ride->pickup_lat !== null && $ride->pickup_lng !== null) {
+            $pickup = [(float) $ride->pickup_lat, (float) $ride->pickup_lng, $startedAt->getTimestamp()];
+            if (! $origin
+                || $this->haversineKm($pickup[0], $pickup[1], $origin[0], $origin[1]) * 1000 <= self::PICKUP_RADIUS_M) {
+                $origin = $pickup;
+                array_unshift($points, $pickup);
+            }
         }
         if ($endLat !== null && $endLng !== null) {
             $points[] = [$endLat, $endLng, now()->getTimestamp()];
@@ -50,14 +63,14 @@ class TripMeterService
 
         $trackKm = $this->trackDistanceKm($points);
 
-        // Lower bound: nobody can drive pickup → end shorter than this.
+        // Lower bound: nobody can drive start → end shorter than this.
         $floorKm = 0.0;
         $end = $this->lastInArea($points);
-        if ($end && $ride->pickup_lat !== null) {
-            $route   = $this->fare->getRoute((float) $ride->pickup_lat, (float) $ride->pickup_lng, $end[0], $end[1]);
+        if ($end && $origin) {
+            $route   = $this->fare->getRoute($origin[0], $origin[1], $end[0], $end[1]);
             $floorKm = $route['source'] === 'google_maps'
                 ? (float) $route['distance_km']
-                : $this->haversineKm((float) $ride->pickup_lat, (float) $ride->pickup_lng, $end[0], $end[1]);
+                : $this->haversineKm($origin[0], $origin[1], $end[0], $end[1]);
         }
 
         $distanceKm  = round(max($trackKm, $floorKm), 2);
@@ -105,6 +118,16 @@ class TripMeterService
         }
 
         return $meters / 1000;
+    }
+
+    private function firstInArea(array $points): ?array
+    {
+        foreach ($points as $p) {
+            if (FareService::inServiceArea($p[0], $p[1])) {
+                return $p;
+            }
+        }
+        return null;
     }
 
     private function lastInArea(array $points): ?array

@@ -157,6 +157,7 @@ class TripMeterTest extends TestCase
     {
         $passenger = User::find($this->ride->passenger_id);
         $passenger->update(['api_token' => 'p-token-' . uniqid(), 'token_expires_at' => now()->addHour()]);
+        $this->at(5, self::LAT, self::LNG);
         $this->at(60, self::LAT + 0.009, self::LNG); // ~1 km
 
         $res = $this->withToken($passenger->api_token)
@@ -168,5 +169,14 @@ class TripMeterTest extends TestCase
 
         $stranger = User::factory()->create(['role' => 'passenger', 'api_token' => 's-' . uniqid(), 'token_expires_at' => now()->addHour()]);
         $this->withToken($stranger->api_token)->getJson("/api/v1/rides/{$this->ride->id}/meter")->assertUnauthorized();
+    }
+
+    public function test_meter_starts_where_the_driver_started_not_at_the_pickup_pin(): void
+    {
+        // Driver tapped Start ~4.4 km from the booked pickup, then drove ~1 km.
+        $this->at(5, self::LAT + 0.04, self::LNG);
+        $this->at(120, self::LAT + 0.049, self::LNG);
+
+        $this->assertEqualsWithDelta(1.0, $this->measure()['distance_km'], 0.1);
     }
 }
