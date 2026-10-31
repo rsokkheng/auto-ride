@@ -854,7 +854,11 @@ class RideController extends ApiController
     public function meter(Request $request, Ride $ride)
     {
         $user = $this->authUser($request);
-        if (! $user || $user->role !== 'driver' || $ride->driver_id !== $user->id) {
+        // The passenger watches the same live meter (km + fare so far) when
+        // they booked without a destination and tell the driver on the way.
+        $isDriver    = $user && $user->role === 'driver' && $ride->driver_id === $user->id;
+        $isPassenger = $user && $ride->passenger_id === $user->id;
+        if (! $isDriver && ! $isPassenger) {
             return $this->unauthorized();
         }
 
@@ -867,10 +871,11 @@ class RideController extends ApiController
             'lng' => 'nullable|numeric|between:-180,180',
         ]);
 
+        // Only the driver's phone may add its current fix to the track.
         $meter = app(TripMeterService::class)->measure(
             $ride,
-            isset($data['lat']) ? (float) $data['lat'] : null,
-            isset($data['lng']) ? (float) $data['lng'] : null,
+            $isDriver && isset($data['lat']) ? (float) $data['lat'] : null,
+            $isDriver && isset($data['lng']) ? (float) $data['lng'] : null,
         );
 
         $fare = $this->fare->calculateRideFare(

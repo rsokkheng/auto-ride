@@ -152,4 +152,21 @@ class TripMeterTest extends TestCase
         $this->withHeader('Authorization', 'Bearer ' . $this->driver->api_token)
             ->getJson("/api/v1/rides/{$this->ride->id}/meter")->assertStatus(422);
     }
+
+    public function test_passenger_can_watch_the_live_meter_but_not_move_it(): void
+    {
+        $passenger = User::find($this->ride->passenger_id);
+        $passenger->update(['api_token' => 'p-token-' . uniqid(), 'token_expires_at' => now()->addHour()]);
+        $this->at(60, self::LAT + 0.009, self::LNG); // ~1 km
+
+        $res = $this->withToken($passenger->api_token)
+            // A far-away fix from the passenger must be ignored.
+            ->getJson("/api/v1/rides/{$this->ride->id}/meter?lat=" . (self::LAT + 0.09) . '&lng=' . self::LNG)
+            ->assertOk();
+        $this->assertEqualsWithDelta(1.0, $res->json('data.distance_km'), 0.1);
+        $this->assertGreaterThan(0, $res->json('data.fare'));
+
+        $stranger = User::factory()->create(['role' => 'passenger', 'api_token' => 's-' . uniqid(), 'token_expires_at' => now()->addHour()]);
+        $this->withToken($stranger->api_token)->getJson("/api/v1/rides/{$this->ride->id}/meter")->assertUnauthorized();
+    }
 }
