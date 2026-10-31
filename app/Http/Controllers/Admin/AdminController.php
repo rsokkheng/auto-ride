@@ -621,7 +621,12 @@ class AdminController extends Controller
 
         $pendingStatuses = ['requested', 'pending', 'accepted', 'driver_arrived', 'in_progress'];
 
-        $query = Ride::with(['passenger', 'driver', 'stops'])->orderByDesc('created_at');
+        $query = Ride::with(['passenger', 'driver', 'stops', 'vehicle'])->orderByDesc('created_at');
+
+        $query->when($request->filled('service'), fn ($q) => $q->where('service_type', $request->query('service')))
+              ->when($request->filled('payment'), fn ($q) => $q->where('payment_method', $request->query('payment')))
+              ->when($request->filled('from'), fn ($q) => $q->whereDate('created_at', '>=', $request->query('from')))
+              ->when($request->filled('to'), fn ($q) => $q->whereDate('created_at', '<=', $request->query('to')));
 
         if ($tab === 'completed') {
             $query->where('status', 'completed');
@@ -657,6 +662,8 @@ class AdminController extends Controller
                 'pending'   => Ride::whereIn('status', $pendingStatuses)->count(),
                 'cancelled' => Ride::where('status', 'cancelled')->count(),
             ],
+            'revenue'       => (int) Ride::where('status', 'completed')->sum('fare'),
+            'serviceLabels' => \App\Models\RidePricing::orderBy('id')->get()->mapWithKeys(fn ($p) => [$p->service_type => $p->label])->all(),
         ]);
     }
 

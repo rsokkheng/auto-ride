@@ -31,36 +31,48 @@ function rideDistanceKm($r): ?float {
 
 @php
     $tabs = [
-        'all'       => ['All Rides', 'fa-route',          'primary'],
-        'pending'   => ['In Progress', 'fa-spinner',      'info'],
-        'completed' => ['Completed', 'fa-flag-checkered', 'success'],
-        'cancelled' => ['Cancelled', 'fa-ban',            'danger'],
+        'all'       => ['All Rides',   'fa-route',          'primary'],
+        'pending'   => ['In Progress', 'fa-location-arrow', 'info'],
+        'completed' => ['Completed',   'fa-flag-checkered', 'success'],
+        'cancelled' => ['Cancelled',   'fa-ban',            'danger'],
     ];
-    $statusTone = ['requested' => 'muted', 'pending' => 'warning', 'accepted' => 'info', 'driver_arrived' => 'info', 'in_progress' => 'primary', 'completed' => 'success', 'cancelled' => 'danger'];
+    $statusTone   = ['requested' => 'muted', 'pending' => 'warning', 'accepted' => 'info', 'driver_arrived' => 'info', 'in_progress' => 'primary', 'completed' => 'success', 'cancelled' => 'danger'];
+    $statusLabel  = ['requested' => 'Searching driver', 'pending' => 'Pending', 'accepted' => 'Driver on the way', 'driver_arrived' => 'Driver arrived', 'in_progress' => 'On trip', 'completed' => 'Completed', 'cancelled' => 'Cancelled'];
+    $serviceIcon  = ['motorcycle' => 'fa-motorcycle', 'tuk_tuk' => 'fa-taxi', 'standard' => 'fa-car', 'premium' => 'fa-car-side', 'shared' => 'fa-people-group', 'van' => 'fa-van-shuttle'];
+    $payLabels    = ['cash' => 'Cash', 'wallet' => 'Wallet', 'aba' => 'ABA', 'wing' => 'Wing', 'card' => 'Card', 'other_online' => 'Online'];
+    $initials     = fn (?string $name) => collect(preg_split('/\s+/', trim((string) $name)))->filter()->take(2)
+        ->map(fn ($w) => mb_strtoupper(mb_substr($w, 0, 1)))->join('') ?: '?';
 @endphp
-<x-admin.stat-grid :cols="4">
+
+<x-admin.stat-grid :cols="5">
     @foreach($tabs as $key => [$label, $icon, $tone])
         <x-admin.stat-card :label="$label" :value="number_format($counts[$key])" :icon="$icon" :tone="$tone"
                            :href="route('admin.rides', array_filter(['tab' => $key, 'search' => $search]))" :active="($tab ?? 'all') === $key" />
     @endforeach
+    <x-admin.stat-card label="Ride Revenue" :value="number_format($revenue) . ' ៛'" icon="fa-sack-dollar" tone="violet"
+                       :sub="(100 - $commissionPct) . '% paid to drivers'" />
 </x-admin.stat-grid>
 
 <div class="card">
     <div class="card-header">
         <x-admin.filter-bar :action="route('admin.rides')" placeholder="Ride #, passenger or driver name / phone" :count="$rides->total()" noun="ride">
-            <x-admin.filter-select name="tab" :options="collect($tabs)->except('all')->map(fn ($t) => $t[0])->all()" all="All statuses" />
+            <x-admin.filter-select name="tab" :options="collect($tabs)->except('all')->map(fn ($t) => $t[0])->all()" all="All statuses"
+                                   :value="($tab ?? 'all') === 'all' ? '' : $tab" />
+            <x-admin.filter-select name="service" :options="$serviceLabels" all="All services" />
+            <x-admin.filter-select name="payment" :options="$payLabels" all="All payments" />
+            <input type="date" name="from" class="form-control form-control-sm" value="{{ request('from') }}" aria-label="From date" title="From" style="min-width:0;width:140px;">
+            <input type="date" name="to" class="form-control form-control-sm" value="{{ request('to') }}" aria-label="To date" title="To" style="min-width:0;width:140px;">
         </x-admin.filter-bar>
     </div>
     <div class="card-body table-responsive p-0">
-        <table class="table table-hover text-nowrap">
+        <table class="table table-hover text-nowrap ride-table">
             <thead>
                 <tr>
                     <th>Ride</th>
-                    <th>Passenger → Driver</th>
-                    <th>Route</th>
+                    <th>Passenger / Driver</th>
+                    <th>Trip</th>
                     <th>Status</th>
                     <th class="text-right">Fare</th>
-                    <th class="text-right">Driver Net</th>
                     <th class="text-center">Actions</th>
                 </tr>
             </thead>
@@ -68,24 +80,19 @@ function rideDistanceKm($r): ?float {
             @forelse($rides as $r)
                 @php
                     $distKm    = rideDistanceKm($r);
+                    $distKm    = $distKm !== null && $distKm >= 0.05 ? $distKm : null;
                     $netDriver = $r->fare ? round($r->fare * (1 - $commissionPct / 100)) : null;
 
-                    // Duration: actual if completed, estimated from distance otherwise
-                    $durationMin = null;
-                    $durationActual = false;
+                    // Trip time: real duration once finished, otherwise the route estimate.
+                    $minutes = null; $actual = false;
                     if ($r->started_at && $r->completed_at) {
-                        $durationMin    = (int) \Carbon\Carbon::parse($r->started_at)->diffInMinutes(\Carbon\Carbon::parse($r->completed_at));
-                        $durationActual = true;
-                    } elseif ($distKm !== null) {
-                        $durationMin = (int) ceil(($distKm / 30) * 60); // 30 km/h avg city speed
+                        $minutes = (int) \Carbon\Carbon::parse($r->started_at)->diffInMinutes(\Carbon\Carbon::parse($r->completed_at));
+                        $actual  = true;
+                    } elseif ($r->duration_min) {
+                        $minutes = (int) $r->duration_min;
                     }
-                    $durationLabel = null;
-                    if ($durationMin === 0 && $durationActual) {
-                        $durationLabel = '< 1 min';
-                    } elseif ($durationMin) {
-                        $hrs = intdiv($durationMin, 60); $mins = $durationMin % 60;
-                        $durationLabel = $hrs ? $hrs . ' h' . ($mins ? ' ' . $mins . ' min' : '') : $mins . ' min';
-                    }
+                    $timeLabel = $minutes ? (intdiv($minutes, 60) ? intdiv($minutes, 60) . ' h ' . ($minutes % 60) . ' min' : $minutes . ' min') : null;
+
                     $stops     = $r->stops ?? collect();
                     $routeData = [
                         'rideId'  => $r->id,
@@ -93,55 +100,118 @@ function rideDistanceKm($r): ?float {
                         'stops'   => $stops->map(fn ($s) => ['address' => $s->address, 'lat' => $s->lat, 'lng' => $s->lng, 'arrived_at' => $s->arrived_at?->format('d M H:i')])->values()->all(),
                         'dropoff' => ['address' => $r->dropoff_address, 'lat' => $r->dropoff_lat, 'lng' => $r->dropoff_lng],
                     ];
+                    $passengerName = $r->passenger?->name ?? $r->passenger_name ?? 'Guest';
                 @endphp
                 <tr data-ride="{{ json_encode([
                         'id' => $r->id, 'passenger_id' => $r->passenger_id, 'driver_id' => $r->driver_id,
                         'pickup_address' => $r->pickup_address, 'dropoff_address' => $r->dropoff_address ?? '',
                         'status' => $r->status, 'fare' => $r->fare ?? '', 'service_type' => $r->service_type ?? '', 'notes' => $r->notes ?? '',
                     ]) }}">
+                    {{-- Ride --}}
                     <td>
-                        <a href="{{ route('admin.rides.show', $r->id) }}" style="font-weight:600;">#{{ $r->id }}</a>
-                        <div class="text-muted tw:text-xs">{{ $r->created_at->format('d M Y, H:i') }}</div>
-                    </td>
-                    <td>
-                        <div>{{ $r->passenger?->name ?? '—' }}@if($r->passenger_name) <span class="text-muted tw:text-xs">for {{ $r->passenger_name }}</span>@endif</div>
-                        <div class="text-muted tw:text-xs"><i class="fas fa-arrow-right mr-1" style="font-size:.6rem;"></i>{{ $r->driver?->name ?? 'No driver yet' }}</div>
-                    </td>
-                    <td>
-                        <button type="button" class="btn btn-sm btn-outline-primary" data-route="{{ json_encode($routeData) }}"
-                                onclick="showStopsModal(JSON.parse(this.dataset.route))">
-                            <i class="fas fa-map-location-dot mr-1"></i>{{ $distKm !== null ? $distKm . ' km' : 'Route' }}
-                        </button>
-                        <div class="text-muted tw:text-xs tw:mt-1">
-                            @if($durationLabel)<i class="fas fa-clock mr-1"></i>{{ $durationLabel }}{{ $durationActual ? '' : ' est.' }}@endif
-                            @if($stops->count()) · {{ $stops->count() }} {{ Str::plural('stop', $stops->count()) }}@endif
+                        <div class="tw:flex tw:items-center tw:gap-3">
+                            <span class="stat-icon tone-primary" style="width:38px;height:38px;font-size:.9rem;" title="{{ $serviceLabels[$r->service_type] ?? $r->service_type }}">
+                                <i class="fas {{ $serviceIcon[$r->service_type] ?? 'fa-car' }}"></i>
+                            </span>
+                            <div>
+                                <a href="{{ route('admin.rides.show', $r->id) }}" style="font-weight:600;color:var(--ink-900);">#{{ $r->id }}</a>
+                                <div class="text-muted tw:text-xs">{{ $serviceLabels[$r->service_type] ?? ucfirst(str_replace('_', ' ', (string) $r->service_type)) }} · {{ $r->created_at->format('d M, H:i') }}</div>
+                                @if($r->is_airport_trip || $r->scheduled_at || $r->is_business_trip)
+                                    <div class="tw:mt-1 tw:flex tw:gap-1">
+                                        @if($r->is_airport_trip)<span class="badge badge-info"><i class="fas fa-plane mr-1"></i>Airport</span>@endif
+                                        @if($r->scheduled_at)<span class="badge badge-light"><i class="far fa-calendar mr-1"></i>{{ $r->scheduled_at->format('d M H:i') }}</span>@endif
+                                        @if($r->is_business_trip)<span class="badge badge-primary">Business</span>@endif
+                                    </div>
+                                @endif
+                            </div>
                         </div>
                     </td>
-                    <td><span class="status-pill tone-{{ $statusTone[$r->status] ?? 'muted' }}">{{ ucfirst(str_replace('_', ' ', $r->status)) }}</span></td>
+
+                    {{-- People: passenger, then driver --}}
+                    <td>
+                        <div class="person" style="gap:.5rem;">
+                            <span class="avatar-chip" style="width:26px;height:26px;font-size:.66rem;">{{ $initials($passengerName) }}</span>
+                            <div class="tw:min-w-0">
+                                <div class="person-name" style="max-width:150px;">{{ $passengerName }}</div>
+                                <div class="person-sub">{{ $r->passenger_phone ?? $r->passenger?->phone ?? '—' }}@if($r->passenger_name && $r->passenger) · by {{ $r->passenger->name }}@endif</div>
+                            </div>
+                        </div>
+                        <div class="person tw:mt-2" style="gap:.5rem;">
+                            @if($r->driver)
+                                <span class="avatar-chip" style="width:26px;height:26px;font-size:.66rem;background:var(--success-soft);color:var(--success-ink);" title="Driver">{{ $initials($r->driver->name) }}</span>
+                                <div class="tw:min-w-0">
+                                    <a href="{{ route('admin.drivers.show', $r->driver) }}" class="person-name d-block" style="max-width:150px;">{{ $r->driver->name }}</a>
+                                    <div class="person-sub">
+                                        @if($r->vehicle)<span style="font-family:ui-monospace,monospace;">{{ $r->vehicle->license_plate }}</span>@else{{ $r->driver->phone }}@endif
+                                    </div>
+                                </div>
+                            @else
+                                <span class="avatar-chip" style="width:26px;height:26px;font-size:.66rem;background:var(--ink-100);color:var(--ink-400);"><i class="fas fa-user-clock"></i></span>
+                                <span class="text-muted tw:text-xs">No driver yet</span>
+                            @endif
+                        </div>
+                    </td>
+
+                    {{-- Trip --}}
+                    <td style="max-width:min(290px, 19vw);">
+                        <div class="trip" role="button" tabindex="0" title="Show route on map" style="cursor:pointer;"
+                             data-route="{{ json_encode($routeData) }}" onclick="showStopsModal(JSON.parse(this.dataset.route))">
+                            <div class="trip-stop" title="{{ $r->pickup_address }}"><span>{{ $r->pickup_address ?: 'Pickup' }}</span></div>
+                            <div class="trip-stop is-drop" title="{{ $r->dropoff_address }}"><span>{{ $r->dropoff_address ?: 'Destination not set' }}</span></div>
+                        </div>
+                        <div class="trip-meta" style="padding-left:16px;">
+                            @if($distKm)<span><i class="fas fa-road"></i>{{ rtrim(rtrim(number_format($distKm, 1), '0'), '.') }} km</span>@endif
+                            @if($timeLabel)<span><i class="far fa-clock"></i>{{ $timeLabel }}{{ $actual ? '' : ' est.' }}</span>@endif
+                            @if($stops->count())<span><i class="fas fa-location-dot"></i>{{ $stops->count() }} {{ Str::plural('stop', $stops->count()) }}</span>@endif
+                            <a href="#" onclick="event.preventDefault(); showStopsModal(JSON.parse(this.closest('td').querySelector('.trip').dataset.route))"><i class="fas fa-map" style="color:inherit;"></i>Map</a>
+                        </div>
+                    </td>
+
+                    {{-- Status --}}
+                    <td>
+                        <span class="status-pill tone-{{ $statusTone[$r->status] ?? 'muted' }}">{{ $statusLabel[$r->status] ?? ucfirst(str_replace('_', ' ', $r->status)) }}</span>
+                        @if($r->status === 'completed' && $r->rating)
+                            <div class="tw:mt-1 tw:text-xs" style="color:var(--warning);">
+                                @for($i = 1; $i <= 5; $i++)<i class="{{ $i <= $r->rating ? 'fas' : 'far' }} fa-star"></i>@endfor
+                            </div>
+                        @elseif($r->status === 'cancelled' && $r->cancellation_reason)
+                            <div class="text-muted tw:mt-1 tw:text-xs text-truncate" style="max-width:150px;" title="{{ $r->cancellation_reason }}">{{ $r->cancellation_reason }}</div>
+                        @endif
+                    </td>
+
+                    {{-- Fare --}}
                     <td class="text-right">
                         @if($r->fare)
-                            <div style="font-weight:600;color:var(--ink-900);">{{ number_format($r->fare) }} ៛</div>
-                            @if($r->discount_amount > 0)<div class="tw:text-xs" style="color:var(--success);">−{{ number_format($r->discount_amount) }} promo</div>@endif
+                            <div style="font-weight:700;color:var(--ink-900);font-size:.92rem;">{{ number_format($r->fare) }} ៛</div>
+                            <div class="tw:text-xs">
+                                <span class="text-muted">{{ $payLabels[$r->payment_method] ?? ucfirst((string) $r->payment_method ?: 'Cash') }}</span>
+                                @if($r->payment_status)
+                                    · <span style="color:{{ $r->payment_status === 'paid' ? 'var(--success)' : 'var(--warning)' }};">{{ ucfirst($r->payment_status) }}</span>
+                                @endif
+                            </div>
+                            <div class="text-muted tw:text-xs">driver {{ number_format($netDriver) }} ៛</div>
+                            @if($r->discount_amount > 0 || $r->tip_amount > 0 || ($r->surge_multiplier ?? 1) > 1)
+                                <div class="tw:mt-1 tw:flex tw:justify-end tw:gap-1">
+                                    @if($r->discount_amount > 0)<span class="badge badge-success" title="Promo discount">−{{ number_format($r->discount_amount) }}</span>@endif
+                                    @if($r->tip_amount > 0)<span class="badge badge-info" title="Tip">+{{ number_format($r->tip_amount) }} tip</span>@endif
+                                    @if(($r->surge_multiplier ?? 1) > 1)<span class="badge badge-danger" title="Surge">×{{ rtrim(rtrim(number_format($r->surge_multiplier, 2), '0'), '.') }}</span>@endif
+                                </div>
+                            @endif
                         @else
-                            <span class="text-muted">Metered</span>
+                            <span class="badge badge-light">Metered</span>
                         @endif
                     </td>
-                    <td class="text-right">
-                        @if($netDriver !== null)
-                            <div style="font-weight:600;color:var(--success);">{{ number_format($netDriver) }} ៛</div>
-                        @else
-                            <span class="text-muted">—</span>
-                        @endif
-                    </td>
+
+                    {{-- Actions --}}
                     <td class="text-center">
                         <x-admin.row-actions edit="openEdit(JSON.parse(this.closest('tr').dataset.ride))"
-                                             :delete="route('admin.rides.destroy', $r)" :confirm="'Delete ride #' . $r->id . '?'">
+                                             :delete="route('admin.rides.destroy', $r)" :confirm="'Delete ride #' . $r->id . '? This cannot be undone.'">
                             <a href="{{ route('admin.rides.show', $r->id) }}" class="btn btn-sm btn-outline-secondary btn-icon" title="View details" data-toggle="tooltip"><i class="fas fa-eye"></i></a>
                         </x-admin.row-actions>
                     </td>
                 </tr>
             @empty
-                <x-admin.empty-row colspan="7" icon="fa-route" title="No rides yet" :clear="route('admin.rides')" />
+                <x-admin.empty-row colspan="6" icon="fa-route" title="No rides yet" hint="Rides booked in the app will appear here." :clear="route('admin.rides')" />
             @endforelse
             </tbody>
         </table>
