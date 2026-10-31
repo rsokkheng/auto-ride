@@ -960,12 +960,24 @@ class RideController extends ApiController
             $updates['distance_km']  = $meter['distance_km'];
             $updates['duration_min'] = $meter['duration_min'];
 
+            $priced = $this->fare->calculateRideFare(
+                $ride->service_type, $meter,
+                (float) $ride->pickup_lat, (float) $ride->pickup_lng,
+            );
             if (! isset($completionData['final_fare'])) {
-                $updates['fare'] = $this->fare->calculateRideFare(
-                    $ride->service_type, $meter,
-                    (float) $ride->pickup_lat, (float) $ride->pickup_lng,
-                )['total'];
+                $updates['fare'] = $priced['total'];
             }
+            $updates['fare_breakdown'] = $this->breakdownFor($priced, (int) ($updates['fare'] ?? $ride->fare));
+        } elseif (empty($ride->fare_breakdown)) {
+            // Destination ride: re-price its booked route for the receipt.
+            $priced = $this->fare->calculateRideFare($ride->service_type, [
+                'distance_km'   => (float) ($ride->distance_km ?: 1),
+                'duration_min'  => (int) ($ride->duration_min ?: 1),
+                'distance_text' => '',
+                'duration_text' => '',
+                'source'        => 'stored',
+            ], (float) $ride->pickup_lat, (float) $ride->pickup_lng);
+            $updates['fare_breakdown'] = $this->breakdownFor($priced, (int) ($updates['fare'] ?? $ride->fare));
         }
 
         $ride->update($updates);
@@ -1286,6 +1298,26 @@ class RideController extends ApiController
         $user = $this->authUser($request);
         if (! $user) abort(401, 'Unauthorized');
         return $user;
+    }
+
+    /**
+     * Receipt lines for a ride: the calculator's components (which already
+     * sum to its total — surge_amount absorbs rounding and the minimum-fare
+     * top-up) plus an `adjustment` when the charged fare differs from it
+     * (e.g. a fare the driver had to enter manually). Zero lines are dropped.
+     */
+    private function breakdownFor(array $priced, int $chargedFare): array
+    {
+        $lines = array_filter(
+            array_map('intval', $priced['breakdown'] ?? []),
+            fn (int $v) => $v !== 0,
+        );
+        $lines['distance_km'] = round((float) ($priced['distance_km'] ?? 0), 2);
+        $diff = $chargedFare - (int) ($priced['total'] ?? 0);
+        if ($chargedFare > 0 && $diff !== 0) {
+            $lines['adjustment'] = $diff;
+        }
+        return $lines;
     }
 
     private function buildDriverInfo(?User $driver): ?array

@@ -70,4 +70,45 @@ class MeteredRideCompletionTest extends TestCase
         $this->assertGreaterThan(0, (float) $this->ride->distance_km);
         $this->assertLessThan(50, (float) $this->ride->distance_km);
     }
+
+    /** Money lines only (distance_km is informational). */
+    private function moneyTotal(array $breakdown): int
+    {
+        unset($breakdown['distance_km']);
+        return array_sum(array_map('intval', $breakdown));
+    }
+
+    public function test_completion_saves_a_breakdown_that_adds_up_to_the_fare(): void
+    {
+        $this->complete(['dropoff_lat' => 11.5462, 'dropoff_lng' => 104.8440])->assertOk();
+
+        $this->ride->refresh();
+        $breakdown = $this->ride->fare_breakdown;
+        $this->assertIsArray($breakdown);
+        $this->assertArrayHasKey('base_fare', $breakdown);
+        $this->assertSame((int) $this->ride->fare, $this->moneyTotal($breakdown));
+        $this->assertArrayNotHasKey('adjustment', $breakdown);
+    }
+
+    public function test_manual_fare_records_the_difference_as_an_adjustment(): void
+    {
+        // Outside the service area → no meter-derived dropoff; driver's own fare wins.
+        $this->complete(['dropoff_lat' => 37.33, 'dropoff_lng' => -122.03, 'final_fare' => 99000])->assertOk();
+
+        $this->ride->refresh();
+        $breakdown = $this->ride->fare_breakdown;
+        $this->assertSame(99000, (int) $this->ride->fare);
+        $this->assertArrayHasKey('adjustment', $breakdown);
+        $this->assertSame(99000, $this->moneyTotal($breakdown));
+    }
+
+    public function test_breakdown_is_returned_with_the_ride(): void
+    {
+        $this->complete(['dropoff_lat' => 11.5462, 'dropoff_lng' => 104.8440])->assertOk();
+
+        $this->withHeader('Authorization', 'Bearer ' . $this->driver->api_token)
+            ->getJson("/api/v1/rides/{$this->ride->id}")
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['ride' => ['fare_breakdown' => ['base_fare']]]]);
+    }
 }

@@ -62,6 +62,7 @@ class Ride extends Model
         'notes',
         'rating',
         'rating_comment',
+        'fare_breakdown',
         // Status timestamps
         'accepted_at',
         'driver_arrived_at',
@@ -100,6 +101,7 @@ class Ride extends Model
     ];
 
     protected $casts = [
+        'fare_breakdown' => 'array',
         'scheduled_at'      => 'datetime',
         'accepted_at'       => 'datetime',
         'driver_arrived_at' => 'datetime',
