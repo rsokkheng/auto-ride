@@ -118,7 +118,9 @@ function rideDistanceKm($r): ?float {
 
         return [
             'dist'      => $distKm !== null && $distKm >= 0.05 ? rtrim(rtrim(number_format($distKm, 1), '0'), '.') . ' km' : null,
-            'time'      => $minutes ? (intdiv($minutes, 60) ? intdiv($minutes, 60) . ' h ' . ($minutes % 60) . ' min' : $minutes . ' min') . ($actual ? '' : ' est.') : null,
+            'time'      => $minutes === null ? null
+                : ($minutes === 0 ? '< 1 min'
+                    : (intdiv($minutes, 60) ? intdiv($minutes, 60) . ' h ' . ($minutes % 60) . ' min' : $minutes . ' min')) . ($actual ? '' : ' est.'),
             'stops'     => $stops->count(),
             'passenger' => $r->passenger?->name ?? $r->passenger_name ?? 'Guest',
             'service'   => $serviceLabels[$r->service_type] ?? ucfirst(str_replace('_', ' ', (string) $r->service_type)),
@@ -130,7 +132,9 @@ function rideDistanceKm($r): ?float {
                 'stops'     => $stops->map(fn ($s) => ['address' => $s->address, 'lat' => $s->lat, 'lng' => $s->lng, 'arrived_at' => $s->arrived_at?->format('d M H:i')])->values()->all(),
                 'dropoff'   => ['address' => $r->dropoff_address, 'lat' => $r->dropoff_lat, 'lng' => $r->dropoff_lng],
                 'distance'  => $distKm !== null && $distKm >= 0.05 ? rtrim(rtrim(number_format($distKm, 1), '0'), '.') . ' km' : null,
-                'time'      => $minutes ? (intdiv($minutes, 60) ? intdiv($minutes, 60) . ' h ' . ($minutes % 60) . ' min' : $minutes . ' min') . ($actual ? '' : ' (estimate)') : null,
+                'time'      => $minutes === null ? null
+                    : ($minutes === 0 ? '< 1 min'
+                        : (intdiv($minutes, 60) ? intdiv($minutes, 60) . ' h ' . ($minutes % 60) . ' min' : $minutes . ' min')) . ($actual ? '' : ' (estimate)'),
                 'fare'      => $r->fare ? number_format($r->fare) . ' ៛' : null,
                 'price'     => $price,
                 'service'   => $serviceLabels[$r->service_type] ?? ucfirst(str_replace('_', ' ', (string) $r->service_type)),
@@ -187,31 +191,22 @@ function rideDistanceKm($r): ?float {
                             </div>
                         </div>
                     </td>
-                    <td style="white-space:normal;min-width:240px;width:32%;">
-                        <div class="tw:flex tw:items-start tw:gap-2">
-                            <div class="trip is-full tw:flex-1">
-                                <div class="trip-stop"><span class="trip-label">Pickup</span><span>{{ $r->pickup_address ?: '—' }}</span></div>
-                                @foreach($i['stopList'] as $n => $stop)
-                                    <div class="trip-stop is-stop"><span class="trip-label">Stop {{ $n + 1 }}@if($stop->arrived_at) · arrived {{ $stop->arrived_at->format('H:i') }}@endif</span><span>{{ $stop->address }}</span></div>
-                                @endforeach
-                                <div class="trip-stop is-drop"><span class="trip-label">Drop-off</span><span>{{ $r->dropoff_address ?: 'Not set' }}</span></div>
-                            </div>
-                            <button type="button" class="btn btn-sm btn-outline-primary btn-icon tw:shrink-0" title="Show route on map" data-toggle="tooltip"
+                    <td>
+                        <div class="tw:flex tw:items-center tw:gap-3">
+                            <button type="button" class="btn btn-sm btn-outline-primary btn-icon tw:shrink-0" title="Show route" data-toggle="tooltip"
                                     data-route="{{ $i['route'] }}" onclick="showStopsModal(JSON.parse(this.dataset.route))">
                                 <i class="fas fa-map-location-dot"></i>
                             </button>
-                        </div>
-                        @if($i['dist'] || $i['time'] || $i['stops'])
-                            <div class="trip-meta" style="padding-left:16px;">
-                                @if($i['dist'])<span><i class="fas fa-road"></i>{{ $i['dist'] }}</span>@endif
-                                @if($i['time'])<span><i class="far fa-clock"></i>{{ $i['time'] }}</span>@endif
-                                @if($i['stops'])<span><i class="fas fa-location-dot"></i>{{ $i['stops'] }} {{ Str::plural('stop', $i['stops']) }}</span>@endif
+                            <div class="tw:text-xs" style="line-height:1.6;">
+                                <div style="color:var(--ink-800);"><i class="fas fa-road mr-1 text-muted" style="width:12px;"></i>{{ $i['dist'] ?? '—' }}</div>
+                                <div style="color:var(--ink-800);"><i class="far fa-clock mr-1 text-muted" style="width:12px;"></i>{{ $i['time'] ?? '—' }}</div>
+                                @if($i['stops'])<div class="text-muted"><i class="fas fa-location-dot mr-1" style="width:12px;"></i>{{ $i['stops'] }} {{ Str::plural('stop', $i['stops']) }}</div>@endif
                             </div>
-                        @endif
+                        </div>
                     </td>
                     <td>
-                        <div class="text-truncate" style="max-width:150px;color:var(--ink-900);"><i class="fas fa-user mr-2 text-muted" style="font-size:.7rem;width:10px;"></i>{{ $i['passenger'] }}</div>
-                        <div class="text-truncate tw:text-xs tw:mt-1" style="max-width:150px;">
+                        <div class="text-truncate" style="max-width:220px;color:var(--ink-900);"><i class="fas fa-user mr-2 text-muted" style="font-size:.7rem;width:10px;"></i>{{ $i['passenger'] }}</div>
+                        <div class="text-truncate tw:text-xs tw:mt-1" style="max-width:220px;">
                             @if($r->driver)
                                 <i class="fas fa-id-card mr-2" style="font-size:.7rem;width:10px;color:var(--success);"></i><a href="{{ route('admin.drivers.show', $r->driver) }}">{{ $r->driver->name }}</a>
                                 @if($r->vehicle)<span class="text-muted"> · {{ $r->vehicle->license_plate }}</span>@endif
@@ -220,7 +215,7 @@ function rideDistanceKm($r): ?float {
                             @endif
                         </div>
                     </td>
-                    <td>@include('admin.partials.ride-fare-lines', ['p' => $i['price'], 'r' => $r, 'payLabels' => $payLabels])</td>
+                    <td>@include('admin.partials.ride-fare-lines', ['p' => $i['price'], 'r' => $r, 'payLabels' => $payLabels, 'compact' => true])</td>
                     <td class="text-center">
                         <x-admin.row-actions edit="openEdit(JSON.parse(this.closest('tr').dataset.ride))"
                                              :delete="route('admin.rides.destroy', $r)" :confirm="'Delete ride #' . $r->id . '? This cannot be undone.'">

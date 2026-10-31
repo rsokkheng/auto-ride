@@ -2,9 +2,24 @@
     Full price breakdown for one ride. $p comes from the rides page's $info():
     trip, surge, airport, waiting, discount, fare, tip, cancel, paid, fee, driver, estimated.
 --}}
-@php $k = fn ($v) => number_format($v) . ' ៛'; @endphp
+@php $k = fn ($v) => number_format($v) . ' ៛'; $compact = $compact ?? false; @endphp
 @if(! $p['fare'] && ! $p['cancel'])
     <span class="badge badge-light">Metered — not priced yet</span>
+@elseif($compact)
+    {{-- List view: price and how it is split. --}}
+    <div class="fare-lines">
+        <div class="fl total" style="border-top:0;margin-top:0;padding-top:0;"><span>Price</span><span>{{ $k($p['fare'] ?: $p['cancel']) }}</span></div>
+        @if($p['fare'])
+            <div class="fl split"><span>Platform fee{{ $p['estimated'] ? ' (est.)' : '' }}</span><span>{{ $k($p['fee']) }}</span></div>
+            @if($p['company'] || $p['companyName'])
+                <div class="fl split"><span>{{ $p['companyName'] ?: 'Company' }} share</span><span>{{ $k($p['company']) }}</span></div>
+            @else
+                <div class="fl driver"><span>Driver earns</span><span>{{ $k($p['driver']) }}</span></div>
+            @endif
+        @else
+            <div class="fl sub"><span>Cancellation fee</span><span></span></div>
+        @endif
+    </div>
 @else
 <div class="fare-lines">
     @if($p['fare'])
