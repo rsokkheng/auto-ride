@@ -391,6 +391,35 @@ a.stat-card.is-active { border-color: var(--primary); box-shadow: 0 0 0 1px var(
 .thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; border: var(--border); flex-shrink: 0; background: var(--ink-50); }
 .thumb-placeholder { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: var(--ink-100); color: var(--ink-400); flex-shrink: 0; }
 
+/* Order cards (rides list). */
+.order-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 1rem; }
+.order-card { background: #fff; border: var(--border); border-radius: 14px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; transition: box-shadow .15s, border-color .15s; min-width: 0; }
+.order-card:hover { box-shadow: var(--shadow-md); border-color: var(--ink-300); }
+.order-card-head { display: flex; align-items: center; gap: .75rem; padding: .9rem 1rem .6rem; }
+.order-card-head .order-id { font-weight: 700; color: var(--ink-900); font-size: .95rem; }
+.order-card-head .order-sub { font-size: .74rem; color: var(--ink-500); }
+.order-card-body { padding: .2rem 1rem .85rem; flex: 1; }
+.order-card-people { display: flex; align-items: center; gap: .5rem; padding: .7rem 1rem; border-top: 1px solid var(--ink-100); font-size: .8rem; min-width: 0; }
+.order-card-people .who { display: flex; align-items: center; gap: .45rem; min-width: 0; flex: 1; }
+.order-card-people .who-name { font-weight: 500; color: var(--ink-800); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.order-card-people .who-sub { font-size: .7rem; color: var(--ink-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.order-card-people .avatar-chip { width: 28px; height: 28px; font-size: .66rem; }
+.order-card-foot { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .7rem 1rem; border-top: 1px solid var(--ink-100); background: var(--ink-50); border-radius: 0 0 14px 14px; }
+.order-card-foot .amount { font-weight: 700; color: var(--ink-900); font-size: 1rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.order-card-foot .amount-sub { font-size: .72rem; color: var(--ink-500); }
+.order-card .trip-stop { font-size: .84rem; }
+
+/* Price breakdown lines (rides). */
+.fare-lines { min-width: 175px; font-size: .76rem; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.fare-lines .fl { display: flex; justify-content: space-between; gap: .75rem; color: var(--ink-600); }
+.fare-lines .fl > span:last-child { white-space: nowrap; }
+.fare-lines .fl.sub { color: var(--ink-400); font-size: .7rem; }
+.fare-lines .fl.minus > span:last-child { color: var(--success); }
+.fare-lines .fl.total { color: var(--ink-900); font-weight: 700; font-size: .86rem; border-top: 1px solid var(--ink-200); margin-top: 2px; padding-top: 2px; }
+.fare-lines .fl.split { color: var(--ink-500); }
+.fare-lines .fl.driver > span:last-child { color: var(--success); font-weight: 600; }
+.fare-lines .sep { border-top: 1px dashed var(--ink-200); margin: 3px 0; }
+
 /* Pickup → drop-off mini timeline (rides, deliveries). */
 .trip { position: relative; padding-left: 16px; min-width: 0; }
 .trip::before { content: ''; position: absolute; left: 4px; top: 9px; bottom: 9px; width: 2px; background: repeating-linear-gradient(var(--ink-300) 0 3px, transparent 3px 6px); }
@@ -398,6 +427,12 @@ a.stat-card.is-active { border-color: var(--primary); box-shadow: 0 0 0 1px var(
 .trip-stop > span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .trip-stop::before { content: ''; position: absolute; left: -16px; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%; background: #fff; border: 2.5px solid var(--success); }
 .trip-stop.is-drop::before { border-color: var(--danger); background: var(--danger); box-shadow: inset 0 0 0 2px #fff; }
+.trip-stop.is-stop::before { border-color: var(--warning); }
+.trip.is-full .trip-stop > span { white-space: normal; overflow: visible; word-break: break-word; }
+.trip.is-full .trip-stop + .trip-stop { margin-top: 3px; }
+.trip.is-full .trip-stop::before { top: calc(.64rem * 1.2 + .78em); }
+.trip.is-full::before { top: 22px; bottom: 22px; }
+.trip-label { display: block; font-size: .64rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-400); line-height: 1.2; }
 .trip-meta { font-size: .74rem; color: var(--ink-500); margin-top: 3px; display: flex; flex-wrap: wrap; gap: .35rem .75rem; }
 .trip-meta i { font-size: .68rem; margin-right: 3px; color: var(--ink-400); }
 

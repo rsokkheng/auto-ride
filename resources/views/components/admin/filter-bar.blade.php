@@ -9,7 +9,7 @@
 --}}
 @props(['action', 'placeholder' => 'Search…', 'search' => 'search', 'count' => null, 'noun' => 'result'])
 @php
-    $filtered = collect(request()->except(['page']))->filter(fn ($v) => filled($v))->isNotEmpty();
+    $filtered = collect(request()->except(['page', 'view']))->filter(fn ($v) => filled($v))->isNotEmpty();
 @endphp
 <form method="GET" action="{{ $action }}" class="filter-bar">
     <div class="search-input">

@@ -621,7 +621,7 @@ class AdminController extends Controller
 
         $pendingStatuses = ['requested', 'pending', 'accepted', 'driver_arrived', 'in_progress'];
 
-        $query = Ride::with(['passenger', 'driver', 'stops', 'vehicle'])->orderByDesc('created_at');
+        $query = Ride::with(['passenger', 'driver.company', 'stops', 'vehicle'])->orderByDesc('created_at');
 
         $query->when($request->filled('service'), fn ($q) => $q->where('service_type', $request->query('service')))
               ->when($request->filled('payment'), fn ($q) => $q->where('payment_method', $request->query('payment')))
@@ -650,7 +650,12 @@ class AdminController extends Controller
         }
 
         return view('admin.rides', [
-            'rides'         => $query->paginate(15)->appends(['search' => $search, 'tab' => $tab]),
+            'rides'         => $rides = $query->paginate($request->query('view') === 'cards' ? 12 : 15)->withQueryString(),
+            // Actual platform fee / driver earning recorded for each ride on this page.
+            'rideTx'        => TransactionRecord::where('type', 'ride_payment')
+                ->whereIn('reference_id', $rides->pluck('id'))
+                ->get(['reference_id', 'gross_amount', 'platform_fee', 'company_share', 'driver_earning', 'status'])
+                ->keyBy('reference_id'),
             'passengers'    => User::where('role', 'passenger')->orderBy('name')->get(),
             'drivers'       => User::where('role', 'driver')->orderBy('name')->get(),
             'commissionPct' => (float) \App\Models\PricingSetting::get('driver_commission_pct', 20),
