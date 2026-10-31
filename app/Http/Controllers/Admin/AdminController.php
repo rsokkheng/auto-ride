@@ -2671,11 +2671,16 @@ class AdminController extends Controller
         $emptyPage = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
         $now = now();
 
+        $live = fn ($q) => $q->where('active', true)
+            ->where(fn ($q) => $q->whereNull('valid_from')->orWhere('valid_from', '<=', $now))
+            ->where(fn ($q) => $q->whereNull('valid_until')->orWhere('valid_until', '>=', $now));
+        // A banner aimed at "all" shows in both apps, so each app's view includes those too.
+        $inApp = fn ($q, string $app) => $q->whereIn('target_role', [$app, 'all']);
+        $app   = in_array($request->query('app'), ['passenger', 'driver'], true) ? $request->query('app') : null;
+
         $query = $this->applySearch(Banner::query(), $request->query('search'), ['title', 'title_kh', 'title_zh', 'deeplink'])
-            ->when($request->filled('audience'), fn ($q) => $q->where('target_role', $request->query('audience')))
-            ->when($request->query('status') === 'live', fn ($q) => $q->where('active', true)
-                ->where(fn ($q) => $q->whereNull('valid_from')->orWhere('valid_from', '<=', $now))
-                ->where(fn ($q) => $q->whereNull('valid_until')->orWhere('valid_until', '>=', $now)))
+            ->when($app, fn ($q) => $inApp($q, $app))
+            ->when($request->query('status') === 'live', $live)
             ->when($request->query('status') === 'scheduled', fn ($q) => $q->where('active', true)->where('valid_from', '>', $now))
             ->when($request->query('status') === 'expired', fn ($q) => $q->where('valid_until', '<', $now))
             ->when($request->query('status') === 'inactive', fn ($q) => $q->where('active', false));
@@ -2686,14 +2691,17 @@ class AdminController extends Controller
                 $emptyPage,
                 false
             ),
+            'app'   => $app,
             'stats' => rescue(fn () => [
-                'total'     => Banner::count(),
-                'live'      => Banner::where('active', true)
-                    ->where(fn ($q) => $q->whereNull('valid_from')->orWhere('valid_from', '<=', $now))
-                    ->where(fn ($q) => $q->whereNull('valid_until')->orWhere('valid_until', '>=', $now))->count(),
-                'scheduled' => Banner::where('active', true)->where('valid_from', '>', $now)->count(),
-                'expired'   => Banner::where('valid_until', '<', $now)->count(),
-            ], ['total' => 0, 'live' => 0, 'scheduled' => 0, 'expired' => 0], false),
+                'total'          => Banner::count(),
+                'live'           => $live(Banner::query())->count(),
+                'live_passenger' => $live($inApp(Banner::query(), 'passenger'))->count(),
+                'live_driver'    => $live($inApp(Banner::query(), 'driver'))->count(),
+                'all_passenger'  => $inApp(Banner::query(), 'passenger')->count(),
+                'all_driver'     => $inApp(Banner::query(), 'driver')->count(),
+                'scheduled'      => Banner::where('active', true)->where('valid_from', '>', $now)->count(),
+                'expired'        => Banner::where('valid_until', '<', $now)->count(),
+            ], array_fill_keys(['total', 'live', 'live_passenger', 'live_driver', 'all_passenger', 'all_driver', 'scheduled', 'expired'], 0), false),
         ]);
     }
 
@@ -2703,7 +2711,7 @@ class AdminController extends Controller
             ...Localized::rules(['title' => 'string|max:100'], ['title']),
             'deeplink'    => 'nullable|string|max:255',
             'target_role' => 'required|in:all,passenger,driver',
-            'sort_order'  => 'nullable|integer|min:0',
+            'sort_order'  => 'nullable|integer|min:0|max:255',
             'valid_from'  => 'nullable|date',
             'valid_until' => 'nullable|date|after_or_equal:valid_from',
             'active'      => 'boolean',
@@ -2725,7 +2733,7 @@ class AdminController extends Controller
             ...Localized::rules(['title' => 'string|max:100'], ['title']),
             'deeplink'    => 'nullable|string|max:255',
             'target_role' => 'required|in:all,passenger,driver',
-            'sort_order'  => 'nullable|integer|min:0',
+            'sort_order'  => 'nullable|integer|min:0|max:255',
             'valid_from'  => 'nullable|date',
             'valid_until' => 'nullable|date|after_or_equal:valid_from',
             'active'      => 'boolean',
@@ -2734,6 +2742,7 @@ class AdminController extends Controller
 
         if ($request->hasFile('image')) {
             $data['image'] = $request->file('image')->store('banners', 'public');
+            Storage::disk('public')->delete($banner->image);
         } else {
             unset($data['image']);
         }
@@ -2749,6 +2758,7 @@ class AdminController extends Controller
     public function destroyBanner(Banner $banner)
     {
         $banner->delete();
+        Storage::disk('public')->delete($banner->image);
         return redirect()->route('admin.banners')->with('success', 'Banner deleted.');
     }
 

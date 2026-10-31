@@ -1,6 +1,6 @@
 {{-- Empty-state table row. Shows a "clear filters" hint when the list is filtered. --}}
-@props(['colspan', 'icon' => 'fa-inbox', 'title' => 'Nothing here yet', 'hint' => null, 'clear' => null])
-@php $filtered = collect(request()->except(['page', 'view']))->filter(fn ($v) => filled($v))->isNotEmpty(); @endphp
+@props(['colspan', 'icon' => 'fa-inbox', 'title' => 'Nothing here yet', 'hint' => null, 'clear' => null, 'keep' => []])
+@php $filtered = collect(request()->except(['page', 'view', ...$keep]))->filter(fn ($v) => filled($v))->isNotEmpty(); @endphp
 <tr>
     <td colspan="{{ $colspan }}">
         <div class="empty-state">
