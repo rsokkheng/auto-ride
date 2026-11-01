@@ -604,6 +604,15 @@ class RideController extends ApiController
             return response()->json(['data' => null, 'message' => 'Ride already claimed by another driver.'], 422);
         }
 
+        if (! $user->hasMinBalance()) {
+            return response()->json([
+                'data'            => null,
+                'message'         => 'Your wallet balance is below ' . number_format(User::minDriverBalance()) . ' ៛. Top up to accept rides.',
+                'code'            => 'low_balance',
+                'min_balance_khr' => User::minDriverBalance(),
+            ], 403);
+        }
+
         // `available` (claimed below) only tracks rides — also refuse while
         // the driver is on a delivery.
         if ($user->hasActiveTrip()) {

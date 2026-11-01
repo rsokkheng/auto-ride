@@ -523,6 +523,12 @@ class AdminApiController extends ApiController
             'processed_by' => $admin->id,
         ]);
 
+        // Under the minimum balance to work → driver app goes offline + alert.
+        if ($withdrawal->driver) {
+            app(\App\Services\DriverAvailabilityService::class)
+                ->enforceMinBalance($withdrawal->driver->fresh(), notifyIfOffline: true);
+        }
+
         return $this->ok($withdrawal->fresh(), 'Withdrawal approved.');
     }
 

@@ -126,7 +126,7 @@ class RideDispatchService
         $queue = $ride->dispatch_queue ?? [];
 
         while ($position < count($queue)) {
-            $driver = User::where('id', $queue[$position])->where('available', true)->withoutActiveTrip()->first();
+            $driver = User::where('id', $queue[$position])->where('available', true)->withoutActiveTrip()->withMinBalance()->first();
 
             if ($driver) {
                 $ride->update([
@@ -219,7 +219,7 @@ class RideDispatchService
         if ($nearby->isEmpty()) {
             $radiusKm = (float) (end($tiers) ?: 8.0);
             $nearby = User::where('role', 'driver')->where('available', true)
-                ->withoutActiveTrip()->acceptingService('ride')
+                ->withoutActiveTrip()->acceptingService('ride')->withMinBalance()
                 ->where(fn ($q) => $q->whereNull('penalty_until')->orWhere('penalty_until', '<=', now()))
                 ->get()
                 ->filter(fn (User $d) => $d->current_latitude === null || $ride->pickup_lat === null

@@ -34,6 +34,20 @@ class UserFactory extends Factory
     }
 
     /**
+     * Drivers can only work with a wallet at the minimum balance
+     * (driver_min_balance_khr) — give factory drivers enough unless a test
+     * sets wallet_balance itself.
+     */
+    public function configure(): static
+    {
+        return $this->afterMaking(function (User $user) {
+            if ($user->role === 'driver' && $user->wallet_balance === null) {
+                $user->wallet_balance = 100000;
+            }
+        });
+    }
+
+    /**
      * Indicate that the model's email address should be unverified.
      */
     public function unverified(): static

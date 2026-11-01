@@ -47,6 +47,8 @@ class WithdrawalController extends ApiController
             ], 422);
         }
 
+        $wasOnline = (bool) $user->available;
+
         $withdrawal = \Illuminate\Support\Facades\DB::transaction(function () use ($user, $data) {
             $withdrawal = WithdrawalRequest::create([
                 'driver_id'      => $user->id,
@@ -64,9 +66,20 @@ class WithdrawalController extends ApiController
             return $withdrawal;
         });
 
+        // Below the minimum now — stop receiving jobs until topped up.
+        // An online driver dropping under the minimum was already switched
+        // offline (with the push) by User::updated when the hold was debited;
+        // an offline one still gets the "top up to go online" push.
+        $fresh = $user->fresh();
+        $wentOffline = $wasOnline && ! $fresh->available;
+        if (! $wasOnline) {
+            app(\App\Services\DriverAvailabilityService::class)->enforceMinBalance($fresh, notifyIfOffline: true);
+        }
+
         return $this->success([
             'withdrawal'     => $withdrawal,
-            'wallet_balance' => $user->fresh()->wallet_balance,
+            'went_offline'   => $wentOffline,
+            'wallet_balance' => $fresh->wallet_balance,
             'message'        => number_format($data['amount_khr']) . ' KHR held. Withdrawal will be processed within 1–2 business days.',
         ]);
     }

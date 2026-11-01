@@ -2628,6 +2628,10 @@ class AdminController extends Controller
             ->where('type', 'withdrawal_hold')
             ->update(['status' => 'completed']);
 
+        // Under the minimum balance to work → driver app goes offline + alert.
+        app(\App\Services\DriverAvailabilityService::class)
+            ->enforceMinBalance($withdrawal->driver->fresh(), notifyIfOffline: true);
+
         return redirect()->route('admin.withdrawals')
             ->with('success', number_format($withdrawal->amount_khr) . ' ៛ withdrawal approved for ' . $withdrawal->driver->name . '.');
     }

@@ -13,6 +13,7 @@ return [
     'ride_completed'        => ['title' => '🏁 行程已完成',     'body' => '您已到达目的地。车费：:fare 瑞尔。'],
     'ride_cancelled_driver' => ['title' => '❌ 行程已取消',     'body' => '司机取消了行程，请重新预订。'],
     'ride_cancelled_passenger' => ['title' => '❌ 行程已取消',  'body' => '乘客已取消预订。'],
+    'driver_low_balance_offline' => ['title' => '💰 已提现 — 您已下线', 'body' => '您的余额为 :balance ៛，低于上线所需的 :min ៛。请为钱包充值后再接单。'],
     'ride_reminder'         => ['title' => '🚗 行程提醒',       'body' => '您预约的行程将在约 :minutes 分钟后开始，请做好准备！'],
     'tip_received'          => ['title' => '您收到了小费！',    'body' => '乘客给了您 :amount 瑞尔的小费。'],
 

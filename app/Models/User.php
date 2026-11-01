@@ -63,6 +63,17 @@ class User extends Authenticatable
      */
     protected static function booted(): void
     {
+        // Wallet dropped under the minimum while online (commission, admin
+        // adjustment, withdrawal…) → offline + alert, wherever it happened.
+        static::updated(function (User $user) {
+            if ($user->role === 'driver' && $user->available
+                && $user->wasChanged('wallet_balance')
+                && (int) $user->getOriginal('wallet_balance') > (int) $user->wallet_balance
+                && ! $user->hasMinBalance()) {
+                app(\App\Services\DriverAvailabilityService::class)->forceOffline($user, 'low_balance');
+            }
+        });
+
         static::saved(function (User $user) {
             if ($user->role !== 'driver') {
                 return;
@@ -127,6 +138,24 @@ class User extends Authenticatable
             ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('deliveries')
                 ->whereColumn('deliveries.driver_id', 'users.id')
                 ->whereIn('deliveries.status', self::ACTIVE_DELIVERY_STATUSES));
+    }
+
+    // ── Minimum wallet balance to work (admin: driver_min_balance_khr) ──────
+
+    public static function minDriverBalance(): int
+    {
+        return (int) PricingSetting::get('driver_min_balance_khr', 50000);
+    }
+
+    /** Drivers whose wallet covers the minimum — the only ones offered jobs. */
+    public function scopeWithMinBalance($query)
+    {
+        return $query->where('wallet_balance', '>=', self::minDriverBalance());
+    }
+
+    public function hasMinBalance(): bool
+    {
+        return (int) $this->wallet_balance >= self::minDriverBalance();
     }
 
     // ── Service modes (driver app's Ride / Delivery / Rental toggles) ───────

@@ -58,6 +58,7 @@ class DriverMatchingService
             ->where('available', true)
             ->withoutActiveTrip()
             ->acceptingService($service)
+            ->withMinBalance()
             ->where(fn ($q) => $q->whereNull('penalty_until')->orWhere('penalty_until', '<=', now()))
             ->with(['vehicles' => fn($q) => $q->where('status', 'active')->latest()->limit(1)])
             ->get();

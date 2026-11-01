@@ -450,7 +450,7 @@ class DeliveryController extends ApiController
     {
         if ($delivery->pickup_lat === null || $delivery->pickup_lng === null) {
             return User::where('role', 'driver')->where('available', true)->withoutActiveTrip()
-                ->acceptingService($delivery->service_type ?? 'delivery')->whereNotNull('fcm_token')->get();
+                ->acceptingService($delivery->service_type ?? 'delivery')->withMinBalance()->whereNotNull('fcm_token')->get();
         }
 
         $radiusKm = (float) PricingSetting::get('delivery_match_radius_km', config('delivery.match_radius_km', 30));
@@ -459,7 +459,7 @@ class DeliveryController extends ApiController
         return $nearby === []
             ? collect()
             : User::whereIn('id', array_keys($nearby))->where('role', 'driver')->where('available', true)->withoutActiveTrip()
-                ->acceptingService($delivery->service_type ?? 'delivery')->get();
+                ->acceptingService($delivery->service_type ?? 'delivery')->withMinBalance()->get();
     }
 
     // ── Share tracking link ─────────────────────────────────────────────────
@@ -592,6 +592,14 @@ class DeliveryController extends ApiController
 
         if ($delivery->driver_id !== $user->id && $user->hasActiveTrip()) {
             return response()->json(['message' => 'You already have an active trip. Finish it first.'], 422);
+        }
+
+        if ($delivery->status !== 'assigned' && ! $user->hasMinBalance()) {
+            return response()->json([
+                'message'         => 'Your wallet balance is below ' . number_format(User::minDriverBalance()) . ' ៛. Top up to accept jobs.',
+                'code'            => 'low_balance',
+                'min_balance_khr' => User::minDriverBalance(),
+            ], 403);
         }
 
         // For open deliveries, block if another driver already claimed it.
