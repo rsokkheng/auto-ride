@@ -82,8 +82,8 @@ class DeliveryController extends ApiController
         $user = $this->authUser($request);
         if (! $user || $user->role !== 'driver') return $this->unauthorized();
 
-        // A driver already on a trip isn't shown new jobs.
-        $busy = $user->hasActiveTrip();
+        // A driver already on a trip — or with Delivery switched off — isn't shown new jobs.
+        $busy = $user->hasActiveTrip() || ! $user->acceptsService('delivery');
 
         // Deliveries this driver already declined or let time out don't come back.
         $dismissed = DriverMissedRequest::where('driver_id', $user->id)
@@ -137,7 +137,7 @@ class DeliveryController extends ApiController
         ]);
 
         $limit   = (int) ($data['limit'] ?? 10);
-        $drivers = $this->matcher->findDrivers((float) $data['pickup_lat'], (float) $data['pickup_lng'], $limit);
+        $drivers = $this->matcher->findDrivers((float) $data['pickup_lat'], (float) $data['pickup_lng'], $limit, service: 'delivery');
 
         $response = $drivers->map(fn($d) => [
             'id'              => $d->id,
@@ -270,7 +270,7 @@ class DeliveryController extends ApiController
         }
 
         if (! $driverId && ! empty($data['pickup_lat']) && ! empty($data['pickup_lng'])) {
-            $best     = $this->matcher->findDrivers((float) $data['pickup_lat'], (float) $data['pickup_lng'], 1)->first();
+            $best     = $this->matcher->findDrivers((float) $data['pickup_lat'], (float) $data['pickup_lng'], 1, service: 'delivery')->first();
             $driverId = $best?->id;
         }
 
@@ -449,7 +449,8 @@ class DeliveryController extends ApiController
     private function driversToOffer(Delivery $delivery): \Illuminate\Support\Collection
     {
         if ($delivery->pickup_lat === null || $delivery->pickup_lng === null) {
-            return User::where('role', 'driver')->where('available', true)->withoutActiveTrip()->whereNotNull('fcm_token')->get();
+            return User::where('role', 'driver')->where('available', true)->withoutActiveTrip()
+                ->acceptingService($delivery->service_type ?? 'delivery')->whereNotNull('fcm_token')->get();
         }
 
         $radiusKm = (float) PricingSetting::get('delivery_match_radius_km', config('delivery.match_radius_km', 30));
@@ -457,7 +458,8 @@ class DeliveryController extends ApiController
 
         return $nearby === []
             ? collect()
-            : User::whereIn('id', array_keys($nearby))->where('role', 'driver')->where('available', true)->withoutActiveTrip()->get();
+            : User::whereIn('id', array_keys($nearby))->where('role', 'driver')->where('available', true)->withoutActiveTrip()
+                ->acceptingService($delivery->service_type ?? 'delivery')->get();
     }
 
     // ── Share tracking link ─────────────────────────────────────────────────

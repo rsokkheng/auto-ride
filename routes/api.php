@@ -247,6 +247,7 @@ Route::prefix('v1')->group(function () {
     Route::get('driver/status', [DriverController::class, 'status']);
     Route::post('driver/availability', [DriverController::class, 'setAvailability']);
     Route::post('driver/go-online', [DriverController::class, 'goOnline']);
+    Route::post('driver/modes', [DriverController::class, 'setServiceModes']);
     Route::post('driver/go-offline', [DriverController::class, 'goOffline']);
     Route::post('driver/location', [DriverController::class, 'updateLocation']);
     Route::post('driver/rides/{ride}/decline', [DriverController::class, 'declineRide']);

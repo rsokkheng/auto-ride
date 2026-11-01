@@ -244,7 +244,7 @@ class PartnerController extends ApiController
         $drivers = $this->matcher->findDrivers(
             (float) $delivery->pickup_lat,
             (float) $delivery->pickup_lng,
-            20
+            20, service: 'delivery'
         );
 
         return $this->success([
@@ -267,7 +267,7 @@ class PartnerController extends ApiController
         $drivers = $this->matcher->findDrivers(
             (float) $delivery->pickup_lat,
             (float) $delivery->pickup_lng,
-            1
+            1, service: 'delivery'
         );
 
         $driver = $drivers->first();

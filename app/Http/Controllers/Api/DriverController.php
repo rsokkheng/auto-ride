@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\User;
+
 use App\Models\Delivery;
 use App\Models\DriverSession;
 use App\Models\PricingSetting;
@@ -181,12 +183,60 @@ class DriverController extends ApiController
             ], 403);
         }
 
+        // The app sends its current mode toggles with go-online.
+        if ($request->has(['ride', 'delivery', 'rental'])
+            && ($request->boolean('ride') || $request->boolean('delivery') || $request->boolean('rental'))) {
+            $this->applyServiceModes($user, $request->only(['ride', 'delivery', 'rental']));
+        }
+
         // Close any open session first (safety), then open new one
         DriverSession::where('driver_id', $user->id)->whereNull('ended_at')
             ->update(['ended_at' => now()]);
         DriverSession::create(['driver_id' => $user->id, 'started_at' => now()]);
 
         return $this->setAvailability($request->merge(['available' => true]));
+    }
+
+    /**
+     * POST /v1/driver/modes {ride, delivery, rental}
+     * The driver app's Ride / Delivery / Rental toggles. Dispatch, push alerts
+     * and the "available jobs" lists only offer job types that are on.
+     */
+    public function setServiceModes(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user || $user->role !== 'driver') return $this->unauthorized();
+
+        $data = $request->validate([
+            'ride'     => 'required|boolean',
+            'delivery' => 'required|boolean',
+            'rental'   => 'required|boolean',
+        ]);
+        if (! $data['ride'] && ! $data['delivery'] && ! $data['rental']) {
+            return response()->json(['message' => 'Keep at least one service on.'], 422);
+        }
+
+        $this->applyServiceModes($user, $data);
+
+        return $this->success($this->serviceModes($user));
+    }
+
+    private function applyServiceModes(User $user, array $modes): void
+    {
+        $user->update([
+            'accepts_rides'      => (bool) $modes['ride'],
+            'accepts_deliveries' => (bool) $modes['delivery'],
+            'accepts_rentals'    => (bool) $modes['rental'],
+        ]);
+    }
+
+    private function serviceModes(User $user): array
+    {
+        return [
+            'ride'     => (bool) $user->accepts_rides,
+            'delivery' => (bool) $user->accepts_deliveries,
+            'rental'   => (bool) $user->accepts_rentals,
+        ];
     }
 
     public function goOffline(Request $request)

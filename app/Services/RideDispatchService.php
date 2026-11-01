@@ -91,7 +91,7 @@ class RideDispatchService
         $tried  = $ride->tried_driver_ids ?? [];
 
         $ranked = $this->matcher
-            ->findDrivers((float) $ride->pickup_lat, (float) $ride->pickup_lng, $limit, $radius)
+            ->findDrivers((float) $ride->pickup_lat, (float) $ride->pickup_lng, $limit, $radius, service: 'ride')
             ->reject(fn(User $d) => in_array($d->id, $tried, true))
             ->values();
 

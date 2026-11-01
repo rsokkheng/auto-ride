@@ -70,6 +70,16 @@ class DeliveryOfferRealtimeTest extends TestCase
         $this->assertFalse($this->sentTo($this->far, 'delivery.offered'), 'a driver 230 km away must not be offered it');
     }
 
+    public function test_driver_with_delivery_switched_off_is_not_offered_it(): void
+    {
+        $this->near2->update(['accepts_deliveries' => false]); // Ride-only in the app
+
+        $this->book();
+
+        $this->assertTrue($this->sentTo($this->near1, 'delivery.offered'));
+        $this->assertFalse($this->sentTo($this->near2, 'delivery.offered'), 'Ride-only driver must not get delivery alerts');
+    }
+
     public function test_accepted_delivery_is_withdrawn_from_the_other_drivers(): void
     {
         $delivery = $this->book();

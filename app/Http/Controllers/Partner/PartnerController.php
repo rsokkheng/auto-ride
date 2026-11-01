@@ -225,7 +225,7 @@ class PartnerController extends Controller
         $nearbyDrivers = [];
         if (in_array($delivery->status, ['created', 'assigned'])) {
             $nearbyDrivers = app(DriverMatchingService::class)
-                ->findDrivers((float) $delivery->pickup_lat, (float) $delivery->pickup_lng, 10)
+                ->findDrivers((float) $delivery->pickup_lat, (float) $delivery->pickup_lng, 10, service: 'delivery')
                 ->map(fn($d) => [
                     'id'          => $d->id,
                     'name'        => $d->name,

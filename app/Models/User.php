@@ -12,7 +12,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'username', 'email', 'password', 'phone', 'phone_verified_at', 'avatar', 'role', 'driver_type', 'company_name', 'company_id', 'salary', 'commission_rate', 'api_token', 'refresh_token', 'token_expires_at', 'refresh_token_expires_at', 'available', 'status_note', 'wallet_balance', 'current_latitude', 'current_longitude', 'rating', 'total_ratings', 'approval_status', 'approved_at', 'cancellation_count', 'cancellation_penalty_until', 'penalty_until', 'penalty_reason', 'proxy_phone', 'fcm_token', 'referral_code', 'referred_by', 'city', 'service_zone', 'social_provider', 'social_id', 'current_streak', 'longest_streak', 'last_trip_date', 'current_5star_streak', 'loyalty_points', 'membership_tier_id', 'onboarding_completed_at', 'onboarding_steps', 'accessibility_settings'])]
+#[Fillable(['name', 'username', 'email', 'password', 'phone', 'phone_verified_at', 'avatar', 'role', 'driver_type', 'company_name', 'company_id', 'salary', 'commission_rate', 'api_token', 'refresh_token', 'token_expires_at', 'refresh_token_expires_at', 'available', 'accepts_rides', 'accepts_deliveries', 'accepts_rentals', 'status_note', 'wallet_balance', 'current_latitude', 'current_longitude', 'rating', 'total_ratings', 'approval_status', 'approved_at', 'cancellation_count', 'cancellation_penalty_until', 'penalty_until', 'penalty_reason', 'proxy_phone', 'fcm_token', 'referral_code', 'referred_by', 'city', 'service_zone', 'social_provider', 'social_id', 'current_streak', 'longest_streak', 'last_trip_date', 'current_5star_streak', 'loyalty_points', 'membership_tier_id', 'onboarding_completed_at', 'onboarding_steps', 'accessibility_settings'])]
 #[Hidden(['password', 'remember_token', 'api_token', 'refresh_token'])]
 class User extends Authenticatable
 {
@@ -28,6 +28,9 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at'           => 'datetime',
+            'accepts_rides'               => 'boolean',
+            'accepts_deliveries'          => 'boolean',
+            'accepts_rentals'             => 'boolean',
             'password'                    => 'hashed',
             'wallet_balance'              => 'integer',
             'salary'                      => 'integer',
@@ -124,6 +127,28 @@ class User extends Authenticatable
             ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('deliveries')
                 ->whereColumn('deliveries.driver_id', 'users.id')
                 ->whereIn('deliveries.status', self::ACTIVE_DELIVERY_STATUSES));
+    }
+
+    // ── Service modes (driver app's Ride / Delivery / Rental toggles) ───────
+
+    public const SERVICE_MODE_COLUMNS = [
+        'ride'     => 'accepts_rides',
+        'delivery' => 'accepts_deliveries',
+        'moving'   => 'accepts_deliveries',
+        'rental'   => 'accepts_rentals',
+    ];
+
+    /** Drivers who have the given job type switched on (null = any). */
+    public function scopeAcceptingService($query, ?string $service)
+    {
+        $column = self::SERVICE_MODE_COLUMNS[$service] ?? null;
+        return $column ? $query->where($column, true) : $query;
+    }
+
+    public function acceptsService(string $service): bool
+    {
+        $column = self::SERVICE_MODE_COLUMNS[$service] ?? null;
+        return $column === null || (bool) ($this->{$column} ?? true);
     }
 
     public function hasActiveTrip(): bool

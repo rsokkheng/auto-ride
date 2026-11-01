@@ -241,8 +241,8 @@ class RideController extends ApiController
         // (self_serve_expires_at set) and the grace window hasn't expired yet. While a
         // ride is still being offered sequentially to its ranked queue (expires_at NULL),
         // it must not be snipeable here by a driver outside that queue.
-        // A driver already on a trip isn't shown new jobs.
-        $busy = $user->hasActiveTrip();
+        // A driver already on a trip — or with Ride switched off — isn't shown new jobs.
+        $busy = $user->hasActiveTrip() || ! $user->acceptsService('ride');
 
         // Rides this driver already declined or let time out don't come back.
         $dismissed = RideDecline::where('driver_id', $user->id)->pluck('ride_id')

@@ -38,7 +38,7 @@ class DriverMatchingService
      * (billed per element). Worth it when actually dispatching a ride; pass false
      * for display-only lookups like the passenger's map, which polls constantly.
      */
-    public function findDrivers(float $pickupLat, float $pickupLng, int $limit = 10, ?float $radiusKm = null, bool $roadDistances = true): Collection
+    public function findDrivers(float $pickupLat, float $pickupLng, int $limit = 10, ?float $radiusKm = null, bool $roadDistances = true, ?string $service = null): Collection
     {
         $radius = $radiusKm ?? $this->radiusKm;
 
@@ -57,6 +57,7 @@ class DriverMatchingService
             ->where('role', 'driver')
             ->where('available', true)
             ->withoutActiveTrip()
+            ->acceptingService($service)
             ->where(fn ($q) => $q->whereNull('penalty_until')->orWhere('penalty_until', '<=', now()))
             ->with(['vehicles' => fn($q) => $q->where('status', 'active')->latest()->limit(1)])
             ->get();
