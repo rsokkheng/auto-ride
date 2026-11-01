@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Services\RideDispatchService;
 use App\Events\RealtimeUpdate;
 use App\Http\Controllers\Api\DeliveryController;
 use App\Models\ChatMessage;
@@ -37,10 +38,21 @@ class RealtimeHooks
             // cancelled by the passenger, auto-cancelled) — tell whichever
             // driver is currently looking at the offer so it disappears now,
             // not on their next poll.
-            if ($ride->getOriginal('status') === Ride::STATUS_REQUESTED) {
-                $offeredTo = ($ride->dispatch_queue ?? [])[$ride->dispatch_position ?? -1] ?? null;
-                if ($offeredTo && (int) $offeredTo !== (int) $ride->driver_id) {
-                    RealtimeUpdate::toDriver((int) $offeredTo, 'ride.offer_withdrawn', ['ride_id' => $ride->id]);
+            if ($ride->getOriginal('status') === Ride::STATUS_REQUESTED
+                && $ride->status !== Ride::STATUS_REQUESTED) {
+                $current   = ($ride->dispatch_queue ?? [])[$ride->dispatch_position ?? -1] ?? null;
+                $offeredTo = array_unique(array_filter(array_merge(
+                    Cache::pull(RideDispatchService::offeredCacheKey($ride->id), []),
+                    [$current],
+                )));
+                // 'cancelled' → the driver app tells the driver; 'taken' just hides it.
+                $reason = $ride->status === Ride::STATUS_CANCELLED ? 'cancelled' : 'taken';
+                foreach ($offeredTo as $driverId) {
+                    if ((int) $driverId !== (int) $ride->driver_id) {
+                        RealtimeUpdate::toDriver((int) $driverId, 'ride.offer_withdrawn', [
+                            'ride_id' => $ride->id, 'reason' => $reason,
+                        ]);
+                    }
                 }
             }
         });
@@ -60,9 +72,12 @@ class RealtimeHooks
             if (in_array($delivery->getOriginal('status'), $open, true)
                 && ! in_array($delivery->status, $open, true)) {
                 $key = DeliveryController::offeredCacheKey($delivery->id);
+                $reason = $delivery->status === 'cancelled' ? 'cancelled' : 'taken';
                 foreach (Cache::pull($key, []) as $driverId) {
                     if ((int) $driverId !== (int) $delivery->driver_id) {
-                        RealtimeUpdate::toDriver((int) $driverId, 'delivery.offer_withdrawn', ['delivery_id' => $delivery->id]);
+                        RealtimeUpdate::toDriver((int) $driverId, 'delivery.offer_withdrawn', [
+                            'delivery_id' => $delivery->id, 'reason' => $reason,
+                        ]);
                     }
                 }
             }

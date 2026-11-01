@@ -8,6 +8,7 @@ use App\Jobs\CancelUnclaimedRide;
 use App\Models\PricingSetting;
 use App\Models\Ride;
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -108,6 +109,18 @@ class RideDispatchService
         $this->offerAt($ride->fresh(), 0);
     }
 
+    /** Every driver this ride was offered to — they all get the withdrawal / cancel notice. */
+    public static function offeredCacheKey(int $rideId): string
+    {
+        return "ride:{$rideId}:offered_to";
+    }
+
+    private static function rememberOffered(int $rideId, array $driverIds): void
+    {
+        $key = self::offeredCacheKey($rideId);
+        Cache::put($key, array_values(array_unique(array_merge(Cache::get($key, []), $driverIds))), 7200);
+    }
+
     private function offerAt(Ride $ride, int $position): void
     {
         $queue = $ride->dispatch_queue ?? [];
@@ -120,6 +133,8 @@ class RideDispatchService
                     'dispatch_position'   => $position,
                     'dispatch_offered_at' => now(),
                 ]);
+
+                self::rememberOffered($ride->id, [$driver->id]);
 
                 $this->fcm->rideRequested(
                     $driver,
@@ -177,10 +192,57 @@ class RideDispatchService
 
         $ride->update(['self_serve_expires_at' => $expiresAt]);
 
+        $this->alertSelfServeDrivers($ride->fresh(), $windowSeconds);
+
         Log::info('self_serve_started', ['ride_id' => $ride->id, 'expires_at' => $expiresAt->toIso8601String(), 'window_seconds' => $windowSeconds]);
 
         CancelUnclaimedRide::dispatch($ride->id)
             ->delay($expiresAt);
+    }
+
+    /**
+     * The ride is now open to any nearby driver — alert them (push + in-app),
+     * like a new delivery, instead of it silently appearing in their list.
+     * Drivers who already declined / timed out on it are skipped.
+     */
+    private function alertSelfServeDrivers(Ride $ride, int $windowSeconds): void
+    {
+        $tried  = $ride->tried_driver_ids ?? [];
+        $tiers  = $this->radiusTiers();
+        $nearby = $ride->pickup_lat !== null
+            ? $this->matcher->findDrivers((float) $ride->pickup_lat, (float) $ride->pickup_lng, 30, (float) (end($tiers) ?: 8.0), roadDistances: false, service: 'ride')
+            : collect();
+
+        // Nobody in the Redis GEO index (positions not synced yet) — fall back to
+        // available Ride-mode drivers whose last saved position is in range, or
+        // unknown, the same way a delivery without coordinates reaches drivers.
+        if ($nearby->isEmpty()) {
+            $radiusKm = (float) (end($tiers) ?: 8.0);
+            $nearby = User::where('role', 'driver')->where('available', true)
+                ->withoutActiveTrip()->acceptingService('ride')
+                ->where(fn ($q) => $q->whereNull('penalty_until')->orWhere('penalty_until', '<=', now()))
+                ->get()
+                ->filter(fn (User $d) => $d->current_latitude === null || $ride->pickup_lat === null
+                    || $this->matcher->haversineDistance((float) $ride->pickup_lat, (float) $ride->pickup_lng,
+                        (float) $d->current_latitude, (float) $d->current_longitude) <= $radiusKm);
+        }
+
+        $drivers = $nearby->reject(fn (User $d) => in_array($d->id, $tried, true))->values();
+        if ($drivers->isEmpty()) return;
+
+        self::rememberOffered($ride->id, $drivers->pluck('id')->all());
+
+        foreach ($drivers as $driver) {
+            RealtimeUpdate::toDriver($driver->id, 'ride.offered', [
+                'ride_id' => $ride->id, 'expires_in' => $windowSeconds,
+            ]);
+            try {
+                $this->fcm->rideRequested($driver, $ride->id, $ride->pickup_address,
+                    $ride->dropoff_address ?? 'Destination TBD', $ride->passenger->name ?? '', (int) $ride->fare);
+            } catch (Throwable $e) {
+                report($e);
+            }
+        }
     }
 
     /**

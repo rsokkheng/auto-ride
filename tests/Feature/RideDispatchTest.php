@@ -2,12 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Events\RealtimeUpdate;
 use App\Jobs\AdvanceRideDispatch;
 use App\Jobs\CancelUnclaimedRide;
 use App\Models\Ride;
 use App\Models\User;
 use App\Services\RideDispatchService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Redis;
 use Tests\TestCase;
@@ -305,4 +308,45 @@ class RideDispatchTest extends TestCase
         $this->assertSame(Ride::STATUS_CANCELLED, $ride->status);
         $this->assertNull($ride->driver_id);
     }
+
+    private function sentTo(User $driver, string $event, ?callable $match = null): bool
+    {
+        return Event::dispatched(RealtimeUpdate::class, fn ($e) =>
+            $e->channel === "driver.{$driver->id}" && $e->event === $event
+            && ($match === null || $match($e->data ?? $e->payload ?? []))
+        )->isNotEmpty();
+    }
+
+    public function test_passenger_cancel_withdraws_the_offer_as_cancelled(): void
+    {
+        Http::fake();
+        Event::fake([RealtimeUpdate::class]);
+        $driver    = $this->makeDriver();
+        $passenger = $this->makePassenger();
+        $ride      = $this->makeRide($passenger);
+        app(RideDispatchService::class)->start($ride->fresh());
+
+        $this->withHeader('Authorization', 'Bearer ' . $passenger->api_token)
+            ->postJson("/api/v1/rides/{$ride->id}/cancel")
+            ->assertOk();
+
+        $this->assertTrue($this->sentTo($driver, 'ride.offer_withdrawn',
+            fn ($data) => ($data['reason'] ?? null) === 'cancelled'));
+    }
+
+    public function test_open_window_alerts_drivers_missing_from_the_geo_index(): void
+    {
+        Http::fake();
+        Event::fake([RealtimeUpdate::class]);
+        $driver    = $this->makeDriver();
+        $passenger = $this->makePassenger();
+        $ride      = $this->makeRide($passenger);
+        Redis::del('drivers:geo'); // position never synced to Redis
+
+        app(RideDispatchService::class)->start($ride->fresh());
+
+        $this->assertNotNull($ride->fresh()->self_serve_expires_at, 'no ranked candidates → open window');
+        $this->assertTrue($this->sentTo($driver, 'ride.offered'), 'driver is still alerted from the DB position');
+    }
+
 }

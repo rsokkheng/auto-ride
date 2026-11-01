@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use Illuminate\Support\Facades\Cache;
 use App\Models\Ride;
 use App\Models\RideStop;
 use App\Models\User;
@@ -1044,6 +1045,8 @@ class RideController extends ApiController
         // Cancellation fee: charged to passenger based on how late they cancel
         $cancellationFee = 0;
         $isByPassenger   = $user->id === $ride->passenger_id;
+        // Read before the update — RealtimeHooks consumes this list on it.
+        $offeredBeforeCancel = Cache::get(\App\Services\RideDispatchService::offeredCacheKey($ride->id), []);
 
         if ($isByPassenger) {
             $cancellationFee = \App\Models\CancellationPolicyTier::feeFor($ride);
@@ -1087,6 +1090,19 @@ class RideController extends ApiController
 
         $fresh = $ride->fresh()->load('passenger', 'driver', 'vehicle');
         $this->firestore->syncRide($fresh);
+
+        // Passenger cancelled a request still being offered: push every driver
+        // who saw it, so a backgrounded app knows too (the in-app offer card is
+        // withdrawn over realtime by RealtimeHooks).
+        if ($isByPassenger && ! $fresh->driver_id) {
+            foreach (User::whereIn('id', $offeredBeforeCancel)->get() as $offered) {
+                try {
+                    $this->fcm->rideCancelledByPassenger($offered, $fresh->id);
+                } catch (\Throwable $e) {
+                    report($e);
+                }
+            }
+        }
 
         // Notify the other party about cancellation
         if ($isByPassenger && $fresh->driver) {
