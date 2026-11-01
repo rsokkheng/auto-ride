@@ -380,7 +380,7 @@ class RideController extends ApiController
             'vehicle_id'      => 'nullable|exists:vehicles,id',
             // Ride for someone else
             'passenger_name'  => 'nullable|string|max:100',
-            'passenger_phone' => 'nullable|string|max:24',
+            'passenger_phone' => ['nullable', 'string', 'max:24', new \App\Rules\CambodianPhone],
             // Promo code
             'promo_code'      => 'nullable|string|max:32',
             // Multi-stop

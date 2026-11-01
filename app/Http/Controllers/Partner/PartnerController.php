@@ -146,7 +146,7 @@ class PartnerController extends Controller
 
         $data = $request->validate([
             'recipient_name'    => 'required|string|max:255',
-            'recipient_phone'   => 'required|string|max:24',
+            'recipient_phone'   => ['required', 'string', 'max:24', new \App\Rules\CambodianPhone],
             'pickup_address'    => 'required|string|max:500',
             'dropoff_address'   => 'required|string|max:500',
             'pickup_lat'        => 'nullable|numeric',

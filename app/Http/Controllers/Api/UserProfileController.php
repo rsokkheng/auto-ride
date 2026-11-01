@@ -97,7 +97,7 @@ class UserProfileController extends ApiController
 
         $data = $request->validate([
             'name'                 => 'required|string|max:100',
-            'phone'                => 'required|string|max:24',
+            'phone'                => ['required', 'string', 'max:24', new \App\Rules\CambodianPhone],
             'relationship'         => 'nullable|string|max:50',
             'notify_on_sos'        => 'nullable|boolean',
             'notify_on_trip_share' => 'nullable|boolean',
@@ -117,7 +117,7 @@ class UserProfileController extends ApiController
 
         $data = $request->validate([
             'name'                 => 'sometimes|string|max:100',
-            'phone'                => 'sometimes|string|max:24',
+            'phone'                => ['sometimes', 'string', 'max:24', new \App\Rules\CambodianPhone],
             'relationship'         => 'nullable|string|max:50',
             'notify_on_sos'        => 'nullable|boolean',
             'notify_on_trip_share' => 'nullable|boolean',

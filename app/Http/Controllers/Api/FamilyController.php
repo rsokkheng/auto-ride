@@ -58,7 +58,7 @@ class FamilyController extends ApiController
 
         $data = $request->validate([
             'name'         => 'required|string|max:100',
-            'phone'        => 'required|string|max:20',
+            'phone'        => ['required', 'string', 'max:20', new \App\Rules\CambodianPhone],
             'relationship' => 'nullable|string|max:40',
         ]);
 
@@ -97,7 +97,7 @@ class FamilyController extends ApiController
 
         $data = $request->validate([
             'name'         => 'sometimes|string|max:100',
-            'phone'        => 'sometimes|string|max:20',
+            'phone'        => ['sometimes', 'string', 'max:20', new \App\Rules\CambodianPhone],
             'relationship' => 'nullable|string|max:40',
         ]);
 

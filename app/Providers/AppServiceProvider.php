@@ -45,7 +45,9 @@ class AppServiceProvider extends ServiceProvider
         // SMS costs money — cap per phone and per IP.
         RateLimiter::for('otp-send', fn (Request $request) => [
             Limit::perHour(10)->by('otp-send:phone:' . self::phoneKey($request)),
-            Limit::perMinute(20)->by('otp-send:ip:' . $request->ip()),
+            Limit::perMinute(5)->by('otp-send:ip:' . $request->ip()),
+            // Each OTP is a paid SMS — cap how many one device/network can trigger.
+            Limit::perHour(30)->by('otp-send:ip-hour:' . $request->ip()),
         ]);
 
         RateLimiter::for('otp-verify', fn (Request $request) => [

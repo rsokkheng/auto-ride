@@ -180,7 +180,7 @@ class WalletController extends ApiController
         if (! $user) return $this->unauthorized();
 
         $data = $request->validate([
-            'phone'  => 'required|string',
+            'phone'  => ['required', 'string', 'max:24', new \App\Rules\CambodianPhone],
             'amount' => 'required|integer|min:1000',
             'note'   => 'nullable|string|max:255',
         ]);

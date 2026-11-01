@@ -67,7 +67,7 @@ class PromoCodeController extends ApiController
             'code'         => 'required|string',
             'service_type' => 'required|in:' . implode(',', PromoCode::contextNames()),
             'order_amount' => 'required|integer|min:0',
-            'guest_phone'  => 'nullable|string|max:20',
+            'guest_phone'  => ['nullable', 'string', 'max:20', new \App\Rules\CambodianPhone],
         ]);
 
         $context = PromoCode::normalizeContext($data['service_type']);

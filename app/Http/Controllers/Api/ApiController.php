@@ -48,7 +48,7 @@ class ApiController extends Controller
 
         $guest = $request->validate([
             'guest_name'  => 'required|string|max:100',
-            'guest_phone' => ['required', 'string', 'max:20', 'regex:/^\+?[0-9 ]{8,16}$/'],
+            'guest_phone' => ['required', 'string', 'max:20', new \App\Rules\CambodianPhone],
             'guest_token' => 'required|string|min:20|max:64',
             'fcm_token'   => 'nullable|string|max:255',
             'guest_phone_token' => 'nullable|string|max:2048',

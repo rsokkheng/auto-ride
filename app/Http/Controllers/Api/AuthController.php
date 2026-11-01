@@ -36,7 +36,7 @@ class AuthController extends ApiController
             'username'     => 'nullable|string|max:64|unique:users,username|alpha_dash',
             'email'        => 'required|email|unique:users,email',
             'password'     => 'required|string|min:8',
-            'phone'        => 'nullable|string|max:24',
+            'phone'        => ['nullable', 'string', 'max:24', new \App\Rules\CambodianPhone],
             'role'         => 'nullable|in:passenger,driver,partner',
             'driver_type'  => 'nullable|in:owner,employee,rental',
             'company_name' => 'nullable|string|max:255',
@@ -271,7 +271,7 @@ class AuthController extends ApiController
             'name'         => 'sometimes|string|max:255',
             'username'     => 'sometimes|nullable|string|max:64|unique:users,username,' . $user->id . '|alpha_dash',
             'email'        => 'sometimes|email|unique:users,email,' . $user->id,
-            'phone'        => 'sometimes|string|max:24',
+            'phone'        => ['sometimes', 'string', 'max:24', new \App\Rules\CambodianPhone],
             'status_note'  => 'sometimes|nullable|string|max:255',
             'driver_type'  => 'sometimes|nullable|in:owner,company_staff,rental',
             'company_name' => 'sometimes|nullable|string|max:255',
@@ -348,7 +348,7 @@ class AuthController extends ApiController
     public function sendOTP(Request $request)
     {
         $data = $request->validate([
-            'phone' => 'required|string|max:24',
+            'phone' => ['required', 'string', 'max:24', new \App\Rules\CambodianPhone],
         ]);
 
         try {
@@ -417,7 +417,7 @@ class AuthController extends ApiController
     public function verifyOTP(Request $request)
     {
         $data = $request->validate([
-            'phone' => 'required|string|max:24',
+            'phone' => ['required', 'string', 'max:24', new \App\Rules\CambodianPhone],
             'code'  => 'required|string|max:8',
         ]);
 
@@ -460,7 +460,7 @@ class AuthController extends ApiController
     public function verifyGuestPhone(Request $request)
     {
         $data = $request->validate([
-            'phone' => 'required|string|max:24',
+            'phone' => ['required', 'string', 'max:24', new \App\Rules\CambodianPhone],
             'code'  => 'required|string|max:8',
         ]);
 
