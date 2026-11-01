@@ -92,8 +92,15 @@ class ApiController extends Controller
      * result directly (`->get()`), which crashed with a TypeError (HTTP 500)
      * when this only took an array.
      */
-    protected function success(array|\Illuminate\Contracts\Support\Arrayable|\JsonSerializable $data, int $status = 200): JsonResponse
-    {
-        return response()->json(['data' => $data], $status);
+    protected function success(
+        array|\Illuminate\Contracts\Support\Arrayable|\JsonSerializable|null $data,
+        int|string $statusOrMessage = 200,
+    ): JsonResponse {
+        // Several controllers pass a message as the 2nd argument
+        // (`success($x, 'Saved.')`); that used to be a TypeError → HTTP 500.
+        if (is_string($statusOrMessage)) {
+            return response()->json(['data' => $data, 'message' => $statusOrMessage], 200);
+        }
+        return response()->json(['data' => $data], $statusOrMessage);
     }
 }

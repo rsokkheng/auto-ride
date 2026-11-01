@@ -48,7 +48,11 @@ class RealtimeHooks
                     [$current],
                 )));
                 // 'cancelled' → the driver app tells the driver; 'taken' just hides it.
-                $reason = $ride->status === Ride::STATUS_CANCELLED ? 'cancelled' : 'taken';
+                // 'cancelled' (passenger / admin) → the driver app explains it;
+                // an expired request with no driver, or one taken by someone
+                // else, just disappears ('taken').
+                $reason = $ride->status === Ride::STATUS_CANCELLED
+                    && $ride->cancellation_reason !== 'no_driver_available' ? 'cancelled' : 'taken';
                 foreach ($offeredTo as $driverId) {
                     if ((int) $driverId !== (int) $ride->driver_id) {
                         RealtimeUpdate::toDriver((int) $driverId, 'ride.offer_withdrawn', [

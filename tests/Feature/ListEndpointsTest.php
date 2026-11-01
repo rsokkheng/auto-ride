@@ -23,4 +23,18 @@ class ListEndpointsTest extends TestCase
                 ->assertJsonIsArray('data');
         }
     }
+
+    public function test_accessibility_settings_save(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'passenger', 'api_token' => 't-' . uniqid(), 'token_expires_at' => now()->addHour(),
+        ]);
+
+        $this->withToken($user->api_token)
+            ->putJson('/api/v1/accessibility', ['font_size' => 'large', 'high_contrast' => true])
+            ->assertOk()
+            ->assertJsonPath('data.font_size', 'large')
+            ->assertJsonPath('message', 'Accessibility settings updated.');
+        $this->assertSame('large', $user->fresh()->accessibility_settings['font_size']);
+    }
 }
