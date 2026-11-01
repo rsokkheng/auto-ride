@@ -87,7 +87,12 @@ class ApiController extends Controller
         return response()->json(['message' => $message], 401);
     }
 
-    protected function success(array $data, int $status = 200): JsonResponse
+    /**
+     * Accepts collections / models too — several controllers return a query
+     * result directly (`->get()`), which crashed with a TypeError (HTTP 500)
+     * when this only took an array.
+     */
+    protected function success(array|\Illuminate\Contracts\Support\Arrayable|\JsonSerializable $data, int $status = 200): JsonResponse
     {
         return response()->json(['data' => $data], $status);
     }
