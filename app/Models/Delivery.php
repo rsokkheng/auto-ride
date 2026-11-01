@@ -146,6 +146,8 @@ class Delivery extends Model
         'promo_code_id',
         'discount_amount',
         'cancellation_reason',
+        'cancelled_by',
+        'cancelled_at',
         'cancellation_fee',
         // Partner delivery
         'partner_id',
@@ -158,6 +160,7 @@ class Delivery extends Model
     ];
 
     protected $casts = [
+        'cancelled_at' => 'datetime',
         'scheduled_at'       => 'datetime',
         'assigned_at'        => 'datetime',
         'started_at'         => 'datetime',

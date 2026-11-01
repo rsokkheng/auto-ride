@@ -950,7 +950,13 @@ class DeliveryController extends ApiController
         }
 
         $isByDriver = $user->role === 'driver';
-        $delivery->update(['status' => 'cancelled']);
+        $reason     = trim((string) $request->input('reason', ''));
+        $delivery->update([
+            'status'              => 'cancelled',
+            'cancelled_by'        => $isByDriver ? 'driver' : 'sender',
+            'cancelled_at'        => now(),
+            'cancellation_reason' => $reason !== '' ? mb_substr($reason, 0, 255) : $delivery->cancellation_reason,
+        ]);
         $fresh = $delivery->fresh()->load('sender', 'driver');
         $this->firestore->syncDelivery($fresh);
 

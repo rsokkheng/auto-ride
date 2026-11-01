@@ -456,9 +456,16 @@ class AdminApiController extends ApiController
 
         $isFinishing = in_array($data['status'], Delivery::FINISHED_STATUSES, true);
 
-        $delivery->update($isFinishing
-            ? ['status' => $data['status'], 'completed_at' => $delivery->completed_at ?? now()]
-            : ['status' => $data['status']]);
+        $delivery->update(match (true) {
+            $isFinishing => ['status' => $data['status'], 'completed_at' => $delivery->completed_at ?? now()],
+            $data['status'] === 'cancelled' => [
+                'status'              => 'cancelled',
+                'cancelled_by'        => 'admin',
+                'cancelled_at'        => now(),
+                'cancellation_reason' => $data['note'] ?? $delivery->cancellation_reason,
+            ],
+            default => ['status' => $data['status']],
+        });
 
         // Settle payment when an admin closes the job out. No-op if already paid.
         if ($isFinishing) {
