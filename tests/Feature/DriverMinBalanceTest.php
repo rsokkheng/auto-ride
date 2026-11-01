@@ -115,4 +115,23 @@ class DriverMinBalanceTest extends TestCase
 
         $this->assertFalse((bool) $driver->fresh()->available);
     }
+
+    public function test_rejected_withdrawal_refunds_and_lets_the_driver_go_online(): void
+    {
+        $driver = $this->driver(60000);
+        $driver->update(['fcm_token' => 'fcm-test-token']);
+        $this->withToken($driver->api_token)->postJson('/api/v1/driver/withdraw', [
+            'amount_khr' => 60000, 'payment_method' => 'aba',
+            'account_number' => '000111222', 'account_name' => 'Driver',
+        ])->assertOk();
+        $this->withToken($driver->api_token)->getJson('/api/v1/driver/status')->assertJsonPath('data.can_go_online', false);
+
+        $admin = User::factory()->create(['role' => 'admin', 'api_token' => 'a-' . uniqid(), 'token_expires_at' => now()->addHour()]);
+        $w = \App\Models\WithdrawalRequest::where('driver_id', $driver->id)->firstOrFail();
+        $this->withToken($admin->api_token)->postJson("/api/v1/admin/withdrawals/{$w->id}/reject", ['reason' => 'Wrong account'])->assertOk();
+
+        $this->withToken($driver->api_token)->getJson('/api/v1/driver/status')->assertJsonPath('data.can_go_online', true);
+        $this->withToken($driver->api_token)->postJson('/api/v1/driver/go-online')->assertOk();
+        $this->assertTrue(PushNotification::where('user_id', $driver->id)->where('type', 'withdrawal_rejected')->exists());
+    }
 }

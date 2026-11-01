@@ -16,6 +16,8 @@ return [
     'driver_low_balance_offline' => ['title' => '💰 已提现 — 您已下线', 'body' => '您的余额为 :balance ៛，低于上线所需的 :min ៛。请为钱包充值后再接单。'],
     'topup_approved' => ['title' => '✅ 充值已通过', 'body' => ':amount ៛ 已存入您的钱包。'],
     'topup_rejected' => ['title' => '❌ 充值被拒绝', 'body' => '您的 :amount ៛ 充值申请被拒绝。'],
+    'withdrawal_approved' => ['title' => '✅ 提现已通过', 'body' => '您的 :amount ៛ 提现已通过，将转入您的账户。'],
+    'withdrawal_rejected' => ['title' => '↩️ 提现被拒绝', 'body' => ':amount ៛ 已退回您的钱包，您可以重新上线。'],
     'ride_reminder'         => ['title' => '🚗 行程提醒',       'body' => '您预约的行程将在约 :minutes 分钟后开始，请做好准备！'],
     'tip_received'          => ['title' => '您收到了小费！',    'body' => '乘客给了您 :amount 瑞尔的小费。'],
 

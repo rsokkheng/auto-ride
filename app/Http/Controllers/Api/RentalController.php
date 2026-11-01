@@ -123,7 +123,7 @@ class RentalController extends ApiController
             'pickup_lng'             => 'nullable|numeric',
             'start_date'             => 'required|date_format:Y-m-d',
             'end_date'               => 'required|date_format:Y-m-d|after_or_equal:start_date',
-            'payment_method'         => 'nullable|in:cash,wallet,aba,wing,other_online',
+            'payment_method'         => 'nullable|in:cash,wallet,aba,acleda,wing,other_online',
             'notes'                  => 'nullable|string|max:500',
             'promo_code'             => 'nullable|string|max:32',
         ]);

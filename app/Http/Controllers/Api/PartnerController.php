@@ -39,7 +39,7 @@ class PartnerController extends ApiController
             'package_size'      => 'nullable|in:small,medium,large,extra_large',
             'package_details'   => 'nullable|string|max:1000',
             'fee'               => 'required|integer|min:0',
-            'payment_method'    => 'nullable|in:cash,wallet,aba,wing,other_online',
+            'payment_method'    => 'nullable|in:cash,wallet,aba,acleda,wing,other_online',
             'payment_by'        => 'nullable|in:sender,recipient',
             'notes'             => 'nullable|string|max:500',
             'partner_reference' => 'nullable|string|max:100',

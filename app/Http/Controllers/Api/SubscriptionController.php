@@ -49,7 +49,7 @@ class SubscriptionController extends ApiController
 
         $data = $request->validate([
             'plan_slug'      => 'required|string|exists:subscription_plans,slug',
-            'payment_method' => 'required|in:wallet,card,qr',
+            'payment_method' => 'required|in:wallet,aba,acleda,card,qr',
             'auto_renew'     => 'boolean',
         ]);
 
@@ -183,7 +183,7 @@ class SubscriptionController extends ApiController
 
         $data = $request->validate([
             'plan_slug'      => 'required|string|exists:subscription_plans,slug',
-            'payment_method' => 'required|in:wallet,card,qr',
+            'payment_method' => 'required|in:wallet,aba,acleda,card,qr',
         ]);
 
         $current = UserSubscription::where('user_id', $user->id)

@@ -16,6 +16,8 @@ return [
     'driver_low_balance_offline' => ['title' => '💰 Wallet withdrawn — you are offline', 'body' => 'Your balance is :balance ៛, below the :min ៛ needed to go online. Please top up your wallet to accept jobs again.'],
     'topup_approved' => ['title' => '✅ Top-up approved', 'body' => ':amount ៛ has been added to your wallet.'],
     'topup_rejected' => ['title' => '❌ Top-up rejected', 'body' => 'Your :amount ៛ top-up request was rejected.'],
+    'withdrawal_approved' => ['title' => '✅ Withdrawal approved', 'body' => 'Your :amount ៛ withdrawal has been approved and will be sent to your account.'],
+    'withdrawal_rejected' => ['title' => '↩️ Withdrawal rejected', 'body' => ':amount ៛ has been returned to your wallet. You can go online again.'],
     'ride_reminder'         => ['title' => '🚗 Ride reminder',            'body' => 'Your scheduled ride is in ~:minutes minutes. Get ready!'],
     'tip_received'          => ['title' => 'You received a tip!',        'body' => 'Your passenger added a :amount KHR tip.'],
 

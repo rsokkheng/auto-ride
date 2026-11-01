@@ -830,7 +830,7 @@ class AdminController extends Controller
             'fee'                => 'nullable|numeric|min:0',
             'package_amount'     => 'nullable|integer|min:0',
             'payment_by'         => 'nullable|in:sender,recipient',
-            'payment_method'     => 'nullable|in:cash,wallet,aba,wing,other_online',
+            'payment_method'     => 'nullable|in:cash,wallet,aba,acleda,wing,other_online',
             'scheduled_at'       => 'nullable|date',
             'notes'              => 'nullable|string',
             'package_details'    => 'nullable|string|max:500',
@@ -903,7 +903,7 @@ class AdminController extends Controller
             'fee'                => 'nullable|numeric|min:0',
             'package_amount'     => 'nullable|integer|min:0',
             'payment_by'         => 'nullable|in:sender,recipient',
-            'payment_method'     => 'nullable|in:cash,wallet,aba,wing,other_online',
+            'payment_method'     => 'nullable|in:cash,wallet,aba,acleda,wing,other_online',
             'scheduled_at'       => 'nullable|date',
             'notes'              => 'nullable|string',
             // Moving fields

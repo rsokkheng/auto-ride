@@ -244,7 +244,7 @@ class DeliveryController extends ApiController
             'fee'               => 'nullable|numeric|min:0',
             'package_amount'    => 'nullable|integer|min:0',
             'payment_by'        => 'nullable|in:sender,recipient',
-            'payment_method'    => 'nullable|in:cash,wallet,aba,wing,other_online',
+            'payment_method'    => 'nullable|in:cash,wallet,aba,acleda,wing,other_online',
             'notes'             => 'nullable|string',
             'vehicle_id'        => 'nullable|exists:vehicles,id',
             // Moving-specific
@@ -1216,7 +1216,7 @@ class DeliveryController extends ApiController
             'dropoff_lng'       => 'nullable|numeric|between:-180,180',
             'scheduled_at'      => 'nullable|date',
             'package_details'   => 'nullable|string|max:500',
-            'payment_method'    => 'nullable|in:cash,wallet,aba,wing,other_online',
+            'payment_method'    => 'nullable|in:cash,wallet,aba,acleda,wing,other_online',
             'notes'             => 'nullable|string',
             'floor_pickup'      => 'nullable|integer|min:0|max:50',
             'floor_dropoff'     => 'nullable|integer|min:0|max:50',

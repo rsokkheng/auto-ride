@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\WithdrawalRequest;
 use App\Services\FcmService;
 use App\Services\RideDispatchService;
 use App\Events\RealtimeUpdate;
@@ -98,6 +99,30 @@ class RealtimeHooks
                         'amount' => number_format((int) $topup->amount),
                     ]),
                     data: ['type' => 'topup_' . $topup->status, 'topup_id' => (string) $topup->id]
+                );
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        });
+
+        // Withdrawal decided (web admin or API) — tell the driver. An approval
+        // that leaves the wallet under the minimum is announced by the
+        // low-balance push instead (enforceMinBalance), not twice.
+        WithdrawalRequest::updated(function (WithdrawalRequest $w) {
+            if (! $w->wasChanged('status') || ! in_array($w->status, ['approved', 'rejected'], true)) return;
+            $driver = $w->driver?->fresh();
+            if (! $driver) return;
+            if ($w->status === 'approved' && ! $driver->hasMinBalance()) return;
+
+            RealtimeUpdate::toDriver($driver->id, 'wallet.updated', [
+                'withdrawal_id' => $w->id, 'status' => $w->status,
+            ]);
+            try {
+                app(FcmService::class)->sendToDriver($driver,
+                    ...FcmService::message('withdrawal_' . $w->status, [
+                        'amount' => number_format((int) $w->amount_khr),
+                    ]),
+                    data: ['type' => 'withdrawal_' . $w->status, 'withdrawal_id' => (string) $w->id]
                 );
             } catch (\Throwable $e) {
                 report($e);
