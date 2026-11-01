@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Services\FcmService;
 use App\Services\RideDispatchService;
 use App\Events\RealtimeUpdate;
 use App\Http\Controllers\Api\DeliveryController;
@@ -80,6 +81,26 @@ class RealtimeHooks
                         ]);
                     }
                 }
+            }
+        });
+
+        TopUpRequest::updated(function (TopUpRequest $topup) {
+            if (! $topup->wasChanged('status') || ! in_array($topup->status, ['approved', 'rejected'], true)) return;
+            $user = $topup->user;
+            if (! $user) return;
+
+            RealtimeUpdate::toUser($user->id, 'wallet.updated', [
+                'topup_id' => $topup->id, 'status' => $topup->status,
+            ]);
+            try {
+                app(FcmService::class)->sendToUser($user,
+                    ...FcmService::message($topup->status === 'approved' ? 'topup_approved' : 'topup_rejected', [
+                        'amount' => number_format((int) $topup->amount),
+                    ]),
+                    data: ['type' => 'topup_' . $topup->status, 'topup_id' => (string) $topup->id]
+                );
+            } catch (\Throwable $e) {
+                report($e);
             }
         });
 

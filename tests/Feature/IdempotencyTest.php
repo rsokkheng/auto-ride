@@ -55,6 +55,9 @@ class IdempotencyTest extends TestCase
         $user = $this->passenger();
 
         $this->topUp($user, ['amount' => 5000], null)->assertCreated();
+        // Only one *pending* top-up is allowed, so settle the first one — this
+        // test is about the middleware not de-duplicating keyless requests.
+        TopUpRequest::where('user_id', $user->id)->update(['status' => 'rejected']);
         $this->topUp($user, ['amount' => 5000], null)->assertCreated();
 
         $this->assertSame(2, TopUpRequest::where('user_id', $user->id)->count());

@@ -27,6 +27,13 @@ class WalletController extends ApiController
             ->latest()
             ->first();
 
+        // Shown as "waiting for approval" in recent transactions; Top up is
+        // disabled while it exists.
+        $pendingTopUp = TopUpRequest::where('user_id', $user->id)
+            ->where('status', 'pending')
+            ->latest()
+            ->first();
+
         $balance    = (int) $user->wallet_balance;
         $minBalance = (int) PricingSetting::get('driver_min_balance_khr', 50000);
 
@@ -41,6 +48,12 @@ class WalletController extends ApiController
                 'id'         => $pendingWithdrawal->id,
                 'amount_khr' => $pendingWithdrawal->amount_khr,
                 'status'     => $pendingWithdrawal->status,
+            ] : null,
+            'pending_topup'       => $pendingTopUp ? [
+                'id'         => $pendingTopUp->id,
+                'amount'     => (int) $pendingTopUp->amount,
+                'method'     => $pendingTopUp->method,
+                'created_at' => $pendingTopUp->created_at?->toIso8601String(),
             ] : null,
             'transactions'        => $transactions,
         ]);
@@ -118,12 +131,25 @@ class WalletController extends ApiController
         $user = $this->authUser($request);
         if (! $user) return $this->unauthorized();
 
+        // Methods the app offers (ABA / ACLEDA / Wing / bank) plus the older generic ones.
+        $methods = 'cash,aba,acleda,wing,bank_transfer,online,company_credit,card,qr';
         $data = $request->validate([
             'amount'         => 'required|integer|min:1000',
-            'method'         => 'nullable|in:cash,online,company_credit,card,qr',
-            'payment_method' => 'nullable|in:cash,online,company_credit,card,qr',
+            'method'         => "nullable|in:{$methods}",
+            'payment_method' => "nullable|in:{$methods}",
             'note'           => 'nullable|string|max:255',
         ]);
+
+        // One request at a time — a second tap while waiting for approval
+        // created duplicates for admin to sort out.
+        $pending = TopUpRequest::where('user_id', $user->id)->where('status', 'pending')->latest()->first();
+        if ($pending) {
+            return response()->json([
+                'message'        => 'You already have a top-up waiting for approval.',
+                'code'           => 'topup_pending',
+                'top_up_request' => $pending,
+            ], 422);
+        }
 
         $topup = TopUpRequest::create([
             'user_id' => $user->id,
