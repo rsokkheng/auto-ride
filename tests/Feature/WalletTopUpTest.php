@@ -60,4 +60,19 @@ class WalletTopUpTest extends TestCase
         $this->assertTrue(PushNotification::where('user_id', $this->driver->id)->where('type', 'topup_approved')->exists());
         $this->assertSame('approved', TopUpRequest::find($id)->status);
     }
+
+    public function test_admin_page_lists_passenger_top_ups_and_filters_by_role(): void
+    {
+        $passenger = User::factory()->create(['role' => 'passenger', 'name' => 'Pax Sokha', 'api_token' => 'p-' . uniqid(), 'token_expires_at' => now()->addHour()]);
+        $this->withToken($passenger->api_token)->postJson('/api/v1/wallet/topup', ['amount' => 20000, 'method' => 'aba'])->assertCreated();
+        $this->driver->update(['name' => 'Drv Dara']);
+        $this->topUp('acleda')->assertCreated();
+
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+
+        $this->get(route('admin.topups'))->assertOk()
+            ->assertSee('Pax Sokha')->assertSee('Drv Dara')->assertSee('Passenger');
+        $this->get(route('admin.topups', ['role' => 'passenger']))->assertOk()
+            ->assertSee('Pax Sokha')->assertDontSee('Drv Dara');
+    }
 }

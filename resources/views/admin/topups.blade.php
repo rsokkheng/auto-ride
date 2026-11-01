@@ -4,7 +4,7 @@
 
 @section('content')
 
-<x-admin.page-toolbar subtitle="Drivers asking to add money to their wallet. Approve once the payment has arrived." />
+<x-admin.page-toolbar subtitle="Passengers and drivers asking to add money to their ROTEH Pay wallet. Approve once the payment has arrived." />
 
 <x-admin.stat-grid :cols="4">
     <x-admin.stat-card label="Waiting for Review" :value="number_format($pending->count())" icon="fa-hourglass-half" tone="warning" sub="requests below" />
@@ -16,7 +16,11 @@
 </x-admin.stat-grid>
 
 @php
-    $methodTone = ['cash' => 'secondary', 'online' => 'info', 'company_credit' => 'primary'];
+    $methodTone = ['cash' => 'secondary', 'aba' => 'info', 'acleda' => 'primary', 'online' => 'info', 'company_credit' => 'primary'];
+    // Who asked — passengers and drivers share this queue.
+    $roleBadge  = fn ($user) => $user?->role === 'driver'
+        ? '<span class="badge badge-warning ml-1" style="font-size:10px;">Driver</span>'
+        : '<span class="badge badge-info ml-1" style="font-size:10px;">Passenger</span>';
     $initials   = fn (?string $name) => collect(preg_split('/\s+/', trim((string) $name)))->filter()->take(2)->map(fn ($w) => mb_strtoupper(mb_substr($w, 0, 1)))->join('') ?: '?';
 @endphp
 
@@ -24,12 +28,19 @@
 <div class="card">
     <div class="card-header d-flex align-items-center justify-content-between">
         <h3 class="card-title mb-0"><i class="fas fa-hourglass-half mr-2" style="color:var(--warning);"></i>Waiting for review</h3>
-        <span class="badge badge-warning">{{ $pending->count() }}</span>
+        <div class="d-flex align-items-center" style="gap:8px;">
+            <div class="btn-group btn-group-sm">
+                <a href="{{ route('admin.topups', array_merge(request()->except('role', 'page'), [])) }}" class="btn {{ !$role ? 'btn-primary' : 'btn-outline-secondary' }}">All</a>
+                <a href="{{ route('admin.topups', array_merge(request()->except('page'), ['role' => 'passenger'])) }}" class="btn {{ $role === 'passenger' ? 'btn-primary' : 'btn-outline-secondary' }}">Passengers</a>
+                <a href="{{ route('admin.topups', array_merge(request()->except('page'), ['role' => 'driver'])) }}" class="btn {{ $role === 'driver' ? 'btn-primary' : 'btn-outline-secondary' }}">Drivers</a>
+            </div>
+            <span class="badge badge-warning">{{ $pending->count() }}</span>
+        </div>
     </div>
     <div class="card-body table-responsive p-0">
         <table class="table table-hover text-nowrap">
             <thead>
-                <tr><th>Driver</th><th class="text-right">Amount</th><th>Method</th><th>Note</th><th>Requested</th><th class="text-center">Actions</th></tr>
+                <tr><th>User</th><th class="text-right">Amount</th><th>Method</th><th>Note</th><th>Requested</th><th class="text-center">Actions</th></tr>
             </thead>
             <tbody>
             @forelse($pending as $t)
@@ -37,7 +48,7 @@
                     <td>
                         <div class="person">
                             <span class="avatar-chip">{{ $initials($t->user->name) }}</span>
-                            <div><div class="person-name">{{ $t->user->name }}</div><div class="person-sub">{{ $t->user->phone ?? $t->user->email }}</div></div>
+                            <div><div class="person-name">{{ $t->user->name }}{!! $roleBadge($t->user) !!}</div><div class="person-sub">{{ $t->user->phone ?? $t->user->email }}</div></div>
                         </div>
                     </td>
                     <td class="text-right" style="font-weight:700;color:var(--ink-900);">{{ number_format($t->amount) }} ៛</td>
@@ -72,14 +83,15 @@
 {{-- History --}}
 <div class="card">
     <div class="card-header">
-        <x-admin.filter-bar :action="route('admin.topups')" placeholder="Search driver name, phone or email" :count="$history->total()" noun="processed request">
+        <x-admin.filter-bar :action="route('admin.topups')" placeholder="Search name, phone or email" :count="$history->total()" noun="processed request">
             <x-admin.filter-select name="status" :options="['approved' => 'Approved', 'rejected' => 'Rejected']" all="Approved & rejected" />
+            <x-admin.filter-select name="role" :options="['passenger' => 'Passengers', 'driver' => 'Drivers']" all="Passengers & drivers" />
         </x-admin.filter-bar>
     </div>
     <div class="card-body table-responsive p-0">
         <table class="table table-hover text-nowrap">
             <thead>
-                <tr><th>Driver</th><th class="text-right">Amount</th><th>Method</th><th>Status</th><th>Processed</th></tr>
+                <tr><th>User</th><th class="text-right">Amount</th><th>Method</th><th>Status</th><th>Processed</th></tr>
             </thead>
             <tbody>
             @forelse($history as $t)
@@ -87,7 +99,7 @@
                     <td>
                         <div class="person">
                             <span class="avatar-chip">{{ $initials($t->user->name) }}</span>
-                            <div><div class="person-name">{{ $t->user->name }}</div><div class="person-sub">{{ $t->user->phone ?? $t->user->email }}</div></div>
+                            <div><div class="person-name">{{ $t->user->name }}{!! $roleBadge($t->user) !!}</div><div class="person-sub">{{ $t->user->phone ?? $t->user->email }}</div></div>
                         </div>
                     </td>
                     <td class="text-right" style="font-weight:600;color:var(--ink-900);">{{ number_format($t->amount) }} ៛</td>

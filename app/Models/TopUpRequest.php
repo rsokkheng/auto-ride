@@ -25,6 +25,8 @@ class TopUpRequest extends Model
 
     public static array $methodLabels = [
         'cash'           => 'Cash',
+        'aba'            => 'ABA Pay',
+        'acleda'         => 'ACLEDA',
         'online'         => 'Online Payment',
         'company_credit' => 'Company Credit',
     ];

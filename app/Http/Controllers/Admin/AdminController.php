@@ -2130,8 +2130,11 @@ class AdminController extends Controller
     public function topups(Request $request)
     {
         $search = trim((string) $request->input('search', ''));
+        // Passengers and drivers both top up their ROTEH Pay wallet.
+        $role   = in_array($request->query('role'), ['passenger', 'driver'], true) ? $request->query('role') : null;
 
-        $matchesSearch = function ($query) use ($search) {
+        $matchesSearch = function ($query) use ($search, $role) {
+            if ($role) $query->whereHas('user', fn ($uq) => $uq->where('role', $role));
             if ($search === '') return;
             $query->where(function ($q) use ($search) {
                 $q->orWhereHas('user', function ($uq) use ($search) {
@@ -2154,6 +2157,7 @@ class AdminController extends Controller
             'pending' => $pendingQuery->get(),
             'history' => $historyQuery->paginate(10)->withQueryString(),
             'search'  => $search,
+            'role'    => $role,
             'stats'   => [
                 'pending_amount'  => (int) TopUpRequest::where('status', 'pending')->sum('amount'),
                 'approved_month'  => (int) TopUpRequest::where('status', 'approved')->where('approved_at', '>=', now()->startOfMonth())->sum('amount'),
