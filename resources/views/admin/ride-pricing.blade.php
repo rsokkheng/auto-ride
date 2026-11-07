@@ -229,6 +229,24 @@ $colors = [
                     </div>
                     <small class="text-muted">Added on top for extra large packages</small>
                 </div>
+                <div class="col-md-3 mb-3">
+                    <label class="field-label"><i class="fas fa-rotate-left mr-1 text-danger"></i>Unsuccessful Delivery Fee</label>
+                    <div class="input-group">
+                        <input type="number" name="partner_failed_fee_percent" class="form-control"
+                               value="{{ $settings['partner_failed_fee_percent']->value ?? 0 }}"
+                               min="0" max="100" step="5" required>
+                        <div class="input-group-append"><span class="input-group-text">%</span></div>
+                    </div>
+                    <small class="text-muted">Of the service fee, when a package was attempted but returned. 0 = free.</small>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="field-label"><i class="fas fa-check-double mr-1 text-success"></i>Confirm New Packages</label>
+                    <select name="partner_packages_auto_confirm" class="form-control">
+                        <option value="0" @selected(($settings['partner_packages_auto_confirm']->value ?? '0') == '0')>ROTEH confirms each package</option>
+                        <option value="1" @selected(($settings['partner_packages_auto_confirm']->value ?? '0') == '1')>Send straight to drivers</option>
+                    </select>
+                    <small class="text-muted">How Partner packages from the app start.</small>
+                </div>
             </div>
 
             {{-- Live preview table --}}

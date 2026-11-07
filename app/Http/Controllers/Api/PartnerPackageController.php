@@ -342,6 +342,32 @@ class PartnerPackageController extends ApiController
             ->download($name . '.pdf');
     }
 
+    /**
+     * GET /v1/partner/statements?date=YYYY-MM-DD — daily statement after
+     * closing: successful and unsuccessful packages with service fees and COD.
+     */
+    public function statement(Request $request)
+    {
+        if ($deny = $this->denyUnlessPartner($user = $this->authUser($request))) return $deny;
+        $data = $request->validate(['date' => 'nullable|date_format:Y-m-d']);
+        [$from, $to] = \App\Services\PartnerStatementService::dayRange($data['date'] ?? null);
+
+        return $this->success(app(\App\Services\PartnerStatementService::class)->build($user, $from, $to));
+    }
+
+    /** GET /v1/partner/statements/link?date=&type=successful|unsuccessful|both — 30-min browser links (print/PDF, Excel). */
+    public function statementLink(Request $request)
+    {
+        if ($deny = $this->denyUnlessPartner($user = $this->authUser($request))) return $deny;
+        $data = $request->validate([
+            'date' => 'nullable|date_format:Y-m-d',
+            'type' => 'nullable|in:successful,unsuccessful,both',
+        ]);
+
+        return $this->success(\App\Http\Controllers\PartnerStatementController::signedLink(
+            $user, $data['date'] ?? now(\App\Services\PartnerStatementService::tz())->toDateString(), $data['type'] ?? 'both'));
+    }
+
     /** @return array{0: array, 1: \Illuminate\Support\Collection} report payload, package rows */
     private function buildReport(User $user, string $period, ?string $date, bool $withPackages = false): array
     {

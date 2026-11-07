@@ -91,6 +91,11 @@
                   {{ request()->routeIs('partner.reports') ? 'nav-active' : 'text-slate-400' }}">
             <i class="fas fa-chart-bar w-4 text-center"></i><span>Reports</span>
         </a>
+        <a href="{{ route('partner.statements') }}"
+           class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium
+                  {{ request()->routeIs('partner.statements*') ? 'nav-active' : 'text-slate-400' }}">
+            <i class="fas fa-file-invoice w-4 text-center"></i><span>Statements · របាយការណ៍ប្រចាំថ្ងៃ</span>
+        </a>
 
         <p class="px-3 text-xs font-semibold uppercase tracking-widest text-slate-500 mb-1 mt-4">Support</p>
         <a href="{{ route('partner.issues') }}"

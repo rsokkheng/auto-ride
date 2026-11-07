@@ -1373,6 +1373,8 @@ class AdminController extends Controller
             'partner_express_fee'               => 'sometimes|integer|min:0',
             'partner_surcharge_large'           => 'sometimes|integer|min:0',
             'partner_surcharge_extra_large'     => 'sometimes|integer|min:0',
+            'partner_failed_fee_percent'        => 'sometimes|numeric|min:0|max:100',
+            'partner_packages_auto_confirm'     => 'sometimes|in:0,1',
             'ride_radius_tiers_km'              => ['sometimes', 'regex:/^(\d+(\.\d+)?)(,\d+(\.\d+)?)*$/'],
             'ride_dispatch_limit'               => 'sometimes|integer|min:1|max:50',
             'ride_offer_timeout_seconds'        => 'sometimes|integer|min:5|max:120',

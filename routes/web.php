@@ -274,6 +274,11 @@ Route::prefix('admin')->middleware(\App\Http\Middleware\AdminAuth::class)->group
     Route::get('partner-packages',                     [\App\Http\Controllers\Admin\PartnerAdminController::class, 'packages'])->name('admin.partner-packages');
     Route::post('partner-packages/{delivery}/confirm', [\App\Http\Controllers\Admin\PartnerAdminController::class, 'confirmPackage'])->name('admin.partner-packages.confirm');
 
+    // Daily Partner statements (successful / unsuccessful)
+    Route::get('partner-statements',                       [\App\Http\Controllers\PartnerStatementController::class, 'adminIndex'])->name('admin.partner-statements');
+    Route::get('partner-statements/{partner}',            [\App\Http\Controllers\PartnerStatementController::class, 'adminShow'])->name('admin.partner-statements.show');
+    Route::get('partner-statements/{partner}/excel',      [\App\Http\Controllers\PartnerStatementController::class, 'adminExcel'])->name('admin.partner-statements.excel');
+
     // Partner Contracts
     Route::get('partner-contracts',                    [AdminController::class, 'partnerContracts'])->name('admin.partner-contracts');
     Route::post('partner-contracts',                   [AdminController::class, 'storePartnerContract'])->name('admin.partner-contracts.store');
@@ -314,6 +319,10 @@ Route::prefix('partner')->middleware(\App\Http\Middleware\PartnerAuth::class)->g
     Route::post('orders/{delivery}/assign', [\App\Http\Controllers\Partner\PartnerController::class, 'assignDriver'])->name('partner.orders.assign');
     Route::post('orders/{delivery}/cancel', [\App\Http\Controllers\Partner\PartnerController::class, 'cancelOrder'])->name('partner.orders.cancel');
 
+    // Daily statements (reconcile with ROTEH)
+    Route::get('statements',             [\App\Http\Controllers\PartnerStatementController::class, 'portalShow'])->name('partner.statements');
+    Route::get('statements/excel',       [\App\Http\Controllers\PartnerStatementController::class, 'portalExcel'])->name('partner.statements.excel');
+
     // Wallet
     Route::get('wallet',                 [\App\Http\Controllers\Partner\PartnerController::class, 'wallet'])->name('partner.wallet');
 
@@ -343,4 +352,10 @@ Route::prefix('seller')->middleware(\App\Http\Middleware\SellerAuth::class)->gro
     Route::post('orders/{order}/confirm',                    [SellerController::class, 'confirmOrder'])->name('seller.orders.confirm');
     Route::post('orders/{order}/complete',                   [SellerController::class, 'completeOrder'])->name('seller.orders.complete');
     Route::post('orders/{order}/cancel',                     [SellerController::class, 'cancelOrder'])->name('seller.orders.cancel');
+});
+
+// ── Partner statements via temporary signed link (Partner app → browser) ─────
+Route::middleware('signed')->group(function () {
+    Route::get('statements/partner/{partner}',       [\App\Http\Controllers\PartnerStatementController::class, 'signedShow'])->name('statements.partner.signed');
+    Route::get('statements/partner/{partner}/excel', [\App\Http\Controllers\PartnerStatementController::class, 'signedExcel'])->name('statements.partner.signed.excel');
 });

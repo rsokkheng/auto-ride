@@ -391,6 +391,8 @@ Route::prefix('v1')->group(function () {
     Route::get('partner/profile',                       [\App\Http\Controllers\Api\PartnerPackageController::class, 'profile']);
     Route::post('partner/register',                     [\App\Http\Controllers\Api\PartnerPackageController::class, 'register']);
     Route::get('partner/packages/quote',                [\App\Http\Controllers\Api\PartnerPackageController::class, 'quote']);
+    Route::get('partner/statements',                    [\App\Http\Controllers\Api\PartnerPackageController::class, 'statement']);
+    Route::get('partner/statements/link',               [\App\Http\Controllers\Api\PartnerPackageController::class, 'statementLink']);
     Route::get('partner/packages/report/export',        [\App\Http\Controllers\Api\PartnerPackageController::class, 'exportReport']);
     Route::get('partner/packages/report',               [\App\Http\Controllers\Api\PartnerPackageController::class, 'report']);
     Route::get('partner/packages/summary',              [\App\Http\Controllers\Api\PartnerPackageController::class, 'summary']);
