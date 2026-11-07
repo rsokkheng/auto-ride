@@ -51,12 +51,16 @@
 </div>
 
 <div class="row mb-3">
-    <div class="col-md-4 mb-2"><div class="card mb-0"><div class="card-body py-2">
-        <div class="text-muted tw:text-xs">COD collected</div><div style="font-size:1.2rem;font-weight:700;">{{ number_format($totals['cod']) }} ៛</div></div></div></div>
-    <div class="col-md-4 mb-2"><div class="card mb-0"><div class="card-body py-2">
-        <div class="text-muted tw:text-xs">Service fees (completed)</div><div style="font-size:1.2rem;font-weight:700;">{{ number_format($totals['fees']) }} ៛</div></div></div></div>
-    <div class="col-md-4 mb-2"><div class="card mb-0"><div class="card-body py-2">
-        <div class="text-muted tw:text-xs">Net payable to partners</div><div style="font-size:1.2rem;font-weight:700;color:{{ $totals['net'] < 0 ? 'var(--danger)' : 'var(--success)' }};">{{ number_format($totals['net']) }} ៛</div></div></div></div>
+    @foreach([
+        ['Total collected (COD + fee)', $totals['collected'], 'var(--ink-900)'],
+        ['ROTEH delivery fees', $totals['fees'], 'var(--ink-900)'],
+        ['ROTEH pays partners', $totals['roteh_pays'], 'var(--success)'],
+        ['Partners pay ROTEH', $totals['partner_pays'], 'var(--danger)'],
+        ['Balance (ROTEH → partners)', $totals['net'], $totals['net'] < 0 ? 'var(--danger)' : 'var(--success)'],
+    ] as [$lbl, $val, $col])
+        <div class="col-6 col-md mb-2"><div class="card mb-0"><div class="card-body py-2">
+            <div class="text-muted tw:text-xs">{{ $lbl }}</div><div style="font-size:1.15rem;font-weight:700;color:{{ $col }};">{{ number_format($val) }} ៛</div></div></div></div>
+    @endforeach
 </div>
 
 <div class="card">
@@ -88,9 +92,11 @@
                     <th>Partner</th>
                     <th class="text-right">Total</th>
                     <th>Status breakdown</th>
-                    <th class="text-right">COD collected</th>
-                    <th class="text-right">Service fees</th>
-                    <th class="text-right">Net to partner</th>
+                    <th class="text-right">Total collected</th>
+                    <th class="text-right">ROTEH fees</th>
+                    <th class="text-right">ROTEH pays</th>
+                    <th class="text-right">Partner pays</th>
+                    <th class="text-right">Balance</th>
                     <th class="text-center">Statements</th>
                 </tr>
             </thead>
@@ -112,9 +118,13 @@
                             @endif
                         @endforeach
                     </td>
-                    <td class="text-right">{{ number_format($r['cod_collected']) }} ៛</td>
+                    <td class="text-right">{{ number_format($r['total_collected']) }} ៛<div class="text-muted tw:text-xs">COD {{ number_format($r['cod_collected']) }}</div></td>
                     <td class="text-right">{{ number_format($r['service_fees']) }} ៛</td>
-                    <td class="text-right" style="font-weight:700;color:{{ $r['net_to_partner'] < 0 ? 'var(--danger)' : 'var(--ink-900)' }};">{{ number_format($r['net_to_partner']) }} ៛</td>
+                    <td class="text-right text-success">{{ number_format($r['roteh_pays_partner']) }} ៛</td>
+                    <td class="text-right text-danger">{{ number_format($r['partner_pays_roteh']) }} ៛</td>
+                    <td class="text-right" style="font-weight:700;color:{{ $r['net_to_partner'] < 0 ? 'var(--danger)' : 'var(--success)' }};">
+                        {{ number_format(abs($r['net_to_partner'])) }} ៛
+                        <div class="tw:text-xs" style="font-weight:400;">{{ $r['net_to_partner'] < 0 ? 'Partner pays ROTEH' : 'ROTEH pays partner' }}</div></td>
                     <td class="text-center">
                         <div class="btn-group btn-group-sm">
                             <a class="btn btn-success" target="_blank" title="Print successful" href="{{ route('admin.partner-statements.show', [$p, 'date' => $date, 'type' => 'successful', 'print' => 1]) }}">
@@ -128,7 +138,7 @@
                     </td>
                 </tr>
             @empty
-                <x-admin.empty-row colspan="7" icon="fa-file-invoice" title="No partners match"
+                <x-admin.empty-row colspan="9" icon="fa-file-invoice" title="No partners match"
                                    hint="Try another closing date, search or status." :clear="route('admin.partner-statements', ['date' => $date])" />
             @endforelse
             </tbody>
@@ -140,8 +150,10 @@
                     <td class="tw:text-xs text-muted" style="white-space:normal;">
                         @foreach($L as $g => $lbl) @if($totals['counts'][$g]) {{ $lbl[0] }} {{ $totals['counts'][$g] }} · @endif @endforeach
                     </td>
-                    <td class="text-right">{{ number_format($totals['cod']) }} ៛</td>
+                    <td class="text-right">{{ number_format($totals['collected']) }} ៛</td>
                     <td class="text-right">{{ number_format($totals['fees']) }} ៛</td>
+                    <td class="text-right text-success">{{ number_format($totals['roteh_pays']) }} ៛</td>
+                    <td class="text-right text-danger">{{ number_format($totals['partner_pays']) }} ៛</td>
                     <td class="text-right">{{ number_format($totals['net']) }} ៛</td>
                     <td></td>
                 </tr>

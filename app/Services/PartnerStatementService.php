@@ -17,11 +17,14 @@ use Illuminate\Support\Collection;
  *   • Unsuccessful — not delivered / returned / cancelled that day
  *
  * Money per package:
- *   COD collected   = item price the driver collected from the receiver
- *   Service fee     = ROTEH delivery fee
- *   Fee from COD    = fee the Partner owes that was not paid up front
- *                     (Partner pays + not prepaid by wallet/ABA)
- *   Net to Partner  = COD collected − fee from COD   (negative = Partner owes ROTEH)
+ *   COD             = item price the driver collected from the receiver
+ *   Delivery fee    = ROTEH service fee
+ *   Total collected = COD + delivery fee when the receiver pays it
+ *   ROTEH pays partner = COD − delivery fee the Partner still owes  (when ≥ 0)
+ *   Partner pays ROTEH = delivery fee the Partner still owes − COD  (when > 0,
+ *                        e.g. a package without COD that the Partner pays for)
+ *   Balance          = Σ ROTEH pays − Σ Partner pays  (negative = Partner owes)
+ * "Still owes" = the Partner pays the fee and did not prepay it (wallet/ABA).
  * Unsuccessful packages collect no COD; a fee is charged only if admin set
  * `partner_failed_fee_percent` (default 0 = free).
  */
@@ -114,10 +117,15 @@ class PartnerStatementService
         $done = $cond['completed'];
         $select[] = "SUM(CASE WHEN {$done} THEN package_amount ELSE 0 END) AS cod_collected";
         $select[] = "SUM(CASE WHEN {$done} THEN fee ELSE 0 END) AS service_fees";
-        $select[] = "SUM(CASE WHEN {$done} AND payment_by <> 'recipient' AND COALESCE(payment_status,'') NOT IN ('paid','prepaid') THEN fee ELSE 0 END) AS fees_from_cod";
+        $owed = "(CASE WHEN payment_by <> 'recipient' AND COALESCE(payment_status,'') NOT IN ('paid','prepaid') THEN fee ELSE 0 END)";
+        $select[] = "SUM(CASE WHEN {$done} THEN {$owed} ELSE 0 END) AS fees_from_cod";
+        $select[] = "SUM(CASE WHEN {$done} THEN package_amount + (CASE WHEN payment_by = 'recipient' THEN fee ELSE 0 END) ELSE 0 END) AS total_collected";
+        $select[] = "SUM(CASE WHEN {$done} AND package_amount - {$owed} > 0 THEN package_amount - {$owed} ELSE 0 END) AS roteh_pays";
+        $select[] = "SUM(CASE WHEN {$done} AND {$owed} - package_amount > 0 THEN {$owed} - package_amount ELSE 0 END) AS partner_pays";
         $select[] = "SUM(CASE WHEN {$cond['failed']} OR {$cond['returned']} THEN fee ELSE 0 END) AS attempted_fees";
         $select[] = "SUM(CASE WHEN {$cond['failed']} OR {$cond['returned']} THEN package_amount ELSE 0 END) AS cod_not_collected";
         array_push($bindings, ...$bind['completed'], ...$bind['completed'], ...$bind['completed'],
+            ...$bind['completed'], ...$bind['completed'], ...$bind['completed'],
             ...$bind['failed'], ...$bind['returned'], ...$bind['failed'], ...$bind['returned']);
 
         $where = '(' . implode(' OR ', $cond) . ')';
@@ -144,7 +152,10 @@ class PartnerStatementService
                     'service_fees'      => (int) $r->service_fees,
                     'fees_from_cod'     => (int) $r->fees_from_cod,
                     'failed_fees'       => $failedFees,
-                    'net_to_partner'    => (int) $r->cod_collected - (int) $r->fees_from_cod - $failedFees,
+                    'total_collected'   => (int) $r->total_collected,
+                    'roteh_pays_partner' => (int) $r->roteh_pays,
+                    'partner_pays_roteh' => (int) $r->partner_pays + $failedFees,
+                    'net_to_partner'    => (int) $r->roteh_pays - (int) $r->partner_pays - $failedFees,
                 ]];
             });
     }
@@ -243,6 +254,11 @@ class PartnerStatementService
                 'cod_not_collected'   => $sum($unsuccessful, 'cod_amount'),
                 'failed_fees'         => $sum($unsuccessful, 'fee_charged'),
                 'net_to_partner'      => $sum($successful, 'net_to_partner') + $sum($unsuccessful, 'net_to_partner'),
+                'total_collected'     => $sum($successful, 'total_collected'),
+                'roteh_pays_partner'  => $sum($successful, 'roteh_pays_partner'),
+                'partner_pays_roteh'  => $sum($successful, 'partner_pays_roteh') + $sum($unsuccessful, 'partner_pays_roteh'),
+                'cod_packages'        => $successful->where('cod_collected', '>', 0)->count(),
+                'non_cod_packages'    => $successful->where('cod_collected', 0)->count(),
                 'failed_fee_percent'  => $failedPct,
                 'status_counts'       => collect(array_keys(self::STATUS_LABELS))
                     ->mapWithKeys(fn ($g) => [$g => collect($all)->where('group', $g)->count()])->all(),
@@ -288,6 +304,9 @@ class PartnerStatementService
             'cod_collected'  => $cod,
             'fee_paid_by'    => $paidBy,        // receiver | partner_prepaid | partner_from_cod
             'fee_from_cod'   => $fromCod,
+            'total_collected' => $cod + ($paidBy === 'receiver' ? $fee : 0),
+            'roteh_pays_partner' => max(0, $cod - $fromCod),
+            'partner_pays_roteh' => max(0, $fromCod - $cod),
             'net_to_partner' => $cod - $fromCod,
         ];
     }
@@ -309,6 +328,8 @@ class PartnerStatementService
             'reason'      => $status === 'cancelled' ? null : ($d->failure_reason ?? 'other'),
             'note'        => $status === 'cancelled' ? $d->cancellation_reason : $d->failure_note,
             'fee_charged' => $charged,
+            'roteh_pays_partner' => 0,
+            'partner_pays_roteh' => $charged,
             'net_to_partner' => -$charged,
         ];
     }

@@ -68,16 +68,16 @@ class PartnerStatementController extends Controller
 
         $headings = ['#', 'Partner / ដៃគូ', 'Phone', 'Total / សរុប'];
         foreach ($L as $g => $lbl) $headings[] = "{$lbl[0]} / {$lbl[1]}";
-        array_push($headings, 'COD collected (៛)', 'Service fees (៛)', 'Fees from COD (៛)', 'Unsuccessful fees (៛)', 'Net to partner (៛)');
+        array_push($headings, 'Total collected (៛)', 'COD (៛)', 'ROTEH delivery fees (៛)', 'ROTEH pays partner (៛)', 'Partner pays ROTEH (៛)', 'Balance (៛, − = partner pays)');
 
         $data = $rows->values()->map(function ($r, $i) use ($L) {
             $line = [$i + 1, $r['name'], $r['phone'], $r['total']];
             foreach (array_keys($L) as $g) $line[] = $r['counts'][$g];
-            return array_merge($line, [$r['cod_collected'], $r['service_fees'], $r['fees_from_cod'], $r['failed_fees'], $r['net_to_partner']]);
+            return array_merge($line, [$r['total_collected'], $r['cod_collected'], $r['service_fees'], $r['roteh_pays_partner'], $r['partner_pays_roteh'], $r['net_to_partner']]);
         })->all();
         $totalLine = ['', 'TOTAL / សរុប', '', $t['total']];
         foreach (array_keys($L) as $g) $totalLine[] = $t['counts'][$g];
-        $data[] = array_merge($totalLine, [$t['cod'], $t['fees'], $t['fees_from_cod'], $t['failed_fees'], $t['net']]);
+        $data[] = array_merge($totalLine, [$t['collected'], $t['cod'], $t['fees'], $t['roteh_pays'], $t['partner_pays'], $t['net']]);
 
         $export = new \App\Exports\GenericReportExport('Partner Statements ' . $from->toDateString(), $headings, $data, [
             'Closing date / ថ្ងៃបិទបញ្ជី' => $from->format('d M Y'),
@@ -149,6 +149,9 @@ class PartnerStatementController extends Controller
             'fees_from_cod' => $rows->sum('fees_from_cod'),
             'failed_fees'   => $rows->sum('failed_fees'),
             'net'           => $rows->sum('net_to_partner'),
+            'collected'     => $rows->sum('total_collected'),
+            'roteh_pays'    => $rows->sum('roteh_pays_partner'),
+            'partner_pays'  => $rows->sum('partner_pays_roteh'),
         ];
     }
 

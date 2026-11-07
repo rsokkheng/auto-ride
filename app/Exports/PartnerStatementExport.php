@@ -23,8 +23,11 @@ class PartnerStatementExport implements WithMultipleSheets
             ['Closing date / ថ្ងៃបិទបញ្ជី', $date],
             [],
             ['Successful / កញ្ចប់ដឹកជោគជ័យ', $m['successful_count']],
+            ['· with COD / មាន COD', $m['cod_packages']],
+            ['· without COD / គ្មាន COD', $m['non_cod_packages']],
+            ['Total collected (COD + fee) / ប្រាក់សរុបបានប្រមូល (៛)', $m['total_collected']],
             ['COD collected / COD បានប្រមូល (៛)', $m['cod_collected']],
-            ['Service fees / តម្លៃសេវា (៛)', $m['service_fees']],
+            ['ROTEH delivery fees / ថ្លៃដឹក ROTEH (៛)', $m['service_fees']],
             ['· paid by receiver / អ្នកទទួលបង់', $m['fees_paid_by_receiver']],
             ['· prepaid by partner / ដៃគូបង់រួច', $m['fees_prepaid']],
             ['· deducted from COD / កាត់ពី COD', $m['fees_from_cod'] - $m['failed_fees']],
@@ -36,21 +39,27 @@ class PartnerStatementExport implements WithMultipleSheets
             ['COD not collected / COD មិនបានប្រមូល (៛)', $m['cod_not_collected']],
             ['Fees charged for unsuccessful / ថ្លៃគិតលើកញ្ចប់មិនជោគជ័យ (៛)', $m['failed_fees']],
             [],
-            [$m['net_to_partner'] < 0 ? 'Partner owes ROTEH / ដៃគូត្រូវបង់ ROTEH (៛)' : 'Payable to partner / ROTEH ត្រូវបង់ដៃគូ (៛)', abs($m['net_to_partner'])],
+            ['ROTEH pays partner / ROTEH ត្រូវបង់ដៃគូ (៛)', $m['roteh_pays_partner']],
+            ['Partner pays ROTEH / ដៃគូត្រូវបង់ ROTEH (៛)', $m['partner_pays_roteh']],
+            [$m['net_to_partner'] < 0 ? 'BALANCE — Partner pays ROTEH / សមតុល្យ ដៃគូបង់ ROTEH (៛)' : 'BALANCE — ROTEH pays partner / សមតុល្យ ROTEH បង់ដៃគូ (៛)', abs($m['net_to_partner'])],
             [],
             ['All statuses / គ្រប់ស្ថានភាព', $m['total_count'] ?? 0],
         ];
 
         $ok = [['#', 'Code', 'Reference', 'Delivered at / ពេលដឹកដល់', 'Receiver / អ្នកទទួល', 'Phone', 'Address / អាសយដ្ឋាន',
-            'Size', 'Express', 'Driver / អ្នកបើកបរ', 'COD collected (៛)', 'Service fee (៛)', 'Fee paid by / អ្នកបង់សេវា', 'Net to partner (៛)']];
+            'Size', 'Express', 'Driver / អ្នកបើកបរ', 'COD (៛)', 'Delivery fee (៛)', 'Fee paid by / អ្នកបង់ថ្លៃដឹក',
+            'Total collected (៛)', 'ROTEH pays partner (៛)', 'Partner pays ROTEH (៛)']];
         foreach ($s['successful'] as $i => $r) {
             $ok[] = [$i + 1, $r['code'], $r['reference'], $r['completed_at'], $r['receiver_name'], $r['receiver_phone'], $r['dropoff_address'],
-                $r['package_size'], $r['express'] ? 'Yes' : '', $r['driver'], $r['cod_collected'], $r['fee'], $paidBy[$r['fee_paid_by']] ?? $r['fee_paid_by'], $r['net_to_partner']];
+                $r['package_size'], $r['express'] ? 'Yes' : '', $r['driver'], $r['cod_collected'], $r['fee'], $paidBy[$r['fee_paid_by']] ?? $r['fee_paid_by'],
+                $r['total_collected'], $r['roteh_pays_partner'], $r['partner_pays_roteh']];
         }
-        $ok[] = ['', 'TOTAL / សរុប', '', '', '', '', '', '', '', '', $m['cod_collected'], $m['service_fees'], '', $m['net_to_partner'] + $m['failed_fees']];
+        $okRows = collect($s['successful']);
+        $ok[] = ['', 'TOTAL / សរុប', '', '', '', '', '', '', '', '', $m['cod_collected'], $m['service_fees'], '',
+            $m['total_collected'], $okRows->sum('roteh_pays_partner'), $okRows->sum('partner_pays_roteh')];
 
         $bad = [['#', 'Code', 'Reference', 'Status / ស្ថានភាព', 'Closed at / ពេលបិទ', 'Reason / មូលហេតុ', 'Note', 'Receiver / អ្នកទទួល', 'Phone',
-            'Address / អាសយដ្ឋាន', 'Driver / អ្នកបើកបរ', 'COD not collected (៛)', 'Service fee (៛)', 'Fee charged (៛)']];
+            'Address / អាសយដ្ឋាន', 'Driver / អ្នកបើកបរ', 'COD not collected (៛)', 'Delivery fee (៛)', 'Partner pays ROTEH (៛)']];
         foreach ($s['unsuccessful'] as $i => $r) {
             $st = PS::UNSUCCESSFUL_STATUS[$r['status']] ?? [$r['status'], ''];
             $re = $r['reason'] ? (PS::REASONS[$r['reason']] ?? [$r['reason'], '']) : null;
@@ -72,7 +81,7 @@ class PartnerStatementExport implements WithMultipleSheets
         }
 
         return [
-            new PartnerReportSheet('Summary', $summary, headerRows: [1], sectionRows: [6, 13, 20, 22]),
+            new PartnerReportSheet('Summary', $summary, headerRows: [1], sectionRows: [6, 16, 25]),
             new PartnerReportSheet('Successful', $ok, headerRows: [1], sectionRows: [count($ok)]),
             new PartnerReportSheet('Unsuccessful', $bad, headerRows: [1], sectionRows: [count($bad)]),
             new PartnerReportSheet('All packages', $all, headerRows: [1]),

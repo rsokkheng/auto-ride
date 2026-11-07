@@ -77,9 +77,11 @@ tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid 
             <th>ដៃគូ<span class="en">Partner</span></th>
             <th class="r">សរុប<span class="en">Total</span></th>
             @foreach($L as $g => $lbl)<th class="c">{{ $lbl[1] }}<span class="en">{{ $lbl[0] }}</span></th>@endforeach
-            <th class="r">COD<span class="en">Collected</span></th>
-            <th class="r">តម្លៃសេវា<span class="en">Service fees</span></th>
-            <th class="r">ត្រូវបង់ដៃគូ<span class="en">Net to partner</span></th>
+            <th class="r">សរុបបានប្រមូល<span class="en">Total collected</span></th>
+            <th class="r">ថ្លៃដឹក ROTEH<span class="en">ROTEH fees</span></th>
+            <th class="r">ROTEH បង់ដៃគូ<span class="en">ROTEH pays</span></th>
+            <th class="r">ដៃគូបង់ ROTEH<span class="en">Partner pays</span></th>
+            <th class="r">សមតុល្យ<span class="en">Balance</span></th>
         </tr></thead>
         <tbody>
         @forelse($rows as $i => $r)
@@ -88,12 +90,14 @@ tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid 
                 <td><b>{{ $r['name'] }}</b><div class="en">{{ $r['phone'] }}</div></td>
                 <td class="r"><b>{{ $r['total'] }}</b></td>
                 @foreach($L as $g => $lbl)<td class="c {{ $r['counts'][$g] ? '' : 'zero' }}">{{ $r['counts'][$g] }}</td>@endforeach
-                <td class="r">{{ $k($r['cod_collected']) }}</td>
+                <td class="r">{{ $k($r['total_collected']) }}</td>
                 <td class="r">{{ $k($r['service_fees']) }}</td>
-                <td class="r" style="{{ $r['net_to_partner'] < 0 ? 'color:#dc2626;' : '' }}"><b>{{ $k($r['net_to_partner']) }}</b></td>
+                <td class="r" style="color:#047857;">{{ $k($r['roteh_pays_partner']) }}</td>
+                <td class="r" style="color:#b91c1c;">{{ $k($r['partner_pays_roteh']) }}</td>
+                <td class="r" style="{{ $r['net_to_partner'] < 0 ? 'color:#dc2626;' : 'color:#047857;' }}"><b>{{ $k($r['net_to_partner']) }}</b></td>
             </tr>
         @empty
-            <tr><td colspan="{{ 6 + count($L) }}" style="text-align:center;padding:20px;color:#6b7280;">គ្មានទិន្នន័យ · No partners</td></tr>
+            <tr><td colspan="{{ 8 + count($L) }}" style="text-align:center;padding:20px;color:#6b7280;">គ្មានទិន្នន័យ · No partners</td></tr>
         @endforelse
         </tbody>
         @if(count($rows))
@@ -101,8 +105,10 @@ tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid 
             <td colspan="2">សរុប · Total</td>
             <td class="r">{{ $k($totals['total']) }}</td>
             @foreach($L as $g => $lbl)<td class="c">{{ $k($totals['counts'][$g]) }}</td>@endforeach
-            <td class="r">{{ $k($totals['cod']) }}</td>
+            <td class="r">{{ $k($totals['collected']) }}</td>
             <td class="r">{{ $k($totals['fees']) }}</td>
+            <td class="r">{{ $k($totals['roteh_pays']) }}</td>
+            <td class="r">{{ $k($totals['partner_pays']) }}</td>
             <td class="r">{{ $k($totals['net']) }}</td>
         </tr></tfoot>
         @endif

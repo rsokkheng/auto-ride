@@ -57,6 +57,9 @@ tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid 
 .t-ok { background:#d1fae5; color:#065f46; } .t-ret { background:#fef3c7; color:#92400e; } .t-fail { background:#fee2e2; color:#991b1b; } .t-can { background:#e5e7eb; color:#374151; }
 .empty { text-align:center; color:var(--muted); padding:22px; }
 .note { font-size:10px; color:var(--muted); margin-top:8px; }
+.balance { display:flex; justify-content:space-between; align-items:center; margin-top:10px; padding:10px 14px; border-radius:8px; background:#ecfdf3; border:1px solid var(--green); font-weight:600; }
+.balance.owe { background:#fef2f2; border-color:#fca5a5; }
+.balance .amt { font-size:18px; font-weight:700; }
 .sign { display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-top:34px; font-size:11px; text-align:center; }
 .sign div { border-top:1px solid #9ca3af; padding-top:6px; }
 @media print {
@@ -115,12 +118,18 @@ tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid 
         <div><span>ទូរស័ព្ទ · Phone:</span> {{ $s['partner']['phone'] }}</div>
         @if($s['partner']['address'])<div style="grid-column:1/-1"><span>អាសយដ្ឋាន · Address:</span> {{ $s['partner']['address'] }}</div>@endif
     </div>
-    <div class="cards">
-        <div class="card"><div class="v">{{ $sum['successful_count'] }}</div><div class="l">កញ្ចប់ជោគជ័យ · Delivered</div></div>
-        <div class="card"><div class="v">{{ $k($sum['cod_collected']) }} ៛</div><div class="l">COD បានប្រមូល · COD collected</div></div>
-        <div class="card"><div class="v">{{ $k($sum['service_fees']) }} ៛</div><div class="l">តម្លៃសេវា · Service fees</div></div>
-        <div class="card {{ $sum['net_to_partner'] < 0 ? 'neg' : 'hl' }}"><div class="v">{{ $k($sum['net_to_partner']) }} ៛</div>
-            <div class="l">{{ $sum['net_to_partner'] < 0 ? 'ដៃគូត្រូវបង់ ROTEH · Partner owes' : 'ROTEH ត្រូវបង់ដៃគូ · Payable to partner' }}</div></div>
+    @php
+        $okRows = collect($s['successful']);
+        $okPays = $okRows->sum('roteh_pays_partner');
+        $okOwes = $okRows->sum('partner_pays_roteh');
+        $okBal  = $okPays - $okOwes;
+    @endphp
+    <div class="cards" style="grid-template-columns:repeat(5,1fr);">
+        <div class="card"><div class="v">{{ $sum['successful_count'] }}</div><div class="l">កញ្ចប់ជោគជ័យ · Delivered<br>COD {{ $sum['cod_packages'] }} · គ្មាន COD {{ $sum['non_cod_packages'] }}</div></div>
+        <div class="card"><div class="v">{{ $k($sum['total_collected']) }} ៛</div><div class="l">ប្រាក់សរុបបានប្រមូល · Total collected (COD + fee)</div></div>
+        <div class="card"><div class="v">{{ $k($sum['service_fees']) }} ៛</div><div class="l">ថ្លៃដឹក ROTEH · ROTEH delivery fees</div></div>
+        <div class="card hl"><div class="v">{{ $k($okPays) }} ៛</div><div class="l">ROTEH ត្រូវបង់ដៃគូ · ROTEH pays partner</div></div>
+        <div class="card {{ $okOwes ? 'neg' : '' }}"><div class="v">{{ $k($okOwes) }} ៛</div><div class="l">ដៃគូត្រូវបង់ ROTEH · Partner pays ROTEH</div></div>
     </div>
     <div class="tbl"><table>
         <thead><tr>
@@ -128,40 +137,53 @@ tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid 
             <th>លេខកូដ<span class="en">Code / Ref</span></th>
             <th>ពេលដឹកដល់<span class="en">Delivered at</span></th>
             <th>អ្នកទទួល<span class="en">Receiver</span></th>
-            <th>កញ្ចប់<span class="en">Package</span></th>
-            <th class="r">COD<span class="en">Collected</span></th>
-            <th class="r">តម្លៃសេវា<span class="en">Service fee</span></th>
-            <th>អ្នកបង់សេវា<span class="en">Fee paid by</span></th>
-            <th class="r">ត្រូវបង់ដៃគូ<span class="en">Net to partner</span></th>
+            <th class="r">COD<span class="en">Item price</span></th>
+            <th class="r">ថ្លៃដឹក<span class="en">Delivery fee</span></th>
+            <th>អ្នកបង់ថ្លៃដឹក<span class="en">Fee paid by</span></th>
+            <th class="r">សរុបបានប្រមូល<span class="en">Total collected</span></th>
+            <th class="r">ROTEH បង់ដៃគូ<span class="en">ROTEH pays partner</span></th>
+            <th class="r">ដៃគូបង់ ROTEH<span class="en">Partner pays ROTEH</span></th>
         </tr></thead>
         <tbody>
         @forelse($s['successful'] as $i => $r)
             <tr>
                 <td>{{ $i + 1 }}</td>
-                <td><span class="code">{{ $r['code'] }}</span>@if($r['reference'])<div class="small">#{{ $r['reference'] }}</div>@endif</td>
+                <td><span class="code">{{ $r['code'] }}</span>@if($r['reference'])<div class="small">#{{ $r['reference'] }}</div>@endif
+                    <div class="small">{{ $sizes[$r['package_size']] ?? $r['package_size'] }}@if($r['express']) · ⚡@endif</div></td>
                 <td>{{ \Illuminate\Support\Str::after($r['completed_at'], ' ') }}<div class="small">{{ $r['driver'] }}</div></td>
-                <td>{{ $r['receiver_name'] }}<div class="small">{{ $r['receiver_phone'] }}</div><div class="small">{{ \Illuminate\Support\Str::limit($r['dropoff_address'], 60) }}</div></td>
-                <td>{{ $sizes[$r['package_size']] ?? $r['package_size'] }}@if($r['express']) · ⚡@endif</td>
-                <td class="r">{{ $r['cod_collected'] ? $k($r['cod_collected']) : '—' }}</td>
+                <td>{{ $r['receiver_name'] }}<div class="small">{{ $r['receiver_phone'] }}</div><div class="small">{{ \Illuminate\Support\Str::limit($r['dropoff_address'], 50) }}</div></td>
+                <td class="r">{{ $r['cod_collected'] ? $k($r['cod_collected']) : 'គ្មាន COD' }}</td>
                 <td class="r">{{ $k($r['fee']) }}</td>
                 <td class="small">{{ $paidBy[$r['fee_paid_by']] ?? $r['fee_paid_by'] }}</td>
-                <td class="r"><b>{{ $k($r['net_to_partner']) }}</b></td>
+                <td class="r">{{ $k($r['total_collected']) }}</td>
+                <td class="r" style="color:#047857;"><b>{{ $r['roteh_pays_partner'] ? $k($r['roteh_pays_partner']) : '—' }}</b></td>
+                <td class="r" style="color:#b91c1c;"><b>{{ $r['partner_pays_roteh'] ? $k($r['partner_pays_roteh']) : '—' }}</b></td>
             </tr>
         @empty
-            <tr><td colspan="9" class="empty">គ្មានកញ្ចប់ដឹកជោគជ័យនៅថ្ងៃនេះ · No delivered packages</td></tr>
+            <tr><td colspan="10" class="empty">គ្មានកញ្ចប់ដឹកជោគជ័យនៅថ្ងៃនេះ · No delivered packages</td></tr>
         @endforelse
         </tbody>
         @if(count($s['successful']))
         <tfoot><tr>
-            <td colspan="5">សរុប · Total ({{ $sum['successful_count'] }})</td>
+            <td colspan="4">សរុប · Total ({{ $sum['successful_count'] }})</td>
             <td class="r">{{ $k($sum['cod_collected']) }}</td>
             <td class="r">{{ $k($sum['service_fees']) }}</td>
-            <td class="small">កាត់ពី COD: {{ $k($sum['fees_from_cod'] - $sum['failed_fees']) }}</td>
-            <td class="r">{{ $k($sum['net_to_partner'] + $sum['failed_fees']) }}</td>
+            <td></td>
+            <td class="r">{{ $k($sum['total_collected']) }}</td>
+            <td class="r">{{ $k($okPays) }}</td>
+            <td class="r">{{ $k($okOwes) }}</td>
         </tr></tfoot>
         @endif
     </table></div>
-    <p class="note">ត្រូវបង់ដៃគូ = COD បានប្រមូល − តម្លៃសេវាដែលដៃគូមិនទាន់បង់ · Net = COD collected − service fees the partner has not paid yet. Amounts in KHR (៛).</p>
+    <div class="balance {{ $okBal < 0 ? 'owe' : '' }}">
+        <div>{{ $okBal < 0 ? 'ដៃគូត្រូវបង់ ROTEH សរុប · Partner pays ROTEH (balance)' : 'ROTEH ត្រូវបង់ដៃគូសរុប · ROTEH pays partner (balance)' }}</div>
+        <div class="amt">{{ $k(abs($okBal)) }} ៛</div>
+    </div>
+    <p class="note">
+        សរុបបានប្រមូល = COD + ថ្លៃដឹក (ពេលអ្នកទទួលបង់ថ្លៃដឹក)។ ROTEH បង់ដៃគូ = COD − ថ្លៃដឹកដែលដៃគូមិនទាន់បង់។
+        កញ្ចប់គ្មាន COD ហើយដៃគូជាអ្នកបង់ថ្លៃដឹក → ដៃគូបង់ថ្លៃដឹកឲ្យ ROTEH។
+        · Total collected = COD + delivery fee when the receiver pays it. ROTEH pays the partner the COD minus any delivery fee the partner has not paid; for a package without COD the partner pays ROTEH the delivery fee. Amounts in KHR (៛).
+    </p>
     <div class="sign"><div>ROTEH (អ្នករៀបចំ · Prepared by)</div><div>ដៃគូ (អ្នកទទួល · Received by)</div></div>
 </div>
 @endif
@@ -200,7 +222,7 @@ tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid 
             <th>អ្នកទទួល<span class="en">Receiver</span></th>
             <th class="r">COD<span class="en">Not collected</span></th>
             <th class="r">តម្លៃសេវា<span class="en">Service fee</span></th>
-            <th class="r">គិតថ្លៃ<span class="en">Fee charged</span></th>
+            <th class="r">ដៃគូបង់ ROTEH<span class="en">Partner pays ROTEH</span></th>
         </tr></thead>
         <tbody>
         @forelse($s['unsuccessful'] as $i => $r)
@@ -216,7 +238,7 @@ tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid 
                 <td>{{ $r['receiver_name'] }}<div class="small">{{ $r['receiver_phone'] }}</div></td>
                 <td class="r">{{ $r['cod_amount'] ? $k($r['cod_amount']) : '—' }}</td>
                 <td class="r">{{ $k($r['fee']) }}</td>
-                <td class="r"><b>{{ $k($r['fee_charged']) }}</b></td>
+                <td class="r" style="color:#b91c1c;"><b>{{ $r['fee_charged'] ? $k($r['fee_charged']) : '—' }}</b></td>
             </tr>
         @empty
             <tr><td colspan="8" class="empty">គ្មានកញ្ចប់មិនជោគជ័យនៅថ្ងៃនេះ · No unsuccessful packages</td></tr>
@@ -238,6 +260,17 @@ tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid 
         · No COD is collected for unsuccessful packages.
         @if($sum['failed_fee_percent'] > 0) {{ rtrim(rtrim(number_format($sum['failed_fee_percent'], 2), '0'), '.') }}% of the service fee is charged for attempted deliveries. @else No service fee is charged. @endif
     </p>
+    @php $day = $sum['net_to_partner']; @endphp
+    <div class="balance {{ $day < 0 ? 'owe' : '' }}">
+        <div>
+            សមតុល្យប្រចាំថ្ងៃ (ជោគជ័យ + មិនជោគជ័យ) · Day balance (successful + unsuccessful)<br>
+            <span class="en">ROTEH pays partner {{ $k($sum['roteh_pays_partner']) }} ៛ − Partner pays ROTEH {{ $k($sum['partner_pays_roteh']) }} ៛</span>
+        </div>
+        <div style="text-align:right;">
+            <div class="en">{{ $day < 0 ? 'ដៃគូត្រូវបង់ ROTEH · Partner pays ROTEH' : 'ROTEH ត្រូវបង់ដៃគូ · ROTEH pays partner' }}</div>
+            <div class="amt">{{ $k(abs($day)) }} ៛</div>
+        </div>
+    </div>
     <div class="sign"><div>ROTEH (អ្នករៀបចំ · Prepared by)</div><div>ដៃគូ (អ្នកទទួល · Received by)</div></div>
 </div>
 @endif

@@ -172,4 +172,33 @@ class PartnerStatementTest extends TestCase
         $this->actingAs($admin)->get(route('admin.partner-statements.show', [$this->partner, 'date' => $this->day, 'type' => 'all']))
             ->assertOk()->assertSee('របាយការណ៍កញ្ចប់ទាំងអស់')->assertSee('កំពុងរង់ចាំ');
     }
+
+    public function test_total_collected_and_who_pays_whom(): void
+    {
+        // No COD, partner pays the fee in cash and hasn't paid → partner pays ROTEH 5,000.
+        $at = Carbon::parse("{$this->day} 16:00", 'Asia/Phnom_Penh')->setTimezone(config('app.timezone'));
+        $this->pkg(['status' => 'completed', 'completed_at' => $at, 'fee' => 5000, 'package_amount' => 0, 'payment_by' => 'sender', 'payment_method' => 'cash']);
+
+        $r = $this->api("/api/v1/partner/statements?date={$this->day}")->assertOk();
+        // 40k COD + 5k fee (receiver) · 30k COD (fee from COD) · 0 (prepaid) · 0 (no COD)
+        $r->assertJsonPath('data.summary.total_collected', 75000)
+          ->assertJsonPath('data.summary.roteh_pays_partner', 65000)   // 40k + 25k
+          ->assertJsonPath('data.summary.partner_pays_roteh', 5000)    // the no-COD package
+          ->assertJsonPath('data.summary.net_to_partner', 60000)
+          ->assertJsonPath('data.summary.non_cod_packages', 2)
+          ->assertJsonPath('data.successful.0.total_collected', 45000)
+          ->assertJsonPath('data.successful.0.roteh_pays_partner', 40000)
+          ->assertJsonPath('data.successful.3.partner_pays_roteh', 5000)
+          ->assertJsonPath('data.successful.3.roteh_pays_partner', 0);
+
+        // The admin overview (one SQL query) gives the same numbers.
+        $ov = app(\App\Services\PartnerStatementService::class)
+            ->overview(...\App\Services\PartnerStatementService::dayRange($this->day))[$this->partner->id];
+        $this->assertSame([75000, 65000, 5000, 60000],
+            [$ov['total_collected'], $ov['roteh_pays_partner'], $ov['partner_pays_roteh'], $ov['net_to_partner']]);
+
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin)->get(route('admin.partner-statements.show', [$this->partner, 'date' => $this->day, 'type' => 'successful']))
+            ->assertOk()->assertSee('ROTEH pays partner')->assertSee('75,000')->assertSee('60,000');
+    }
 }
