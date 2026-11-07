@@ -164,25 +164,8 @@ class PartnerController extends Controller
         $serviceOption = $data['service_option'] ?? 'normal';
         $packageSize   = $data['package_size']   ?? 'small';
 
-        // Use partner contract (flat rate); fall back to system default partner rates
-        $contract = PartnerContract::where('partner_id', $partner->id)
-            ->where('is_active', true)
-            ->latest()
-            ->first();
-
-        if ($contract) {
-            $fee = $contract->calculateFee($serviceOption, $packageSize);
-        } else {
-            $normalFee  = (int) PricingSetting::get('partner_normal_fee', 5000);
-            $expressFee = (int) PricingSetting::get('partner_express_fee', 10000);
-            $base       = $serviceOption === 'express' ? $expressFee : $normalFee;
-            $surcharge  = match ($packageSize) {
-                'large'       => (int) PricingSetting::get('partner_surcharge_large', 5000),
-                'extra_large' => (int) PricingSetting::get('partner_surcharge_extra_large', 5000),
-                default       => 0,
-            };
-            $fee = $base + $surcharge;
-        }
+        // Partner contract (flat rate), or the default partner prices.
+        $fee = PartnerContract::feeFor($partner, $serviceOption, $packageSize);
 
         $delivery = Delivery::create([
             'partner_id'        => $partner->id,

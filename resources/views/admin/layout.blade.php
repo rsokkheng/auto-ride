@@ -101,6 +101,8 @@
             @php
                 $pendingDrivers    = rescue(fn() => \App\Models\User::where('role','driver')->where('approval_status','pending')->count(), 0, false);
                 $pendingTx         = rescue(fn() => \App\Models\TransactionRecord::where('status','pending')->count(), 0, false);
+                $pendingPartners   = rescue(fn() => \App\Models\PartnerProfile::where('status','pending')->count(), 0, false);
+                $pendingPackages   = rescue(fn() => \App\Models\Delivery::whereNotNull('partner_id')->where('status','created')->count(), 0, false);
                 $pendingTopup      = rescue(fn() => \App\Models\TopUpRequest::where('status','pending')->count(), 0, false);
                 $pendingWithdraw   = rescue(fn() => \App\Models\WithdrawalRequest::where('status','pending')->count(), 0, false);
 
@@ -127,6 +129,7 @@
                     ['header' => 'Operations', 'items' => [
                         ['Rides',            'fa-route',            'admin.rides',            ['admin.rides']],
                         ['Deliveries',       'fa-box',              'admin.deliveries',       ['admin.deliveries']],
+                        ['Partner Packages', 'fa-boxes-stacked',    'admin.partner-packages', ['admin.partner-packages*'], $pendingPackages, 'badge-warning'],
                         ['Rental',      'fa-car-side',         'admin.car-rentals',      ['admin.car-rentals*']],
                         ['Marketplace',      'fa-store',            'admin.marketplace',      ['admin.marketplace']],
                         ['Marketplace Orders','fa-shopping-bag',    'admin.marketplace-orders',['admin.marketplace-orders*']],
@@ -138,6 +141,7 @@
                         ['Vehicles',          'fa-car',          'admin.vehicles',          ['admin.vehicles']],
                         ['Companies',         'fa-building',     'admin.companies',         ['admin.companies']],
                         ['Business Accounts', 'fa-briefcase',    'admin.business-accounts', ['admin.business-accounts*']],
+                        ['Partners',          'fa-handshake',    'admin.partners',          ['admin.partners*'], $pendingPartners, 'badge-warning'],
                         ['Partner Contracts', 'fa-file-contract','admin.partner-contracts', ['admin.partner-contracts*']],
                     ]],
                     ['header' => 'Finance', 'items' => [

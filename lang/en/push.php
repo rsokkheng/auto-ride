@@ -111,4 +111,7 @@ return [
             ],
         ],
     ],
+    'partner_approved' => ['title' => '🎉 You are now a ROTEH Partner', 'body' => 'Your Partner account for :name is approved. You can now create packages for ROTEH to deliver.'],
+    'partner_rejected' => ['title' => 'Partner registration not approved', 'body' => 'Your Partner registration was not approved. Reason: :reason'],
+    'partner_package_confirmed' => ['title' => '📦 Package confirmed', 'body' => ':code is confirmed. ROTEH is finding a driver to pick it up.'],
 ];

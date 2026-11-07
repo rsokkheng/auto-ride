@@ -99,6 +99,10 @@ class Delivery extends Model
         'recipient_name',
         'recipient_phone',
         'package_size',
+        'package_type',
+        'package_weight',
+        'package_photo',
+        'confirmed_at',
         'driver_id',
         'vehicle_id',
         'pickup_address',
@@ -163,6 +167,8 @@ class Delivery extends Model
         'cancelled_at' => 'datetime',
         'scheduled_at'       => 'datetime',
         'assigned_at'        => 'datetime',
+        'confirmed_at'       => 'datetime',
+        'package_weight'     => 'float',
         'started_at'         => 'datetime',
         'completed_at'       => 'datetime',
         'pickup_scanned_at'  => 'datetime',
@@ -187,6 +193,57 @@ class Delivery extends Model
         'split_pct_customer'  => 'integer',
         'share_active'        => 'boolean',
     ];
+
+    // ── Partner packages ────────────────────────────────────────────────────
+
+    /** Partner-facing package statuses, in workflow order. */
+    public const PACKAGE_STATUSES = ['pending', 'confirmed', 'driver_assigned', 'picked_up', 'in_transit', 'delivered', 'cancelled'];
+
+    /** Map a raw deliveries.status onto the Partner package status. */
+    public static function packageStatusFor(string $status): string
+    {
+        return match ($status) {
+            'created'                            => 'pending',
+            'requested', 'pending'               => 'confirmed',
+            'assigned', 'accepted'               => 'driver_assigned',
+            'picked_up'                          => 'picked_up',
+            'in_progress', 'in_transit'          => 'in_transit',
+            'delivered', 'completed'             => 'delivered',
+            'cancelled'                          => 'cancelled',
+            default                              => $status,
+        };
+    }
+
+    public function packageStatus(): string
+    {
+        return self::packageStatusFor((string) $this->status);
+    }
+
+    public function trackingHistories(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PackageTrackingHistory::class)->orderBy('id');
+    }
+
+    protected static function booted(): void
+    {
+        // Timeline for Partner packages: one row each time the visible status changes.
+        $record = function (Delivery $d) {
+            if (! $d->partner_id) return;
+            $status = $d->packageStatus();
+            $last = PackageTrackingHistory::where('delivery_id', $d->id)->latest('id')->value('status');
+            if ($last === $status) return;
+            PackageTrackingHistory::create([
+                'delivery_id' => $d->id,
+                'status'      => $status,
+                'raw_status'  => (string) $d->status,
+                'note'        => $status === 'cancelled' ? $d->cancellation_reason : null,
+            ]);
+        };
+        static::created($record);
+        static::updated(function (Delivery $d) use ($record) {
+            if ($d->wasChanged('status')) $record($d);
+        });
+    }
 
     /** Expose the tracking link everywhere a delivery is serialised. */
     protected $appends = ['tracking_url'];

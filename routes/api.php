@@ -385,6 +385,16 @@ Route::prefix('v1')->group(function () {
     Route::post('driver/withdraw', [WithdrawalController::class, 'store']);
     Route::get('driver/withdrawals', [WithdrawalController::class, 'index']);
 
+    // ── Partner packages (Passenger app) ──────────────────────────────────────
+    Route::get('partner/profile',                       [\App\Http\Controllers\Api\PartnerPackageController::class, 'profile']);
+    Route::post('partner/register',                     [\App\Http\Controllers\Api\PartnerPackageController::class, 'register']);
+    Route::get('partner/packages/quote',                [\App\Http\Controllers\Api\PartnerPackageController::class, 'quote']);
+    Route::get('partner/packages/summary',              [\App\Http\Controllers\Api\PartnerPackageController::class, 'summary']);
+    Route::get('partner/packages',                      [\App\Http\Controllers\Api\PartnerPackageController::class, 'index']);
+    Route::post('partner/packages',                     [\App\Http\Controllers\Api\PartnerPackageController::class, 'store']);
+    Route::get('partner/packages/{delivery}',          [\App\Http\Controllers\Api\PartnerPackageController::class, 'show']);
+    Route::post('partner/packages/{delivery}/cancel',  [\App\Http\Controllers\Api\PartnerPackageController::class, 'cancel']);
+
     // ── Partner Delivery ──────────────────────────────────────────────────────
     Route::get('partner/deliveries',                                       [\App\Http\Controllers\Api\PartnerController::class, 'index']);
     Route::post('partner/deliveries',                                      [\App\Http\Controllers\Api\PartnerController::class, 'store']);

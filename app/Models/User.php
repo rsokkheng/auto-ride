@@ -186,6 +186,18 @@ class User extends Authenticatable
             || Delivery::where('driver_id', $this->id)->whereIn('status', self::ACTIVE_DELIVERY_STATUSES)->exists();
     }
 
+    public function partnerProfile(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(PartnerProfile::class);
+    }
+
+    /** Approved Partner — may create packages from the Passenger app. */
+    public function isApprovedPartner(): bool
+    {
+        return ($this->role === 'partner' && $this->partnerProfile?->status !== 'suspended')
+            || $this->partnerProfile?->status === 'approved';
+    }
+
     public function vehicles(): HasMany
     {
         return $this->hasMany(Vehicle::class);

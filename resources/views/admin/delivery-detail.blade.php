@@ -5,6 +5,22 @@
 @section('content')
 <div class="container-fluid">
 
+    @if($delivery->partner_id && $delivery->status === 'created')
+        <div class="alert alert-warning d-flex align-items-center justify-content-between">
+            <div><i class="fas fa-hourglass-half mr-2"></i><strong>Partner package waiting for confirmation.</strong> Confirm to send it to nearby drivers, or assign a driver below.</div>
+            <form method="POST" action="{{ route('admin.partner-packages.confirm', $delivery) }}" class="mb-0">
+                @csrf
+                <button class="btn btn-success btn-sm"><i class="fas fa-check mr-1"></i>Confirm &amp; find driver</button>
+            </form>
+        </div>
+    @endif
+    @if($delivery->package_photo)
+        <div class="mb-3"><a href="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($delivery->package_photo) }}" target="_blank"><i class="fas fa-image mr-1"></i>Package photo</a>
+            @if($delivery->package_type) · {{ ucfirst($delivery->package_type) }}@endif
+            @if($delivery->package_weight) · {{ rtrim(rtrim(number_format($delivery->package_weight, 2), '0'), '.') }} kg @endif
+        </div>
+    @endif
+
     {{-- Top Key Financial & Status Summary Cards --}}
     <div class="row mb-3">
         <div class="col-md-3 col-sm-6 col-12">

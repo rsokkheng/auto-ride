@@ -266,6 +266,14 @@ Route::prefix('admin')->middleware(\App\Http\Middleware\AdminAuth::class)->group
     Route::patch('settlements/{settlement}/cancel',              [SettlementController::class, 'cancel'])->name('admin.settlements.cancel');
     Route::delete('settlements/{settlement}',                    [SettlementController::class, 'destroy'])->name('admin.settlements.destroy');
 
+    // Partner registrations & packages (Passenger app)
+    Route::get('partners',                             [\App\Http\Controllers\Admin\PartnerAdminController::class, 'partners'])->name('admin.partners');
+    Route::post('partners/{profile}/approve',         [\App\Http\Controllers\Admin\PartnerAdminController::class, 'approve'])->name('admin.partners.approve');
+    Route::post('partners/{profile}/reject',          [\App\Http\Controllers\Admin\PartnerAdminController::class, 'reject'])->name('admin.partners.reject');
+    Route::post('partners/{profile}/suspend',         [\App\Http\Controllers\Admin\PartnerAdminController::class, 'suspend'])->name('admin.partners.suspend');
+    Route::get('partner-packages',                     [\App\Http\Controllers\Admin\PartnerAdminController::class, 'packages'])->name('admin.partner-packages');
+    Route::post('partner-packages/{delivery}/confirm', [\App\Http\Controllers\Admin\PartnerAdminController::class, 'confirmPackage'])->name('admin.partner-packages.confirm');
+
     // Partner Contracts
     Route::get('partner-contracts',                    [AdminController::class, 'partnerContracts'])->name('admin.partner-contracts');
     Route::post('partner-contracts',                   [AdminController::class, 'storePartnerContract'])->name('admin.partner-contracts.store');

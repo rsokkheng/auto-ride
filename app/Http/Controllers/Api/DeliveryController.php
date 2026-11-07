@@ -408,22 +408,7 @@ class DeliveryController extends ApiController
         $this->firestore->syncDelivery($delivery);
 
         try {
-            $nearbyDrivers = $this->driversToOffer($delivery);
-
-            // Instant in-app offer for drivers with the app open (FCM below
-            // covers a backgrounded app). Remember who was told, so they can be
-            // told again the moment it's taken or cancelled (RealtimeHooks).
-            foreach ($nearbyDrivers as $driver) {
-                RealtimeUpdate::toDriver($driver->id, 'delivery.offered', ['delivery_id' => $delivery->id]);
-            }
-            Cache::put(self::offeredCacheKey($delivery->id), $nearbyDrivers->pluck('id')->all(), 7200);
-
-            $dropoffLabel = $delivery->dropoff_address ?? 'Destination TBD';
-            $this->fcm->sendToUsers(
-                $nearbyDrivers->whereNotNull('fcm_token')->all(),
-                ...FcmService::message('delivery_requested', ['pickup' => $delivery->pickup_address, 'dropoff' => $dropoffLabel]),
-                data: ['type' => 'delivery_requested', 'delivery_id' => (string) $delivery->id]
-            );
+            app(\App\Services\DeliveryOfferService::class)->offer($delivery);
         } catch (\Throwable $e) {
             report($e);
         }
@@ -439,27 +424,6 @@ class DeliveryController extends ApiController
     public static function offeredCacheKey(int $deliveryId): string
     {
         return "delivery:{$deliveryId}:offered";
-    }
-
-    /**
-     * Available drivers near the pickup (Redis GEO, nearest first, capped) —
-     * previously every available driver in the country got a push for every
-     * delivery. Without pickup coordinates, falls back to that old broadcast.
-     */
-    private function driversToOffer(Delivery $delivery): \Illuminate\Support\Collection
-    {
-        if ($delivery->pickup_lat === null || $delivery->pickup_lng === null) {
-            return User::where('role', 'driver')->where('available', true)->withoutActiveTrip()
-                ->acceptingService($delivery->service_type ?? 'delivery')->withMinBalance()->whereNotNull('fcm_token')->get();
-        }
-
-        $radiusKm = (float) PricingSetting::get('delivery_match_radius_km', config('delivery.match_radius_km', 30));
-        $nearby   = app(DriverGeoService::class)->nearby((float) $delivery->pickup_lat, (float) $delivery->pickup_lng, $radiusKm, 50);
-
-        return $nearby === []
-            ? collect()
-            : User::whereIn('id', array_keys($nearby))->where('role', 'driver')->where('available', true)->withoutActiveTrip()
-                ->acceptingService($delivery->service_type ?? 'delivery')->withMinBalance()->get();
     }
 
     // ── Share tracking link ─────────────────────────────────────────────────

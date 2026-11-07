@@ -973,9 +973,25 @@ class AdminController extends Controller
                                 : (in_array($delivery->status, ['created']) ? 'assigned' : $delivery->status),
             'assigned_at'     => $delivery->assigned_at ?? now(),
             'assignment_type' => $delivery->assignment_type ?? 'manual',
+            'confirmed_at'    => $delivery->confirmed_at ?? ($delivery->partner_id ? now() : null),
         ]);
 
         $driver = User::find($data['driver_id']);
+
+        // Tell the driver straight away — an assigned job waits for their accept.
+        if ($driver && $delivery->status === 'assigned') {
+            try {
+                \App\Events\RealtimeUpdate::toDriver($driver->id, 'delivery.offered', ['delivery_id' => $delivery->id]);
+                app(\App\Services\FcmService::class)->sendToUser($driver,
+                    ...\App\Services\FcmService::message('delivery_requested', [
+                        'pickup' => $delivery->pickup_address, 'dropoff' => $delivery->dropoff_address ?? '',
+                    ]),
+                    data: ['type' => 'delivery_requested', 'delivery_id' => (string) $delivery->id]
+                );
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
 
         return redirect()->route('admin.deliveries')
             ->with('success', "Delivery #{$delivery->id} assigned to {$driver->name}.");

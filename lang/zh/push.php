@@ -109,4 +109,7 @@ return [
             ],
         ],
     ],
+    'partner_approved' => ['title' => '🎉 您已成为 ROTEH 伙伴', 'body' => '您的伙伴账户 :name 已通过审核，现在可以创建包裹交由 ROTEH 配送。'],
+    'partner_rejected' => ['title' => '伙伴注册未通过', 'body' => '您的伙伴注册未通过。原因：:reason'],
+    'partner_package_confirmed' => ['title' => '📦 包裹已确认', 'body' => ':code 已确认，ROTEH 正在寻找司机取件。'],
 ];
