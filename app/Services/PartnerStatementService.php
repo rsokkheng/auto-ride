@@ -53,6 +53,137 @@ class PartnerStatementService
         return [$d->copy()->startOfDay(), $d->copy()->endOfDay()];
     }
 
+    /** Status groups used by the overview / "All packages" report. */
+    public const OPEN_GROUPS = [
+        'pending'    => ['created'],
+        'confirmed'  => ['requested', 'pending'],
+        'on_the_way' => ['assigned', 'accepted', 'picked_up', 'in_progress', 'in_transit'],
+    ];
+
+    public const STATUS_LABELS = [
+        'pending'    => ['Pending', 'កំពុងរង់ចាំ'],
+        'confirmed'  => ['Confirmed — finding driver', 'បានបញ្ជាក់ — កំពុងរកអ្នកបើកបរ'],
+        'on_the_way' => ['On the way', 'កំពុងដឹក'],
+        'completed'  => ['Completed', 'បានបញ្ចប់'],
+        'failed'     => ['Not delivered — returning', 'មិនបានដឹកដល់ — កំពុងយកត្រឡប់'],
+        'returned'   => ['Returned to shop', 'បានប្រគល់ត្រឡប់មកហាង'],
+        'cancelled'  => ['Cancelled', 'បានបោះបង់'],
+    ];
+
+    /**
+     * SQL pieces for "packages of the day": created that day and still open
+     * (pending / confirmed / on the way), or closed that day (completed,
+     * not delivered, returned, cancelled — by their own timestamp).
+     * @return array{0: array<string,string>, 1: array} conditions per group, bindings per group
+     */
+    private function dayConditions(Carbon $from, Carbon $to): array
+    {
+        $appTz = config('app.timezone');
+        $a = $from->copy()->setTimezone($appTz)->toDateTimeString();
+        $b = $to->copy()->setTimezone($appTz)->toDateTimeString();
+        $in = fn (array $v) => "'" . implode("','", $v) . "'";
+
+        $cond = [];
+        foreach (self::OPEN_GROUPS as $g => $statuses) {
+            $cond[$g] = "(status IN ({$in($statuses)}) AND created_at BETWEEN ? AND ?)";
+        }
+        $cond['completed'] = "(status IN ('delivered','completed') AND completed_at BETWEEN ? AND ?)";
+        $cond['failed']    = "(status = 'delivery_failed' AND failed_at BETWEEN ? AND ?)";
+        $cond['returned']  = "(status = 'returned' AND returned_at BETWEEN ? AND ?)";
+        $cond['cancelled'] = "(status = 'cancelled' AND COALESCE(cancelled_at, updated_at) BETWEEN ? AND ?)";
+
+        return [$cond, array_fill_keys(array_keys($cond), [$a, $b])];
+    }
+
+    /**
+     * One row per partner with packages that day: counts for every status,
+     * COD, service fees and net — one grouped query, for the admin overview.
+     * @return Collection<int, array> keyed by partner_id
+     */
+    public function overview(Carbon $from, Carbon $to): Collection
+    {
+        [$cond, $bind] = $this->dayConditions($from, $to);
+        $pct = (float) PricingSetting::get('partner_failed_fee_percent', 0);
+
+        $select = ['partner_id'];
+        $bindings = [];
+        foreach ($cond as $g => $c) {
+            $select[] = "SUM(CASE WHEN {$c} THEN 1 ELSE 0 END) AS c_{$g}";
+            array_push($bindings, ...$bind[$g]);
+        }
+        $done = $cond['completed'];
+        $select[] = "SUM(CASE WHEN {$done} THEN package_amount ELSE 0 END) AS cod_collected";
+        $select[] = "SUM(CASE WHEN {$done} THEN fee ELSE 0 END) AS service_fees";
+        $select[] = "SUM(CASE WHEN {$done} AND payment_by <> 'recipient' AND COALESCE(payment_status,'') NOT IN ('paid','prepaid') THEN fee ELSE 0 END) AS fees_from_cod";
+        $select[] = "SUM(CASE WHEN {$cond['failed']} OR {$cond['returned']} THEN fee ELSE 0 END) AS attempted_fees";
+        $select[] = "SUM(CASE WHEN {$cond['failed']} OR {$cond['returned']} THEN package_amount ELSE 0 END) AS cod_not_collected";
+        array_push($bindings, ...$bind['completed'], ...$bind['completed'], ...$bind['completed'],
+            ...$bind['failed'], ...$bind['returned'], ...$bind['failed'], ...$bind['returned']);
+
+        $where = '(' . implode(' OR ', $cond) . ')';
+        $whereBindings = array_merge(...array_values($bind));
+
+        return Delivery::query()
+            ->whereNotNull('partner_id')
+            ->whereRaw($where, $whereBindings)
+            ->selectRaw(implode(', ', $select), $bindings)
+            ->groupBy('partner_id')
+            ->get()
+            ->mapWithKeys(function ($r) use ($pct) {
+                $counts = [];
+                foreach (array_keys(self::STATUS_LABELS) as $g) $counts[$g] = (int) $r->{"c_{$g}"};
+                $failedFees = (int) round((int) $r->attempted_fees * $pct / 100);
+                return [(int) $r->partner_id => [
+                    'counts'            => $counts,
+                    'total'             => array_sum($counts),
+                    'successful'        => $counts['completed'],
+                    'unsuccessful'      => $counts['failed'] + $counts['returned'] + $counts['cancelled'],
+                    'open'              => $counts['pending'] + $counts['confirmed'] + $counts['on_the_way'],
+                    'cod_collected'     => (int) $r->cod_collected,
+                    'cod_not_collected' => (int) $r->cod_not_collected,
+                    'service_fees'      => (int) $r->service_fees,
+                    'fees_from_cod'     => (int) $r->fees_from_cod,
+                    'failed_fees'       => $failedFees,
+                    'net_to_partner'    => (int) $r->cod_collected - (int) $r->fees_from_cod - $failedFees,
+                ]];
+            });
+    }
+
+    /** Every package of the day with its status group — the "All packages" report. */
+    public function allPackages(User $partner, Carbon $from, Carbon $to): array
+    {
+        [$cond, $bind] = $this->dayConditions($from, $to);
+        $rows = Delivery::where('partner_id', $partner->id)
+            ->whereRaw('(' . implode(' OR ', $cond) . ')', array_merge(...array_values($bind)))
+            ->with('driver:id,name,phone')
+            ->orderBy('id')
+            ->get();
+
+        return $rows->map(function (Delivery $d) {
+            $ps = $d->packageStatus();
+            $group = match ($ps) {
+                'pending'                                    => 'pending',
+                'confirmed'                                  => 'confirmed',
+                'driver_assigned', 'picked_up', 'in_transit' => 'on_the_way',
+                default                                      => $ps, // completed | failed | returned | cancelled
+            };
+            $tz = self::tz();
+            $closed = match ($group) {
+                'completed' => $d->completed_at,
+                'failed'    => $d->failed_at,
+                'returned'  => $d->returned_at,
+                'cancelled' => $d->cancelled_at ?? $d->updated_at,
+                default     => null,
+            };
+            return $this->base($d) + [
+                'group'     => $group,
+                'closed_at' => $closed?->copy()->setTimezone($tz)->format('Y-m-d H:i'),
+                'reason'    => in_array($group, ['failed', 'returned'], true) ? ($d->failure_reason ?? 'other') : null,
+                'payment_by' => $d->payment_by,
+            ];
+        })->values()->all();
+    }
+
     public function build(User $partner, Carbon $from, Carbon $to): array
     {
         $appTz = config('app.timezone');
@@ -97,6 +228,7 @@ class PartnerStatementService
             ],
             'successful'   => $successful->all(),
             'unsuccessful' => $unsuccessful->all(),
+            'all'          => $all = $this->allPackages($partner, $from, $to),
             'summary'      => [
                 'successful_count'    => $successful->count(),
                 'unsuccessful_count'  => $unsuccessful->count(),
@@ -112,6 +244,9 @@ class PartnerStatementService
                 'failed_fees'         => $sum($unsuccessful, 'fee_charged'),
                 'net_to_partner'      => $sum($successful, 'net_to_partner') + $sum($unsuccessful, 'net_to_partner'),
                 'failed_fee_percent'  => $failedPct,
+                'status_counts'       => collect(array_keys(self::STATUS_LABELS))
+                    ->mapWithKeys(fn ($g) => [$g => collect($all)->where('group', $g)->count()])->all(),
+                'total_count'         => count($all),
             ],
         ];
     }

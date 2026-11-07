@@ -47,6 +47,15 @@ class PartnerStatementTest extends TestCase
 
     private function pkg(array $a): Delivery
     {
+        $created = $a['created_at'] ?? null;
+        unset($a['created_at']);
+        $d = $this->make($a);
+        if ($created) Delivery::whereKey($d->id)->update(['created_at' => $created]);
+        return $d->fresh();
+    }
+
+    private function make(array $a): Delivery
+    {
         return Delivery::create($a + [
             'partner_id' => $this->partner->id, 'sender_id' => $this->partner->id, 'service_type' => 'delivery',
             'sender_name' => 'Shop', 'recipient_name' => 'ដារ៉ា', 'recipient_phone' => '0961234567',
@@ -127,5 +136,40 @@ class PartnerStatementTest extends TestCase
     {
         $p = User::factory()->create(['role' => 'passenger', 'api_token' => 'p-' . uniqid(), 'token_expires_at' => now()->addHour()]);
         $this->withHeaders(['Authorization' => 'Bearer ' . $p->api_token])->getJson('/api/v1/partner/statements')->assertStatus(403);
+    }
+
+    public function test_admin_overview_all_statuses_filters_and_exports(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $at = fn (string $hm) => Carbon::parse("{$this->day} {$hm}", 'Asia/Phnom_Penh')->setTimezone(config('app.timezone'));
+        // Open packages created that day: pending, confirmed, on the way
+        $this->pkg(['status' => 'created', 'created_at' => $at('14:00')]);
+        $this->pkg(['status' => 'requested', 'created_at' => $at('14:10')]);
+        $this->pkg(['status' => 'in_progress', 'created_at' => $at('14:20')]);
+        // A second partner with only a pending package
+        $b = User::factory()->create(['role' => 'partner', 'name' => 'Bopha Store']);
+        $this->pkg(['partner_id' => $b->id, 'sender_id' => $b->id, 'status' => 'created', 'created_at' => $at('15:00')]);
+
+        $ov = app(\App\Services\PartnerStatementService::class)->overview(...\App\Services\PartnerStatementService::dayRange($this->day));
+        $mine = $ov[$this->partner->id];
+        $this->assertSame(['pending' => 1, 'confirmed' => 1, 'on_the_way' => 1, 'completed' => 3, 'failed' => 1, 'returned' => 1, 'cancelled' => 1], $mine['counts']);
+        $this->assertSame(9, $mine['total']);
+        $this->assertSame(65000, $mine['net_to_partner']);
+        // Same numbers as the per-partner statement.
+        $st = $this->api("/api/v1/partner/statements?date={$this->day}")->json('data.summary');
+        $this->assertSame($mine['counts'], $st['status_counts']);
+        $this->assertSame($mine['net_to_partner'], $st['net_to_partner']);
+
+        $page = fn (array $q) => $this->actingAs($admin)->get(route('admin.partner-statements', ['date' => $this->day] + $q))->assertOk();
+        $page([])->assertSee('ហាងសុខា Shop')->assertSee('Bopha Store');
+        $page(['search' => 'Bopha'])->assertSee('Bopha Store')->assertDontSee('ហាងសុខា Shop');
+        $page(['status' => 'unsuccessful'])->assertSee('ហាងសុខា Shop')->assertDontSee('Bopha Store');
+        $page(['status' => 'pending', 'sort' => 'name'])->assertSee('Bopha Store')->assertSee('ហាងសុខា Shop');
+
+        $this->actingAs($admin)->get(route('admin.partner-statements.overview', ['date' => $this->day, 'status' => 'unsuccessful']))
+            ->assertOk()->assertSee('របាយការណ៍ដៃគូទាំងអស់')->assertDontSee('Bopha Store');
+        $this->actingAs($admin)->get(route('admin.partner-statements.overview.excel', ['date' => $this->day]))->assertOk();
+        $this->actingAs($admin)->get(route('admin.partner-statements.show', [$this->partner, 'date' => $this->day, 'type' => 'all']))
+            ->assertOk()->assertSee('របាយការណ៍កញ្ចប់ទាំងអស់')->assertSee('កំពុងរង់ចាំ');
     }
 }

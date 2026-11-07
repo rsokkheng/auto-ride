@@ -2,33 +2,92 @@
 @section('title', 'Partner Statements')
 @section('page-title', 'Partner Statements')
 
+@php
+    use App\Services\PartnerStatementService as PS;
+    $L = PS::STATUS_LABELS;
+    $tone = ['pending' => 'warning', 'confirmed' => 'info', 'on_the_way' => 'primary', 'completed' => 'success',
+             'failed' => 'danger', 'returned' => 'danger', 'cancelled' => 'muted'];
+    $icon = ['pending' => 'fa-hourglass-half', 'confirmed' => 'fa-magnifying-glass-location', 'on_the_way' => 'fa-truck-fast',
+             'completed' => 'fa-circle-check', 'failed' => 'fa-phone-slash', 'returned' => 'fa-rotate-left', 'cancelled' => 'fa-ban'];
+    $q = fn (array $extra = []) => array_merge(request()->except('page'), $extra);
+@endphp
+
 @section('content')
 
-<x-admin.page-toolbar subtitle="Daily statements after closing the books — print the Successful and Unsuccessful reports and hand them to each Partner. Partners see the same statements in the app and on the Partner website.">
+<x-admin.page-toolbar subtitle="Daily statements after closing the books. Every status per partner; print Successful / Unsuccessful / All statuses for each partner, or the whole list.">
     <form method="GET" action="{{ route('admin.partner-statements') }}" class="d-flex align-items-center" style="gap:6px;">
+        @foreach(request()->except(['date', 'page']) as $k => $v)
+            @if(filled($v))<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endif
+        @endforeach
         <label class="mb-0 text-muted">Closing date</label>
-        <input type="date" name="date" value="{{ $date }}" max="{{ now(\App\Services\PartnerStatementService::tz())->toDateString() }}"
+        <input type="date" name="date" value="{{ $date }}" max="{{ now(PS::tz())->toDateString() }}"
                class="form-control form-control-sm" style="width:auto;" onchange="this.form.submit()">
     </form>
+    <a class="btn btn-outline-primary" target="_blank" href="{{ route('admin.partner-statements.overview', $q(['date' => $date, 'print' => 1])) }}">
+        <i class="fas fa-print mr-1"></i> Print list</a>
+    <a class="btn btn-outline-success" href="{{ route('admin.partner-statements.overview.excel', $q(['date' => $date])) }}">
+        <i class="fas fa-file-excel mr-1"></i> Excel</a>
 </x-admin.page-toolbar>
 
-<x-admin.stat-grid :cols="4">
-    <x-admin.stat-card label="Partners with activity" :value="number_format($rows->count())" icon="fa-handshake" tone="primary" />
-    <x-admin.stat-card label="Successful" :value="number_format($totals['successful'])" icon="fa-circle-check" tone="success"
-                       :sub="number_format($totals['unsuccessful']) . ' unsuccessful'" />
-    <x-admin.stat-card label="COD collected" :value="number_format($totals['cod']) . ' ៛'" icon="fa-money-bill-wave" tone="info" />
-    <x-admin.stat-card label="Payable to partners" :value="number_format($totals['net']) . ' ៛'" icon="fa-hand-holding-dollar" tone="warning"
-                       :sub="'Service fees ' . number_format($totals['fees']) . ' ៛'" />
-</x-admin.stat-grid>
+{{-- Status cards — click to filter --}}
+<div class="row mb-2">
+    <div class="col-6 col-md-3 col-xl mb-2">
+        <x-admin.stat-card label="All packages" :value="number_format($totals['total'])" icon="fa-boxes-stacked" tone="primary"
+                           :sub="number_format($totals['partners']) . ' partners'"
+                           :href="route('admin.partner-statements', $q(['status' => null]))" :active="!request('status')" />
+    </div>
+    @foreach([['pending', 'pending'], ['on_the_way', 'open'], ['completed', 'successful'], ['returned', 'returned'], ['cancelled', 'unsuccessful']] as [$g, $filter])
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <x-admin.stat-card :label="$g === 'returned' ? 'Not delivered / Returned' : ($g === 'cancelled' ? 'Unsuccessful (all)' : ($g === 'on_the_way' ? 'Open (pending → on the way)' : $L[$g][0]))"
+                               :value="number_format(match ($g) {
+                                   'returned' => $totals['counts']['failed'] + $totals['counts']['returned'],
+                                   'cancelled' => $totals['unsuccessful'],
+                                   'on_the_way' => $totals['open'],
+                                   default => $totals['counts'][$g] })"
+                               :icon="$icon[$g]" :tone="$tone[$g] === 'muted' ? 'danger' : $tone[$g]"
+                               :href="route('admin.partner-statements', $q(['status' => $filter]))" :active="request('status') === $filter" />
+        </div>
+    @endforeach
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-4 mb-2"><div class="card mb-0"><div class="card-body py-2">
+        <div class="text-muted tw:text-xs">COD collected</div><div style="font-size:1.2rem;font-weight:700;">{{ number_format($totals['cod']) }} ៛</div></div></div></div>
+    <div class="col-md-4 mb-2"><div class="card mb-0"><div class="card-body py-2">
+        <div class="text-muted tw:text-xs">Service fees (completed)</div><div style="font-size:1.2rem;font-weight:700;">{{ number_format($totals['fees']) }} ៛</div></div></div></div>
+    <div class="col-md-4 mb-2"><div class="card mb-0"><div class="card-body py-2">
+        <div class="text-muted tw:text-xs">Net payable to partners</div><div style="font-size:1.2rem;font-weight:700;color:{{ $totals['net'] < 0 ? 'var(--danger)' : 'var(--success)' }};">{{ number_format($totals['net']) }} ៛</div></div></div></div>
+</div>
 
 <div class="card">
+    <div class="card-header">
+        <x-admin.filter-bar :action="route('admin.partner-statements')" placeholder="Search partner, business, phone or email"
+                            :count="$rows->total()" noun="partner" :keep="['date']">
+            <x-admin.filter-select name="status" all="All statuses" :options="[
+                'pending' => 'Has pending (waiting confirm)',
+                'open' => 'Has open (pending → on the way)',
+                'successful' => 'Has successful',
+                'unsuccessful' => 'Has unsuccessful',
+                'returned' => 'Has not delivered / returned',
+                'owes' => 'Partner owes ROTEH',
+            ]" />
+            <x-admin.filter-select name="sort" all="Sort: most packages" :options="[
+                'name' => 'Sort: name A–Z',
+                'unsuccessful' => 'Sort: most unsuccessful',
+                'open' => 'Sort: most open',
+                'cod' => 'Sort: highest COD',
+                'net' => 'Sort: highest net',
+            ]" />
+            <x-admin.filter-select name="per_page" all="25 / page" :options="['50' => '50 / page', '100' => '100 / page']" />
+        </x-admin.filter-bar>
+    </div>
     <div class="card-body table-responsive p-0">
         <table class="table table-hover text-nowrap">
             <thead>
                 <tr>
                     <th>Partner</th>
-                    <th class="text-right">Successful</th>
-                    <th class="text-right">Unsuccessful</th>
+                    <th class="text-right">Total</th>
+                    <th>Status breakdown</th>
                     <th class="text-right">COD collected</th>
                     <th class="text-right">Service fees</th>
                     <th class="text-right">Net to partner</th>
@@ -37,38 +96,59 @@
             </thead>
             <tbody>
             @forelse($rows as $r)
-                @php
-                    $p = $r['partner'];
-                    $s = $r['summary'];
-                @endphp
+                @php $p = $r['partner']; @endphp
                 <tr>
                     <td>
-                        <div style="font-weight:600;color:var(--ink-900);">{{ $p->partnerProfile?->business_name ?: ($p->company_name ?: $p->name) }}</div>
-                        <div class="text-muted tw:text-xs">{{ $p->partnerProfile?->phone ?: $p->phone }}</div>
+                        <div style="font-weight:600;color:var(--ink-900);">{{ $r['name'] }}</div>
+                        <div class="text-muted tw:text-xs">{{ $r['phone'] }}</div>
                     </td>
-                    <td class="text-right"><span class="text-success" style="font-weight:600;">{{ $s['successful_count'] }}</span></td>
-                    <td class="text-right">
-                        <span class="{{ $s['unsuccessful_count'] ? 'text-danger' : 'text-muted' }}" style="font-weight:600;">{{ $s['unsuccessful_count'] }}</span>
-                        @if($s['unsuccessful_count'])<div class="text-muted tw:text-xs">{{ $s['returned_count'] }} returned · {{ $s['returning_count'] }} returning · {{ $s['cancelled_count'] }} cancelled</div>@endif
+                    <td class="text-right" style="font-weight:700;">{{ $r['total'] }}</td>
+                    <td style="white-space:normal;min-width:260px;">
+                        @foreach($L as $g => $lbl)
+                            @if($r['counts'][$g] > 0)
+                                <span class="status-pill tone-{{ $tone[$g] }} mb-1" title="{{ $lbl[0] }} · {{ $lbl[1] }}">
+                                    <i class="fas {{ $icon[$g] }} mr-1"></i>{{ $lbl[0] === 'Confirmed — finding driver' ? 'Confirmed' : ($lbl[0] === 'Not delivered — returning' ? 'Returning' : $lbl[0]) }} {{ $r['counts'][$g] }}
+                                </span>
+                            @endif
+                        @endforeach
                     </td>
-                    <td class="text-right">{{ number_format($s['cod_collected']) }} ៛</td>
-                    <td class="text-right">{{ number_format($s['service_fees']) }} ៛</td>
-                    <td class="text-right" style="font-weight:700;color:{{ $s['net_to_partner'] < 0 ? 'var(--danger)' : 'var(--ink-900)' }};">{{ number_format($s['net_to_partner']) }} ៛</td>
+                    <td class="text-right">{{ number_format($r['cod_collected']) }} ៛</td>
+                    <td class="text-right">{{ number_format($r['service_fees']) }} ៛</td>
+                    <td class="text-right" style="font-weight:700;color:{{ $r['net_to_partner'] < 0 ? 'var(--danger)' : 'var(--ink-900)' }};">{{ number_format($r['net_to_partner']) }} ៛</td>
                     <td class="text-center">
-                        <a class="btn btn-sm btn-success" target="_blank" href="{{ route('admin.partner-statements.show', [$p, 'date' => $date, 'type' => 'successful', 'print' => 1]) }}" title="Print successful">
-                            <i class="fas fa-print mr-1"></i>Successful</a>
-                        <a class="btn btn-sm btn-outline-danger" target="_blank" href="{{ route('admin.partner-statements.show', [$p, 'date' => $date, 'type' => 'unsuccessful', 'print' => 1]) }}" title="Print unsuccessful">
-                            <i class="fas fa-print mr-1"></i>Unsuccessful</a>
-                        <a class="btn btn-sm btn-outline-secondary" target="_blank" href="{{ route('admin.partner-statements.show', [$p, 'date' => $date]) }}" title="View both"><i class="fas fa-eye"></i></a>
-                        <a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.partner-statements.excel', [$p, 'date' => $date]) }}" title="Excel"><i class="fas fa-file-excel"></i></a>
+                        <div class="btn-group btn-group-sm">
+                            <a class="btn btn-success" target="_blank" title="Print successful" href="{{ route('admin.partner-statements.show', [$p, 'date' => $date, 'type' => 'successful', 'print' => 1]) }}">
+                                <i class="fas fa-print mr-1"></i>Successful</a>
+                            <a class="btn btn-outline-danger" target="_blank" title="Print unsuccessful" href="{{ route('admin.partner-statements.show', [$p, 'date' => $date, 'type' => 'unsuccessful', 'print' => 1]) }}">
+                                <i class="fas fa-print mr-1"></i>Unsuccessful</a>
+                            <a class="btn btn-outline-primary" target="_blank" title="All statuses" href="{{ route('admin.partner-statements.show', [$p, 'date' => $date, 'type' => 'all']) }}">
+                                <i class="fas fa-list mr-1"></i>All</a>
+                            <a class="btn btn-outline-secondary" title="Excel" href="{{ route('admin.partner-statements.excel', [$p, 'date' => $date]) }}"><i class="fas fa-file-excel"></i></a>
+                        </div>
                     </td>
                 </tr>
             @empty
-                <x-admin.empty-row colspan="7" icon="fa-file-invoice" title="No partner packages closed on this date"
-                                   hint="Pick another closing date above." :clear="route('admin.partner-statements')" />
+                <x-admin.empty-row colspan="7" icon="fa-file-invoice" title="No partners match"
+                                   hint="Try another closing date, search or status." :clear="route('admin.partner-statements', ['date' => $date])" />
             @endforelse
             </tbody>
+            @if($rows->total() > 0)
+            <tfoot>
+                <tr style="font-weight:700;background:var(--surface-2, #f8fafc);">
+                    <td>Total ({{ number_format($totals['partners']) }} partners{{ $rows->hasPages() ? ', all pages' : '' }})</td>
+                    <td class="text-right">{{ number_format($totals['total']) }}</td>
+                    <td class="tw:text-xs text-muted" style="white-space:normal;">
+                        @foreach($L as $g => $lbl) @if($totals['counts'][$g]) {{ $lbl[0] }} {{ $totals['counts'][$g] }} · @endif @endforeach
+                    </td>
+                    <td class="text-right">{{ number_format($totals['cod']) }} ៛</td>
+                    <td class="text-right">{{ number_format($totals['fees']) }} ៛</td>
+                    <td class="text-right">{{ number_format($totals['net']) }} ៛</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+            @endif
         </table>
     </div>
+    <x-admin.pagination :paginator="$rows" />
 </div>
 @endsection

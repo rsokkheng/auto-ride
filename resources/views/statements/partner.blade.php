@@ -7,7 +7,9 @@
         : \Carbon\Carbon::parse($s['from'])->format('d/m/Y') . ' – ' . \Carbon\Carbon::parse($s['to'])->format('d/m/Y');
     $sizes = ['small' => 'តូច', 'medium' => 'មធ្យម', 'large' => 'ធំ', 'extra_large' => 'ធំខ្លាំង'];
     $paidBy = ['receiver' => 'អ្នកទទួលបង់ · Receiver', 'partner_prepaid' => 'បង់រួច · Prepaid', 'partner_from_cod' => 'កាត់ពី COD · From COD'];
-    $show = fn ($t) => $type === 'both' || $type === $t;
+    $show = fn ($t) => $type === $t || ($type === 'both' && $t !== 'all');
+    $groupTag = ['pending' => 't-can', 'confirmed' => 't-can', 'on_the_way' => 't-ret', 'completed' => 't-ok',
+                 'failed' => 't-fail', 'returned' => 't-ret', 'cancelled' => 't-can'];
 @endphp
 <!DOCTYPE html>
 <html lang="km">
@@ -52,7 +54,7 @@ tr:nth-child(even) td { background:#f9fafb; }
 .small { font-size:9.5px; color:var(--muted); }
 tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid var(--green); }
 .tag { display:inline-block; padding:1px 6px; border-radius:4px; font-size:9.5px; font-weight:600; }
-.t-ret { background:#fef3c7; color:#92400e; } .t-fail { background:#fee2e2; color:#991b1b; } .t-can { background:#e5e7eb; color:#374151; }
+.t-ok { background:#d1fae5; color:#065f46; } .t-ret { background:#fef3c7; color:#92400e; } .t-fail { background:#fee2e2; color:#991b1b; } .t-can { background:#e5e7eb; color:#374151; }
 .empty { text-align:center; color:var(--muted); padding:22px; }
 .note { font-size:10px; color:var(--muted); margin-top:8px; }
 .sign { display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-top:34px; font-size:11px; text-align:center; }
@@ -237,6 +239,66 @@ tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid 
         @if($sum['failed_fee_percent'] > 0) {{ rtrim(rtrim(number_format($sum['failed_fee_percent'], 2), '0'), '.') }}% of the service fee is charged for attempted deliveries. @else No service fee is charged. @endif
     </p>
     <div class="sign"><div>ROTEH (អ្នករៀបចំ · Prepared by)</div><div>ដៃគូ (អ្នកទទួល · Received by)</div></div>
+</div>
+@endif
+
+{{-- ── All packages (every status) ────────────────────────────────────── --}}
+@if($show('all'))
+@php($sc = $sum['status_counts'])
+<div class="page">
+    <div class="head">
+        <div>
+            <div class="brand">ROTEH</div>
+            <div class="title">របាយការណ៍កញ្ចប់ទាំងអស់ (គ្រប់ស្ថានភាព)</div>
+            <div class="en">All Packages Report — every status</div>
+        </div>
+        <div class="meta">
+            <b>{{ $s['statement_no'] }}-A</b><br>
+            ថ្ងៃ · Date: <b>{{ $dateLabel }}</b><br>
+            <span class="en">Generated {{ \Carbon\Carbon::parse($s['generated_at'])->format('d/m/Y H:i') }}</span>
+        </div>
+    </div>
+    <div class="info">
+        <div><span>ដៃគូ · Partner:</span> <b>{{ $s['partner']['business_name'] }}</b></div>
+        <div><span>ទូរស័ព្ទ · Phone:</span> {{ $s['partner']['phone'] }}</div>
+    </div>
+    <div class="cards" style="grid-template-columns:repeat(4,1fr);">
+        <div class="card hl"><div class="v">{{ $sum['total_count'] }}</div><div class="l">សរុប · Total</div></div>
+        @foreach(\App\Services\PartnerStatementService::STATUS_LABELS as $g => $lbl)
+            <div class="card {{ in_array($g, ['failed','returned']) && $sc[$g] ? 'neg' : '' }}"><div class="v">{{ $sc[$g] }}</div><div class="l">{{ $lbl[1] }} · {{ $lbl[0] }}</div></div>
+        @endforeach
+    </div>
+    <div class="tbl"><table>
+        <thead><tr>
+            <th>#</th>
+            <th>លេខកូដ<span class="en">Code / Ref</span></th>
+            <th>បង្កើត<span class="en">Created</span></th>
+            <th>ស្ថានភាព<span class="en">Status</span></th>
+            <th>អ្នកទទួល<span class="en">Receiver</span></th>
+            <th>អ្នកបើកបរ<span class="en">Driver</span></th>
+            <th class="r">COD</th>
+            <th class="r">តម្លៃសេវា<span class="en">Service fee</span></th>
+        </tr></thead>
+        <tbody>
+        @forelse($s['all'] as $i => $r)
+            <tr>
+                <td>{{ $i + 1 }}</td>
+                <td><span class="code">{{ $r['code'] }}</span>@if($r['reference'])<div class="small">#{{ $r['reference'] }}</div>@endif</td>
+                <td>{{ \Illuminate\Support\Str::after($r['created_at'], ' ') }}<div class="small">{{ \Illuminate\Support\Str::before($r['created_at'], ' ') }}</div></td>
+                <td><span class="tag {{ $groupTag[$r['group']] ?? '' }}">{{ PS::STATUS_LABELS[$r['group']][1] ?? $r['group'] }}</span>
+                    @if($r['reason'])<div class="small">{{ PS::REASONS[$r['reason']][1] ?? '' }}</div>@endif
+                    @if($r['closed_at'])<div class="small">{{ \Illuminate\Support\Str::after($r['closed_at'], ' ') }}</div>@endif</td>
+                <td>{{ $r['receiver_name'] }}<div class="small">{{ $r['receiver_phone'] }}</div></td>
+                <td class="small">{{ $r['driver'] ?? '—' }}</td>
+                <td class="r">{{ $r['cod_amount'] ? $k($r['cod_amount']) : '—' }}</td>
+                <td class="r">{{ $k($r['fee']) }}</td>
+            </tr>
+        @empty
+            <tr><td colspan="8" class="empty">គ្មានកញ្ចប់នៅថ្ងៃនេះ · No packages on this day</td></tr>
+        @endforelse
+        </tbody>
+    </table></div>
+    <p class="note">កញ្ចប់ដែលបង្កើតនៅថ្ងៃនេះ ហើយនៅមិនទាន់បញ្ចប់ និងកញ្ចប់ដែលបានបិទនៅថ្ងៃនេះ · Packages created this day that are still open, plus packages closed this day.</p>
 </div>
 @endif
 

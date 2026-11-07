@@ -276,6 +276,8 @@ Route::prefix('admin')->middleware(\App\Http\Middleware\AdminAuth::class)->group
 
     // Daily Partner statements (successful / unsuccessful)
     Route::get('partner-statements',                       [\App\Http\Controllers\PartnerStatementController::class, 'adminIndex'])->name('admin.partner-statements');
+    Route::get('partner-statements/overview/print',        [\App\Http\Controllers\PartnerStatementController::class, 'adminOverviewPrint'])->name('admin.partner-statements.overview');
+    Route::get('partner-statements/overview/excel',        [\App\Http\Controllers\PartnerStatementController::class, 'adminOverviewExcel'])->name('admin.partner-statements.overview.excel');
     Route::get('partner-statements/{partner}',            [\App\Http\Controllers\PartnerStatementController::class, 'adminShow'])->name('admin.partner-statements.show');
     Route::get('partner-statements/{partner}/excel',      [\App\Http\Controllers\PartnerStatementController::class, 'adminExcel'])->name('admin.partner-statements.excel');
 

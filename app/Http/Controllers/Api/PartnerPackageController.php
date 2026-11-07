@@ -361,7 +361,7 @@ class PartnerPackageController extends ApiController
         if ($deny = $this->denyUnlessPartner($user = $this->authUser($request))) return $deny;
         $data = $request->validate([
             'date' => 'nullable|date_format:Y-m-d',
-            'type' => 'nullable|in:successful,unsuccessful,both',
+            'type' => 'nullable|in:successful,unsuccessful,both,all',
         ]);
 
         return $this->success(\App\Http\Controllers\PartnerStatementController::signedLink(

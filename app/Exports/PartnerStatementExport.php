@@ -37,6 +37,8 @@ class PartnerStatementExport implements WithMultipleSheets
             ['Fees charged for unsuccessful / ថ្លៃគិតលើកញ្ចប់មិនជោគជ័យ (៛)', $m['failed_fees']],
             [],
             [$m['net_to_partner'] < 0 ? 'Partner owes ROTEH / ដៃគូត្រូវបង់ ROTEH (៛)' : 'Payable to partner / ROTEH ត្រូវបង់ដៃគូ (៛)', abs($m['net_to_partner'])],
+            [],
+            ['All statuses / គ្រប់ស្ថានភាព', $m['total_count'] ?? 0],
         ];
 
         $ok = [['#', 'Code', 'Reference', 'Delivered at / ពេលដឹកដល់', 'Receiver / អ្នកទទួល', 'Phone', 'Address / អាសយដ្ឋាន',
@@ -57,10 +59,23 @@ class PartnerStatementExport implements WithMultipleSheets
         }
         $bad[] = ['', 'TOTAL / សរុប', '', '', '', '', '', '', '', '', '', $m['cod_not_collected'], collect($s['unsuccessful'])->sum('fee'), $m['failed_fees']];
 
+        $all = [['#', 'Code', 'Reference', 'Created / បង្កើត', 'Status / ស្ថានភាព', 'Reason / មូលហេតុ', 'Closed at / ពេលបិទ',
+            'Receiver / អ្នកទទួល', 'Phone', 'Address / អាសយដ្ឋាន', 'Driver / អ្នកបើកបរ', 'COD (៛)', 'Service fee (៛)']];
+        foreach ($s['all'] ?? [] as $i => $r) {
+            $st = PS::STATUS_LABELS[$r['group']] ?? [$r['group'], ''];
+            $re = $r['reason'] ? (PS::REASONS[$r['reason']] ?? [$r['reason'], '']) : null;
+            $all[] = [$i + 1, $r['code'], $r['reference'], $r['created_at'], "{$st[0]} / {$st[1]}", $re ? "{$re[0]} / {$re[1]}" : '',
+                $r['closed_at'], $r['receiver_name'], $r['receiver_phone'], $r['dropoff_address'], $r['driver'], $r['cod_amount'], $r['fee']];
+        }
+        foreach (PS::STATUS_LABELS as $g => $lbl) {
+            $summary[] = ["{$lbl[0]} / {$lbl[1]}", $m['status_counts'][$g] ?? 0];
+        }
+
         return [
-            new PartnerReportSheet('Summary', $summary, headerRows: [1], sectionRows: [6, 13, 20]),
+            new PartnerReportSheet('Summary', $summary, headerRows: [1], sectionRows: [6, 13, 20, 22]),
             new PartnerReportSheet('Successful', $ok, headerRows: [1], sectionRows: [count($ok)]),
             new PartnerReportSheet('Unsuccessful', $bad, headerRows: [1], sectionRows: [count($bad)]),
+            new PartnerReportSheet('All packages', $all, headerRows: [1]),
         ];
     }
 }

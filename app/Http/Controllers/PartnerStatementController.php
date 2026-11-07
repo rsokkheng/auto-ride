@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Exports\PartnerStatementExport;
-use App\Models\Delivery;
 use App\Models\User;
 use App\Services\PartnerStatementService as PS;
 use Illuminate\Http\Request;
@@ -24,33 +23,133 @@ class PartnerStatementController extends Controller
 
     // ── ROTEH admin ──────────────────────────────────────────────────────────
 
+    /**
+     * All partners for a closing date — every status, with filters:
+     * search, status (pending / open / successful / unsuccessful / returned /
+     * owes), sort and paging. The same filtered list prints / exports.
+     */
     public function adminIndex(Request $request)
     {
+        [$rows, $from] = $this->overviewRows($request);
+
+        $totals = $this->overviewTotals($rows);
+        $perPage = min(max((int) $request->query('per_page', 25), 10), 100);
+        $page = max(1, (int) $request->query('page', 1));
+        $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
+            $rows->forPage($page, $perPage)->values(), $rows->count(), $perPage, $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
+
+        return view('admin.partner-statements', [
+            'rows' => $paginator, 'totals' => $totals, 'date' => $from->toDateString(),
+            'filters' => $request->only(['search', 'status', 'sort', 'per_page']),
+        ]);
+    }
+
+    /** Printable all-partners report for the filtered list. */
+    public function adminOverviewPrint(Request $request)
+    {
+        [$rows, $from] = $this->overviewRows($request);
+
+        return view('statements.overview', [
+            'rows' => $rows, 'totals' => $this->overviewTotals($rows), 'date' => $from->toDateString(),
+            'filters' => $request->only(['search', 'status', 'sort']),
+            'backUrl' => route('admin.partner-statements', $request->query()),
+            'excelUrl' => route('admin.partner-statements.overview.excel', $request->query()),
+            'autoPrint' => $request->boolean('print'),
+        ]);
+    }
+
+    public function adminOverviewExcel(Request $request)
+    {
+        [$rows, $from] = $this->overviewRows($request);
+        $t = $this->overviewTotals($rows);
+        $L = PS::STATUS_LABELS;
+
+        $headings = ['#', 'Partner / ដៃគូ', 'Phone', 'Total / សរុប'];
+        foreach ($L as $g => $lbl) $headings[] = "{$lbl[0]} / {$lbl[1]}";
+        array_push($headings, 'COD collected (៛)', 'Service fees (៛)', 'Fees from COD (៛)', 'Unsuccessful fees (៛)', 'Net to partner (៛)');
+
+        $data = $rows->values()->map(function ($r, $i) use ($L) {
+            $line = [$i + 1, $r['name'], $r['phone'], $r['total']];
+            foreach (array_keys($L) as $g) $line[] = $r['counts'][$g];
+            return array_merge($line, [$r['cod_collected'], $r['service_fees'], $r['fees_from_cod'], $r['failed_fees'], $r['net_to_partner']]);
+        })->all();
+        $totalLine = ['', 'TOTAL / សរុប', '', $t['total']];
+        foreach (array_keys($L) as $g) $totalLine[] = $t['counts'][$g];
+        $data[] = array_merge($totalLine, [$t['cod'], $t['fees'], $t['fees_from_cod'], $t['failed_fees'], $t['net']]);
+
+        $export = new \App\Exports\GenericReportExport('Partner Statements ' . $from->toDateString(), $headings, $data, [
+            'Closing date / ថ្ងៃបិទបញ្ជី' => $from->format('d M Y'),
+            'Partners' => $rows->count(),
+            'Generated' => now(PS::tz())->format('d M Y H:i'),
+        ]);
+
+        return Excel::download($export, 'ROTEH_partner_statements_' . $from->format('Ymd') . '.xlsx');
+    }
+
+    /** @return array{0: \Illuminate\Support\Collection, 1: \Carbon\Carbon} */
+    private function overviewRows(Request $request): array
+    {
         [$from, $to] = PS::dayRange($request->query('date'));
-        $appTz = config('app.timezone');
-        [$a, $b] = [$from->copy()->setTimezone($appTz), $to->copy()->setTimezone($appTz)];
+        $ov = $this->statements->overview($from, $to);
 
-        // Every partner with something closed that day.
-        $ids = Delivery::whereNotNull('partner_id')
-            ->where(fn ($q) => $q
-                ->where(fn ($w) => $w->whereIn('status', ['delivered', 'completed'])->whereBetween('completed_at', [$a, $b]))
-                ->orWhere(fn ($w) => $w->where('status', 'delivery_failed')->whereBetween('failed_at', [$a, $b]))
-                ->orWhere(fn ($w) => $w->where('status', 'returned')->whereBetween('returned_at', [$a, $b]))
-                ->orWhere(fn ($w) => $w->where('status', 'cancelled')->whereBetween(\DB::raw('COALESCE(cancelled_at, updated_at)'), [$a, $b])))
-            ->distinct()->pluck('partner_id');
+        $search = trim((string) $request->query('search', ''));
+        $users = User::whereIn('id', $ov->keys())
+            ->with('partnerProfile')
+            ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
+                ->where('name', 'like', "%{$search}%")
+                ->orWhere('phone', 'like', "%{$search}%")
+                ->orWhere('email', 'like', "%{$search}%")
+                ->orWhere('company_name', 'like', "%{$search}%")
+                ->orWhereHas('partnerProfile', fn ($p) => $p->where('business_name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%"))))
+            ->get();
 
-        $rows = User::whereIn('id', $ids)->with('partnerProfile')->orderBy('name')->get()
-            ->map(fn (User $p) => ['partner' => $p, 'summary' => $this->statements->build($p, $from, $to)['summary']]);
+        $rows = $users->map(fn (User $u) => $ov[$u->id] + [
+            'partner' => $u,
+            'name'    => $u->partnerProfile?->business_name ?: ($u->company_name ?: $u->name),
+            'phone'   => $u->partnerProfile?->phone ?: $u->phone,
+        ]);
 
-        $totals = [
-            'successful'   => $rows->sum(fn ($r) => $r['summary']['successful_count']),
-            'unsuccessful' => $rows->sum(fn ($r) => $r['summary']['unsuccessful_count']),
-            'cod'          => $rows->sum(fn ($r) => $r['summary']['cod_collected']),
-            'fees'         => $rows->sum(fn ($r) => $r['summary']['service_fees']),
-            'net'          => $rows->sum(fn ($r) => $r['summary']['net_to_partner']),
+        $rows = match ($request->query('status')) {
+            'pending'      => $rows->filter(fn ($r) => $r['counts']['pending'] > 0),
+            'open'         => $rows->filter(fn ($r) => $r['open'] > 0),
+            'successful'   => $rows->filter(fn ($r) => $r['successful'] > 0),
+            'unsuccessful' => $rows->filter(fn ($r) => $r['unsuccessful'] > 0),
+            'returned'     => $rows->filter(fn ($r) => $r['counts']['returned'] + $r['counts']['failed'] > 0),
+            'owes'         => $rows->filter(fn ($r) => $r['net_to_partner'] < 0),
+            default        => $rows,
+        };
+
+        $rows = match ($request->query('sort', 'total')) {
+            'name'         => $rows->sortBy(fn ($r) => mb_strtolower($r['name'])),
+            'net'          => $rows->sortByDesc('net_to_partner'),
+            'cod'          => $rows->sortByDesc('cod_collected'),
+            'unsuccessful' => $rows->sortByDesc('unsuccessful'),
+            'open'         => $rows->sortByDesc('open'),
+            default        => $rows->sortByDesc('total'),
+        };
+
+        return [$rows->values(), $from];
+    }
+
+    private function overviewTotals(\Illuminate\Support\Collection $rows): array
+    {
+        $counts = [];
+        foreach (array_keys(PS::STATUS_LABELS) as $g) $counts[$g] = $rows->sum(fn ($r) => $r['counts'][$g]);
+        return [
+            'partners'      => $rows->count(),
+            'total'         => $rows->sum('total'),
+            'counts'        => $counts,
+            'successful'    => $rows->sum('successful'),
+            'unsuccessful'  => $rows->sum('unsuccessful'),
+            'open'          => $rows->sum('open'),
+            'cod'           => $rows->sum('cod_collected'),
+            'fees'          => $rows->sum('service_fees'),
+            'fees_from_cod' => $rows->sum('fees_from_cod'),
+            'failed_fees'   => $rows->sum('failed_fees'),
+            'net'           => $rows->sum('net_to_partner'),
         ];
-
-        return view('admin.partner-statements', ['rows' => $rows, 'totals' => $totals, 'date' => $from->toDateString()]);
     }
 
     public function adminShow(Request $request, User $partner)
@@ -130,7 +229,7 @@ class PartnerStatementController extends Controller
 
     private function type(Request $request): string
     {
-        return in_array($request->query('type'), ['successful', 'unsuccessful'], true) ? $request->query('type') : 'both';
+        return in_array($request->query('type'), ['successful', 'unsuccessful', 'all'], true) ? $request->query('type') : 'both';
     }
 
     private function switchUrls(callable $url): array
@@ -139,6 +238,7 @@ class PartnerStatementController extends Controller
             '✅ ជោគជ័យ · Successful'       => $url('successful'),
             '⚠️ មិនជោគជ័យ · Unsuccessful' => $url('unsuccessful'),
             '📄 ទាំងពីរ · Both'            => $url('both'),
+            '📋 គ្រប់ស្ថានភាព · All statuses' => $url('all'),
         ];
     }
 
