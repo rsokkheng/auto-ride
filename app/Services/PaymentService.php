@@ -49,6 +49,10 @@ class PaymentService
 
     public function processDelivery(Delivery $delivery): TransactionRecord
     {
+        if ($delivery->partner_id) {
+            return $this->processPartnerPackage($delivery);
+        }
+
         $driver = $delivery->driver?->load('company');
         $fare   = $delivery->fee;
         $split  = $driver
@@ -88,6 +92,63 @@ class PaymentService
             ]);
 
             $delivery->update(['payment_status' => self::statusAfterSettlement($method, $delivery->payment_status)]);
+
+            return $record;
+        });
+    }
+
+    /**
+     * Partner package: delivered by a ROTEH staff driver on a salary, so the
+     * whole fee is ROTEH revenue — no per-trip credit to the driver, no
+     * company split. ROTEH charges the fee to the Partner:
+     *   · receiver pays (cash)   → the driver collected it → paid
+     *   · Partner pays by wallet → debited now (unpaid if the wallet is short)
+     *   · Partner pays by ABA    → paid when PayWay confirms
+     *   · Partner pays cash      → stays unpaid; taken from the COD or paid on
+     *                              the daily statement
+     */
+    private function processPartnerPackage(Delivery $delivery): TransactionRecord
+    {
+        $fee    = (int) $delivery->fee;
+        $method = $delivery->payment_method ?? 'cash';
+        $driver = $delivery->driver;
+
+        return DB::transaction(function () use ($delivery, $driver, $fee, $method) {
+            $status = $delivery->payment_status ?? 'unpaid';
+
+            if ($delivery->payment_by === 'recipient') {
+                $status = 'paid';
+            } elseif ($method === 'wallet' && ! in_array($status, ['paid', 'prepaid'], true)) {
+                $partner = $delivery->partner ?? $delivery->sender;
+                if ($partner && (int) $partner->wallet_balance >= $fee) {
+                    $this->wallet->debit($partner, $fee, 'delivery_payment', "Partner package PKG-" . str_pad((string) $delivery->id, 6, '0', STR_PAD_LEFT) . ' fee', $delivery);
+                    $status = 'paid';
+                } else {
+                    $status = 'unpaid';
+                }
+            } elseif (in_array($method, self::ONLINE_METHODS, true)) {
+                $status = self::statusAfterSettlement($method, $status);
+            } else {
+                $status = in_array($status, ['paid', 'prepaid'], true) ? $status : 'unpaid';
+            }
+
+            $record = TransactionRecord::create([
+                'reference_type' => Delivery::class,
+                'reference_id'   => $delivery->id,
+                'payer_id'       => $delivery->partner_id,
+                'payee_id'       => $driver?->id,
+                'type'           => 'delivery_payment',
+                'payment_method' => $method,
+                'payment_by'     => $delivery->payment_by ?? 'sender',
+                'gross_amount'   => $fee,
+                'platform_fee'   => $fee,   // all ROTEH revenue
+                'company_share'  => 0,
+                'driver_earning' => 0,      // staff driver — salary
+                'status'         => 'completed',
+                'note'           => 'Partner package #' . $delivery->id . ' (staff driver, fee to ROTEH)',
+            ]);
+
+            $delivery->update(['payment_status' => $status]);
 
             return $record;
         });

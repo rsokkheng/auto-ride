@@ -679,7 +679,10 @@
                         <select name="driver_id" class="form-control" required>
                             <option value="">— Choose a driver —</option>
                             @php
-                                $drivers = \App\Models\User::where('role', 'driver')->orderBy('name')->get();
+                                // Partner packages: ROTEH staff (salaried) drivers only.
+                                $drivers = \App\Models\User::where('role', 'driver')
+                                    ->when($delivery->partner_id, fn ($q) => $q->where('driver_type', 'employee'))
+                                    ->orderBy('name')->get();
                             @endphp
                             @foreach($drivers as $dr)
                                 <option value="{{ $dr->id }}">{{ $dr->name }}{{ $dr->phone ? ' — '.$dr->phone : '' }}</option>

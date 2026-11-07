@@ -27,6 +27,9 @@
         <i class="fas fa-print mr-1"></i> Print list</a>
     <a class="btn btn-outline-success" href="{{ route('admin.partner-statements.overview.excel', $q(['date' => $date])) }}">
         <i class="fas fa-file-excel mr-1"></i> Excel</a>
+    <a class="btn btn-outline-dark" target="_blank" href="{{ route('admin.partner-statements.drivers', ['date' => $date]) }}"
+       title="Cash each ROTEH staff driver hands over (COD + receiver-paid fees)">
+        <i class="fas fa-motorcycle mr-1"></i> Driver cash</a>
 </x-admin.page-toolbar>
 
 {{-- Status cards — click to filter --}}

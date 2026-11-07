@@ -47,10 +47,12 @@ class DeliveryOfferService
     public function driversToOffer(Delivery $delivery): Collection
     {
         $service = $delivery->service_type ?? 'delivery';
+        // Partner packages are delivered by ROTEH staff drivers (salaried) only.
+        $staffOnly = fn ($q) => $delivery->partner_id ? $q->where('driver_type', 'employee') : $q;
 
         if ($delivery->pickup_lat === null || $delivery->pickup_lng === null) {
             return User::where('role', 'driver')->where('available', true)->withoutActiveTrip()
-                ->acceptingService($service)->withMinBalance()->whereNotNull('fcm_token')->get();
+                ->tap($staffOnly)->acceptingService($service)->withMinBalance()->whereNotNull('fcm_token')->get();
         }
 
         $radiusKm = (float) PricingSetting::get('delivery_match_radius_km', config('delivery.match_radius_km', 30));
@@ -59,6 +61,6 @@ class DeliveryOfferService
         return $nearby === []
             ? collect()
             : User::whereIn('id', array_keys($nearby))->where('role', 'driver')->where('available', true)->withoutActiveTrip()
-                ->acceptingService($service)->withMinBalance()->get();
+                ->tap($staffOnly)->acceptingService($service)->withMinBalance()->get();
     }
 }

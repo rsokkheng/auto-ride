@@ -789,6 +789,12 @@ class AdminController extends Controller
             ?? $commissionPct;
         $platformFee = (int) floor((($delivery->fee ?? 0) * $driverCommRate) / 100);
         $netDriver = max(0, ($delivery->fee ?? 0) - $platformFee);
+        // Partner package: ROTEH staff driver on salary — the whole fee is ROTEH's.
+        if ($delivery->partner_id) {
+            $driverCommRate = 100;
+            $platformFee    = (int) ($delivery->fee ?? 0);
+            $netDriver      = 0;
+        }
 
         return view('admin.delivery-detail', compact('delivery', 'commissionPct', 'driverCommRate', 'platformFee', 'netDriver'));
     }
@@ -966,6 +972,10 @@ class AdminController extends Controller
         $data = $request->validate([
             'driver_id' => 'required|exists:users,id',
         ]);
+
+        if ($delivery->partner_id && ! User::find($data['driver_id'])?->isSalariedStaff()) {
+            return back()->with('error', 'Partner packages can only be assigned to ROTEH staff drivers (salaried).');
+        }
 
         $delivery->update([
             'driver_id'       => $data['driver_id'],

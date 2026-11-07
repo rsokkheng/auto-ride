@@ -88,6 +88,20 @@ class PartnerStatementController extends Controller
         return Excel::download($export, 'ROTEH_partner_statements_' . $from->format('Ymd') . '.xlsx');
     }
 
+    /** Staff driver cash hand-over for the closing date (printable). */
+    public function adminDriverCash(Request $request)
+    {
+        [$from, $to] = PS::dayRange($request->query('date'));
+        $rows = $this->statements->driverCash($from, $to);
+
+        return view('statements.drivers', [
+            'rows' => $rows,
+            'date' => $from->toDateString(),
+            'backUrl' => route('admin.partner-statements', ['date' => $from->toDateString()]),
+            'autoPrint' => $request->boolean('print'),
+        ]);
+    }
+
     /** @return array{0: \Illuminate\Support\Collection, 1: \Carbon\Carbon} */
     private function overviewRows(Request $request): array
     {

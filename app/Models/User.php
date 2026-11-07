@@ -148,14 +148,32 @@ class User extends Authenticatable
     }
 
     /** Drivers whose wallet covers the minimum — the only ones offered jobs. */
+    /**
+     * Drivers whose wallet covers the minimum — the only ones offered jobs.
+     * ROTEH staff (salaried, driver_type = employee) pay no per-trip
+     * commission, so the wallet minimum doesn't apply to them.
+     */
     public function scopeWithMinBalance($query)
     {
-        return $query->where('wallet_balance', '>=', self::minDriverBalance());
+        return $query->where(fn ($q) => $q
+            ->where('wallet_balance', '>=', self::minDriverBalance())
+            ->orWhere('driver_type', 'employee'));
     }
 
     public function hasMinBalance(): bool
     {
-        return (int) $this->wallet_balance >= self::minDriverBalance();
+        return $this->isSalariedStaff() || (int) $this->wallet_balance >= self::minDriverBalance();
+    }
+
+    /** ROTEH staff driver on a salary — delivers Partner packages, earns nothing per trip. */
+    public function isSalariedStaff(): bool
+    {
+        return $this->role === 'driver' && $this->driver_type === 'employee';
+    }
+
+    public function scopeSalariedStaff($query)
+    {
+        return $query->where('role', 'driver')->where('driver_type', 'employee');
     }
 
     // ── Service modes (driver app's Ride / Delivery / Rental toggles) ───────

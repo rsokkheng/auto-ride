@@ -117,7 +117,7 @@ class PartnerStatementService
         $done = $cond['completed'];
         $select[] = "SUM(CASE WHEN {$done} THEN package_amount ELSE 0 END) AS cod_collected";
         $select[] = "SUM(CASE WHEN {$done} THEN fee ELSE 0 END) AS service_fees";
-        $owed = "(CASE WHEN payment_by <> 'recipient' AND COALESCE(payment_status,'') NOT IN ('paid','prepaid') THEN fee ELSE 0 END)";
+        $owed = "(CASE WHEN payment_by <> 'recipient' AND NOT (COALESCE(payment_method,'cash') IN ('wallet','aba','acleda') AND COALESCE(payment_status,'') IN ('paid','prepaid')) THEN fee ELSE 0 END)";
         $select[] = "SUM(CASE WHEN {$done} THEN {$owed} ELSE 0 END) AS fees_from_cod";
         $select[] = "SUM(CASE WHEN {$done} THEN package_amount + (CASE WHEN payment_by = 'recipient' THEN fee ELSE 0 END) ELSE 0 END) AS total_collected";
         $select[] = "SUM(CASE WHEN {$done} AND package_amount - {$owed} > 0 THEN package_amount - {$owed} ELSE 0 END) AS roteh_pays";
@@ -158,6 +158,55 @@ class PartnerStatementService
                     'net_to_partner'    => (int) $r->roteh_pays - (int) $r->partner_pays - $failedFees,
                 ]];
             });
+    }
+
+    /**
+     * Staff driver cash hand-over for a closing day. Staff drivers are on a
+     * salary: everything they collect for Partner packages belongs to ROTEH.
+     *   cash to hand over = COD collected + delivery fees the receiver paid in cash
+     * Plus the packages they must bring back to shops (not delivered).
+     * @return Collection<int, array>
+     */
+    public function driverCash(Carbon $from, Carbon $to): Collection
+    {
+        $appTz = config('app.timezone');
+        [$a, $b] = [$from->copy()->setTimezone($appTz), $to->copy()->setTimezone($appTz)];
+
+        $rows = Delivery::whereNotNull('partner_id')->whereNotNull('driver_id')
+            ->where(fn ($q) => $q
+                ->where(fn ($w) => $w->whereIn('status', ['delivered', 'completed'])->whereBetween('completed_at', [$a, $b]))
+                ->orWhere(fn ($w) => $w->where('status', 'delivery_failed')->whereBetween('failed_at', [$a, $b]))
+                ->orWhere(fn ($w) => $w->where('status', 'returned')->whereBetween('returned_at', [$a, $b])))
+            ->with(['driver:id,name,phone,driver_type', 'partner:id,name,company_name', 'partner.partnerProfile:id,user_id,business_name'])
+            ->orderBy('completed_at')
+            ->get();
+
+        return $rows->groupBy('driver_id')->map(function (Collection $list) {
+            $driver = $list->first()->driver;
+            $done   = $list->filter(fn ($d) => in_array($d->status, ['delivered', 'completed'], true));
+            $cashFee = fn ($d) => $d->payment_by === 'recipient' && ($d->payment_method ?? 'cash') === 'cash' ? (int) $d->fee : 0;
+            $cod = (int) $done->sum('package_amount');
+            $fees = (int) $done->sum($cashFee);
+            return [
+                'driver'          => $driver,
+                'delivered'       => $done->count(),
+                'cod_collected'   => $cod,
+                'cash_fees'       => $fees,
+                'cash_to_hand_over' => $cod + $fees,
+                'returning'       => $list->where('status', 'delivery_failed')->count(),
+                'returned'        => $list->where('status', 'returned')->count(),
+                'packages'        => $list->map(fn (Delivery $d) => [
+                    'code'      => 'PKG-' . str_pad((string) $d->id, 6, '0', STR_PAD_LEFT),
+                    'partner'   => $d->partner?->partnerProfile?->business_name ?: ($d->partner?->company_name ?: $d->partner?->name),
+                    'status'    => $d->packageStatus(),
+                    'reason'    => $d->failure_reason,
+                    'receiver'  => $d->recipient_name,
+                    'cod'       => in_array($d->status, ['delivered', 'completed'], true) ? (int) $d->package_amount : 0,
+                    'cash_fee'  => in_array($d->status, ['delivered', 'completed'], true) ? $cashFee($d) : 0,
+                    'time'      => ($d->completed_at ?? $d->returned_at ?? $d->failed_at)?->copy()->setTimezone(self::tz())->format('H:i'),
+                ])->values()->all(),
+            ];
+        })->sortByDesc('cash_to_hand_over')->values();
     }
 
     /** Every package of the day with its status group — the "All packages" report. */
@@ -291,7 +340,10 @@ class PartnerStatementService
     {
         $fee = (int) $d->fee;
         $cod = (int) $d->package_amount;
-        $prepaid = in_array($d->payment_status, ['paid', 'prepaid'], true);
+        // Prepaid only when the Partner really paid up front (wallet / ABA) —
+        // a cash fee is settled from the COD or on this statement.
+        $prepaid = in_array($d->payment_method, ['wallet', 'aba', 'acleda'], true)
+            && in_array($d->payment_status, ['paid', 'prepaid'], true);
         [$paidBy, $fromCod] = match (true) {
             $d->payment_by === 'recipient' => ['receiver', 0],
             $prepaid                       => ['partner_prepaid', 0],

@@ -107,7 +107,7 @@ class PartnerPackageTest extends TestCase
         Storage::disk('public')->assertExists($d->package_photo);
 
         // Drivers don't see it before ROTEH confirms.
-        $driver = User::factory()->create(['role' => 'driver', 'api_token' => 'd-' . uniqid(), 'token_expires_at' => now()->addHour(), 'available' => true]);
+        $driver = User::factory()->create(['role' => 'driver', 'driver_type' => 'employee', 'api_token' => 'd-' . uniqid(), 'token_expires_at' => now()->addHour(), 'available' => true]);
         $this->as($driver)->getJson('/api/v1/deliveries/available')->assertJsonCount(0, 'data.deliveries.data');
 
         $admin = User::factory()->create(['role' => 'admin']);

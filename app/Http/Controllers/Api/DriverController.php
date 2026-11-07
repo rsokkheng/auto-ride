@@ -133,7 +133,7 @@ class DriverController extends ApiController
 
         // Block going online when wallet balance is below minimum
         $minBalance = (int) PricingSetting::get('driver_min_balance_khr', 50000);
-        if ($data['available'] && $user->wallet_balance < $minBalance) {
+        if ($data['available'] && ! $user->hasMinBalance()) {
             return response()->json([
                 'success'         => false,
                 'message'         => 'Your wallet balance is too low to go online. Please top up at least ' . number_format($minBalance) . ' ៛ to continue.',
@@ -172,7 +172,7 @@ class DriverController extends ApiController
         }
 
         $minBalance = (int) PricingSetting::get('driver_min_balance_khr', 50000);
-        if ($user->wallet_balance < $minBalance) {
+        if (! $user->hasMinBalance()) {
             return response()->json([
                 'success'         => false,
                 'message'         => 'Your wallet balance is too low to go online. Please top up at least ' . number_format($minBalance) . ' ៛ to continue.',

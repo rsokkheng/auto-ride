@@ -92,6 +92,8 @@ class DeliveryController extends ApiController
         $deliveries = Delivery::with(['sender', 'vehicle'])
             ->whereIn('status', ['requested', 'pending'])
             ->whereNull('driver_id')
+            // Partner packages are for ROTEH staff drivers only.
+            ->when(! $user->isSalariedStaff(), fn ($q) => $q->whereNull('partner_id'))
             ->when($busy, fn ($q) => $q->whereRaw('1 = 0'))
             ->when($dismissed->isNotEmpty(), fn ($q) => $q->whereNotIn('id', $dismissed))
             ->orderBy('created_at')
@@ -547,6 +549,14 @@ class DeliveryController extends ApiController
             return response()->json([
                 'message' => "Delivery cannot be accepted — current status is \"{$delivery->status}\".",
             ], 422);
+        }
+
+        // Partner packages are delivered by ROTEH staff (salaried) drivers only.
+        if ($delivery->partner_id && ! $user->isSalariedStaff()) {
+            return response()->json([
+                'message' => 'Partner packages are delivered by ROTEH staff drivers only.',
+                'code'    => 'staff_only',
+            ], 403);
         }
 
         // For partner-assigned deliveries, only the assigned driver can accept.
