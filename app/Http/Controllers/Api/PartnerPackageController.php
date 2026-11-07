@@ -299,9 +299,54 @@ class PartnerPackageController extends ApiController
             'period' => 'nullable|in:day,week,month',
             'date'   => 'nullable|date_format:Y-m-d',
         ]);
-        $period = $data['period'] ?? 'day';
+        [$payload] = $this->buildReport($user, $data['period'] ?? 'day', $data['date'] ?? null);
+
+        return $this->success($payload);
+    }
+
+    /**
+     * GET /v1/partner/packages/report/export?period=&date=&format=pdf|xlsx
+     * The same report as a file the Partner can save or share.
+     */
+    public function exportReport(Request $request)
+    {
+        if ($deny = $this->denyUnlessPartner($user = $this->authUser($request))) return $deny;
+
+        $data = $request->validate([
+            'period' => 'nullable|in:day,week,month',
+            'date'   => 'nullable|date_format:Y-m-d',
+            'format' => 'required|in:pdf,xlsx',
+        ]);
+        [$report, $rows] = $this->buildReport($user, $data['period'] ?? 'day', $data['date'] ?? null, withPackages: true);
+
+        $business = $user->partnerProfile?->business_name ?: ($user->company_name ?: $user->name);
+        $name = 'ROTEH_report_' . $report['period'] . '_' . $report['from'] . ($report['from'] !== $report['to'] ? '_' . $report['to'] : '');
+
+        if ($data['format'] === 'xlsx') {
+            return \Maatwebsite\Excel\Facades\Excel::download(
+                new \App\Exports\PartnerReportExport($report, $rows, $business), $name . '.xlsx');
+        }
+
+        // dompdf is memory hungry: give this request room, and keep the PDF's
+        // package table to a printable size (Excel always has every package).
+        @ini_set('memory_limit', '512M');
+        $pdfLimit = 500;
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('partner.report-pdf', [
+                'report' => $report, 'rows' => $rows->take($pdfLimit), 'business' => $business,
+                'hiddenRows' => max(0, $rows->count() - $pdfLimit),
+                'generatedAt' => now(config('ride.local_timezone', 'Asia/Phnom_Penh')),
+            ])
+            ->setPaper('a4', 'portrait')
+            ->setOptions(['isHtml5ParserEnabled' => true, 'isRemoteEnabled' => false])
+            ->download($name . '.pdf');
+    }
+
+    /** @return array{0: array, 1: \Illuminate\Support\Collection} report payload, package rows */
+    private function buildReport(User $user, string $period, ?string $date, bool $withPackages = false): array
+    {
         $tz     = config('ride.local_timezone', 'Asia/Phnom_Penh');
-        $anchor = isset($data['date']) ? \Carbon\Carbon::parse($data['date'], $tz) : now($tz);
+        $anchor = $date ? \Carbon\Carbon::parse($date, $tz) : now($tz);
 
         [$from, $to] = match ($period) {
             'week'  => [$anchor->copy()->startOfWeek(\Carbon\Carbon::MONDAY), $anchor->copy()->endOfWeek(\Carbon\Carbon::SUNDAY)],
@@ -312,7 +357,8 @@ class PartnerPackageController extends ApiController
         $appTz = config('app.timezone');
         $rows = Delivery::where('partner_id', $user->id)
             ->whereBetween('created_at', [$from->copy()->setTimezone($appTz), $to->copy()->setTimezone($appTz)])
-            ->get(['id', 'status', 'fee', 'package_amount', 'failure_reason', 'created_at', 'completed_at']);
+            ->orderBy('created_at')
+            ->get($withPackages ? ['*'] : ['id', 'status', 'fee', 'package_amount', 'failure_reason', 'created_at', 'completed_at']);
 
         // Buckets: hours of the day, or days of the week / month.
         $buckets = [];
@@ -367,7 +413,7 @@ class PartnerPackageController extends ApiController
 
         $handled = $totals['completed'] + $totals['failed'] + $totals['returned'];
 
-        return $this->success([
+        return [[
             'period'       => $period,
             'from'         => $from->toDateString(),
             'to'           => $to->toDateString(),
@@ -377,7 +423,7 @@ class PartnerPackageController extends ApiController
             'avg_delivery_minutes' => $minutes ? (int) round(array_sum($minutes) / count($minutes)) : null,
             'failure_reasons' => $reasons,
             'series'       => collect($buckets)->map(fn ($v, $k) => ['key' => (string) $k] + $v)->values()->all(),
-        ]);
+        ], $rows];
     }
 
     // ── Shared with the admin panel ───────────────────────────────────────────

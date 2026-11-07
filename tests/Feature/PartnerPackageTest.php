@@ -31,7 +31,7 @@ class PartnerPackageTest extends TestCase
         ]);
     }
 
-    private function as(User $u): static
+    protected function as(User $u): static
     {
         return $this->withHeaders(['Authorization' => 'Bearer ' . $u->api_token]);
     }
@@ -258,5 +258,23 @@ class PartnerPackageTest extends TestCase
         $this->as($p)->getJson('/api/v1/partner/packages/report?period=month&date=2026-11-04')
             ->assertJsonPath('data.totals.total', 5)->assertJsonPath('data.totals.in_progress', 1)
             ->assertJsonCount(30, 'data.series');
+    }
+
+    public function test_report_exports_pdf_and_excel(): void
+    {
+        $p = $this->partner();
+        $this->as($p)->postJson('/api/v1/partner/packages', $this->packagePayload(['recipient_name' => 'សុខា']));
+
+        $pdf = $this->as($p)->get('/api/v1/partner/packages/report/export?period=month&format=pdf');
+        $pdf->assertOk();
+        $this->assertStringContainsString('application/pdf', $pdf->headers->get('content-type'));
+        $this->assertStringStartsWith('%PDF', $pdf->getContent());
+
+        $xlsx = $this->as($p)->get('/api/v1/partner/packages/report/export?period=week&format=xlsx');
+        $xlsx->assertOk();
+        $this->assertStringContainsString('.xlsx', $xlsx->headers->get('content-disposition'));
+
+        // Normal passengers can't export.
+        $this->as($this->user())->get('/api/v1/partner/packages/report/export?format=pdf', ['Accept' => 'application/json'])->assertStatus(403);
     }
 }
