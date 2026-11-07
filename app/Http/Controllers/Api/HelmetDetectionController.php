@@ -21,9 +21,17 @@ class HelmetDetectionController extends ApiController
         $request->validate(['image' => 'required|file|mimes:jpeg,jpg,png,webp|max:5120']);
 
         $imageData = base64_encode(file_get_contents($request->file('image')->getRealPath()));
-        $apiKey    = config('services.google_vision.key');
+        // A dedicated Vision key, else the project's Google Maps key (works once
+        // "Cloud Vision API" is enabled on that Google Cloud project).
+        $apiKey    = config('services.google_vision.key') ?: config('services.google_maps.key');
+        if (! $apiKey) {
+            return response()->json([
+                'data' => null, 'code' => 'not_configured',
+                'message' => 'Helmet check is not set up yet. Please contact support.',
+            ], 503);
+        }
 
-        $response = Http::post("https://vision.googleapis.com/v1/images:annotate?key={$apiKey}", [
+        $response = Http::timeout(20)->post("https://vision.googleapis.com/v1/images:annotate?key={$apiKey}", [
             'requests' => [[
                 'image'    => ['content' => $imageData],
                 'features' => [
@@ -34,7 +42,11 @@ class HelmetDetectionController extends ApiController
         ]);
 
         if (! $response->successful()) {
-            return response()->json(['data' => null, 'message' => 'Vision API error.'], 502);
+            report(new \RuntimeException('Vision API ' . $response->status() . ': ' . substr($response->body(), 0, 300)));
+            return response()->json([
+                'data' => null, 'code' => 'vision_error',
+                'message' => 'Could not check the photo right now. Please try again.',
+            ], 502);
         }
 
         $annotations = $response->json('responses.0.labelAnnotations', []);
@@ -71,7 +83,8 @@ class HelmetDetectionController extends ApiController
         $passed = $confidence >= 0.60;
 
         return $this->success([
-            'passed'     => $passed,
+            'passed'          => $passed,
+            'helmet_detected' => $passed, // name the driver app reads
             'confidence' => round($confidence, 3),
             'label'      => $helmetLabel,
             'labels'     => array_map(fn ($l) => [

@@ -39,7 +39,8 @@ class PaymentService
      */
     public function settleDelivery(Delivery $delivery): ?TransactionRecord
     {
-        if ($delivery->fee <= 0 || $delivery->payment_status === 'paid') {
+        // 'awaiting_payment' = already settled, only the ABA payment is missing.
+        if ($delivery->fee <= 0 || in_array($delivery->payment_status, ['paid', 'awaiting_payment'], true)) {
             return null;
         }
 
@@ -86,10 +87,24 @@ class PaymentService
                 'note'           => "Delivery #{$delivery->id}",
             ]);
 
-            $delivery->update(['payment_status' => 'paid']);
+            $delivery->update(['payment_status' => self::statusAfterSettlement($method, $delivery->payment_status)]);
 
             return $record;
         });
+    }
+
+    /** ABA / ACLEDA methods are collected through ABA PayWay, not by the driver. */
+    public const ONLINE_METHODS = ['aba', 'acleda'];
+
+    /**
+     * Payment status once a trip is settled. Cash / wallet are paid at this
+     * point; an ABA trip is only paid once PayWay confirms — before that it
+     * stays 'awaiting_payment' (the passenger pays from the receipt).
+     */
+    public static function statusAfterSettlement(string $method, ?string $current): string
+    {
+        if (! in_array($method, self::ONLINE_METHODS, true)) return 'paid';
+        return in_array($current, ['paid', 'prepaid'], true) ? 'paid' : 'awaiting_payment';
     }
 
     // ── Ride ─────────────────────────────────────────────────────────────────
@@ -134,7 +149,7 @@ class PaymentService
                 'note'           => "Ride #{$ride->id}",
             ]);
 
-            $ride->update(['payment_status' => 'paid']);
+            $ride->update(['payment_status' => self::statusAfterSettlement($method, $ride->payment_status)]);
 
             return $record;
         });

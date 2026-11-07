@@ -85,6 +85,11 @@ class QrPaymentController extends ApiController
      */
     public function webhook(Request $request)
     {
+        // Disabled: it had no signature check, so anyone could mark a QR
+        // "paid" and get the wallet credited. Real payments go through ABA
+        // PayWay (PayWayController / PayWayService), confirmed server-side.
+        return response()->json(['ok' => false, 'message' => 'Gone — use ABA PayWay.'], 410);
+
         $data = $request->validate([
             'reference' => 'required|string',
             'bank_ref'  => 'required|string',

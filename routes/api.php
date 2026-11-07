@@ -64,6 +64,8 @@ Route::prefix('v1')->group(function () {
     Route::post('auth/otp/send',    [AuthController::class, 'sendOTP'])->middleware('throttle:otp-send');
     Route::post('auth/otp/verify',  [AuthController::class, 'verifyOTP'])->middleware('throttle:otp-verify');
     Route::post('shop/guest-phone/verify', [AuthController::class, 'verifyGuestPhone'])->middleware('throttle:otp-verify');
+    // ABA PayWay notification — public; only triggers a signed Check Transaction.
+    Route::post('payments/payway/callback', [\App\Http\Controllers\Api\PayWayController::class, 'callback'])->middleware('throttle:120,1');
     Route::post('auth/phone/verify',[AuthController::class, 'verifyPhone']);
     Route::post('auth/firebase-token', [AuthController::class, 'firebaseToken']);
     Route::get('auth/fcm-token',       [AuthController::class, 'getFcmToken']);
@@ -394,6 +396,10 @@ Route::prefix('v1')->group(function () {
 
     // ── QR Payment ────────────────────────────────────────────────────────────
     Route::post('payments/qr/generate', [QrPaymentController::class, 'generate']);
+    // ABA PayWay KHQR (real payments) — see App\Services\PayWayService.
+    Route::post('payments/payway/khqr', [\App\Http\Controllers\Api\PayWayController::class, 'createKhqr']);
+    Route::post('payments/payway/order', [\App\Http\Controllers\Api\PayWayController::class, 'createForOrder']);
+    Route::get('payments/payway/{tranId}', [\App\Http\Controllers\Api\PayWayController::class, 'status']);
     Route::get('payments/qr', [QrPaymentController::class, 'index']);
     Route::get('payments/qr/{reference}/status', [QrPaymentController::class, 'status']);
     Route::post('payments/qr/webhook', [QrPaymentController::class, 'webhook']);

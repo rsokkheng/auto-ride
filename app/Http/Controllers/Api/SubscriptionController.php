@@ -49,7 +49,7 @@ class SubscriptionController extends ApiController
 
         $data = $request->validate([
             'plan_slug'      => 'required|string|exists:subscription_plans,slug',
-            'payment_method' => 'required|in:wallet,aba,acleda,card,qr',
+            'payment_method' => 'required|in:wallet,aba,acleda',
             'auto_renew'     => 'boolean',
         ]);
 
@@ -94,10 +94,18 @@ class SubscriptionController extends ApiController
             default   => now()->addMonth(),
         };
 
+        // ABA / ACLEDA: the plan starts once ABA PayWay confirms the payment
+        // (POST /payments/payway/order type=subscription). Before, a card/QR
+        // "payment" activated the plan with no money taken.
+        $online = $data['payment_method'] !== 'wallet';
+        if ($online) {
+            UserSubscription::where('user_id', $user->id)->where('status', 'pending')->update(['status' => 'cancelled']);
+        }
+
         $sub = UserSubscription::create([
             'user_id'              => $user->id,
             'subscription_plan_id' => $plan->id,
-            'status'               => 'active',
+            'status'               => $online ? 'pending' : 'active',
             'payment_method'       => $data['payment_method'],
             'started_at'           => now(),
             'expires_at'           => $expiresAt,
@@ -110,15 +118,15 @@ class SubscriptionController extends ApiController
             'subscription_plan_id' => $plan->id,
             'amount_khr'           => $plan->price_khr,
             'type'                 => 'subscribe',
-            'status'               => 'paid',
+            'status'               => $online ? 'pending' : 'paid',
             'payment_method'       => $data['payment_method'],
             'reference'            => 'SUB-' . strtoupper(uniqid()),
-            'paid_at'              => now(),
+            'paid_at'              => $online ? null : now(),
         ]);
 
         return response()->json([
             'data'    => $this->formatSubscription($sub->load('plan')),
-            'message' => "Subscribed to {$plan->name} plan. Enjoy your benefits!",
+            'message' => $online ? 'Complete the ABA payment to start your plan.' : "Subscribed to {$plan->name} plan. Enjoy your benefits!",
         ], 201);
     }
 
@@ -183,7 +191,7 @@ class SubscriptionController extends ApiController
 
         $data = $request->validate([
             'plan_slug'      => 'required|string|exists:subscription_plans,slug',
-            'payment_method' => 'required|in:wallet,aba,acleda,card,qr',
+            'payment_method' => 'required|in:wallet,aba,acleda',
         ]);
 
         $current = UserSubscription::where('user_id', $user->id)
@@ -196,8 +204,13 @@ class SubscriptionController extends ApiController
             return response()->json(['message' => 'Already on this plan.'], 422);
         }
 
-        // Cancel current if exists
-        if ($current) {
+        // ABA / ACLEDA: the new plan waits for the PayWay payment and the
+        // current one keeps running until then (PayWayService activates the
+        // new plan and cancels the old). Before, it switched with no payment.
+        $online = $data['payment_method'] !== 'wallet';
+        if ($online) {
+            UserSubscription::where('user_id', $user->id)->where('status', 'pending')->update(['status' => 'cancelled']);
+        } elseif ($current) {
             $current->update(['status' => 'cancelled', 'cancelled_at' => now(), 'auto_renew' => false]);
         }
 
@@ -228,7 +241,7 @@ class SubscriptionController extends ApiController
         $sub = UserSubscription::create([
             'user_id'              => $user->id,
             'subscription_plan_id' => $newPlan->id,
-            'status'               => 'active',
+            'status'               => $online ? 'pending' : 'active',
             'payment_method'       => $data['payment_method'],
             'started_at'           => now(),
             'expires_at'           => $expiresAt,
@@ -241,15 +254,15 @@ class SubscriptionController extends ApiController
             'subscription_plan_id' => $newPlan->id,
             'amount_khr'           => $newPlan->price_khr,
             'type'                 => 'subscribe',
-            'status'               => 'paid',
+            'status'               => $online ? 'pending' : 'paid',
             'payment_method'       => $data['payment_method'],
             'reference'            => 'SUB-' . strtoupper(uniqid()),
-            'paid_at'              => now(),
+            'paid_at'              => $online ? null : now(),
         ]);
 
         return response()->json([
             'data'    => $this->formatSubscription($sub->load('plan')),
-            'message' => "Switched to {$newPlan->name} plan.",
+            'message' => $online ? 'Complete the ABA payment to switch plans.' : "Switched to {$newPlan->name} plan.",
         ]);
     }
 

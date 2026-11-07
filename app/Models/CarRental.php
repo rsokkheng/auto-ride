@@ -13,6 +13,7 @@ class CarRental extends Model
         'guest_name',
         'guest_phone',
         'guest_token',
+        'payment_status',
         'guest_fcm_token',
         'vehicle_id',
         'marketplace_product_id',
