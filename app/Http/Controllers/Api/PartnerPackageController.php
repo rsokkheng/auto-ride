@@ -120,7 +120,8 @@ class PartnerPackageController extends ApiController
             'package_size'      => 'required|in:small,medium,large,extra_large',
             'service_option'    => 'nullable|in:normal,express',
             'package_amount'    => 'nullable|integer|min:0|max:100000000', // COD item price collected from the recipient
-            'payment_by'        => 'nullable|in:sender,recipient',
+            // The fee is always charged to the Partner: cash = taken from the
+            // COD / paid on the daily statement; or prepaid by ROTEH Pay / ABA.
             'payment_method'    => 'nullable|in:cash,wallet,aba,acleda',
             'partner_reference' => 'nullable|string|max:100',
             'notes'             => 'nullable|string|max:500',
@@ -128,9 +129,8 @@ class PartnerPackageController extends ApiController
         ]);
 
         $option    = $data['service_option'] ?? 'normal';
-        $paymentBy = $data['payment_by'] ?? 'sender';
-        // The recipient can only pay the driver in cash.
-        $method    = $paymentBy === 'recipient' ? 'cash' : ($data['payment_method'] ?? 'cash');
+        $paymentBy = 'sender';
+        $method    = $data['payment_method'] ?? 'cash';
         // Fee is always the server's price — never the app's.
         $fee       = PartnerContract::feeFor($user, $option, $data['package_size']);
 

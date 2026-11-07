@@ -14,7 +14,7 @@ class PartnerStatementExport implements WithMultipleSheets
     {
         $s = $this->s; $m = $s['summary'];
         $date = $s['from'] === $s['to'] ? $s['from'] : "{$s['from']} → {$s['to']}";
-        $paidBy = ['receiver' => 'Receiver / អ្នកទទួល', 'partner_prepaid' => 'Partner prepaid / បង់រួច', 'partner_from_cod' => 'From COD / កាត់ពី COD'];
+        $paidBy = ['partner_prepaid' => 'Partner prepaid / ដៃគូបង់រួច', 'partner_from_cod' => 'From COD / កាត់ពី COD', 'partner_pays' => 'Partner pays ROTEH / ដៃគូបង់'];
 
         $summary = [
             ['ROTEH Partner Statement / របាយការណ៍ដៃគូ — ' . $s['statement_no']],
@@ -25,10 +25,9 @@ class PartnerStatementExport implements WithMultipleSheets
             ['Successful / កញ្ចប់ដឹកជោគជ័យ', $m['successful_count']],
             ['· with COD / មាន COD', $m['cod_packages']],
             ['· without COD / គ្មាន COD', $m['non_cod_packages']],
-            ['Total collected (COD + fee) / ប្រាក់សរុបបានប្រមូល (៛)', $m['total_collected']],
-            ['COD collected / COD បានប្រមូល (៛)', $m['cod_collected']],
-            ['ROTEH delivery fees / ថ្លៃដឹក ROTEH (៛)', $m['service_fees']],
-            ['· paid by receiver / អ្នកទទួលបង់', $m['fees_paid_by_receiver']],
+            ['COD collected from receivers / COD បានប្រមូល (៛)', $m['cod_collected']],
+            ['ROTEH delivery fees (charged to partner) / ថ្លៃដឹក ROTEH (៛)', $m['service_fees']],
+            ['Delivery fees settled by / ការទូទាត់ថ្លៃដឹក', ''],
             ['· prepaid by partner / ដៃគូបង់រួច', $m['fees_prepaid']],
             ['· deducted from COD / កាត់ពី COD', $m['fees_from_cod'] - $m['failed_fees']],
             [],
@@ -47,16 +46,16 @@ class PartnerStatementExport implements WithMultipleSheets
         ];
 
         $ok = [['#', 'Code', 'Reference', 'Delivered at / ពេលដឹកដល់', 'Receiver / អ្នកទទួល', 'Phone', 'Address / អាសយដ្ឋាន',
-            'Size', 'Express', 'Driver / អ្នកបើកបរ', 'COD (៛)', 'Delivery fee (៛)', 'Fee paid by / អ្នកបង់ថ្លៃដឹក',
-            'Total collected (៛)', 'ROTEH pays partner (៛)', 'Partner pays ROTEH (៛)']];
+            'Size', 'Express', 'Driver / អ្នកបើកបរ', 'COD (៛)', 'Delivery fee (៛)', 'Fee settled / ការទូទាត់ថ្លៃដឹក',
+            'ROTEH pays partner (៛)', 'Partner pays ROTEH (៛)']];
         foreach ($s['successful'] as $i => $r) {
             $ok[] = [$i + 1, $r['code'], $r['reference'], $r['completed_at'], $r['receiver_name'], $r['receiver_phone'], $r['dropoff_address'],
                 $r['package_size'], $r['express'] ? 'Yes' : '', $r['driver'], $r['cod_collected'], $r['fee'], $paidBy[$r['fee_paid_by']] ?? $r['fee_paid_by'],
-                $r['total_collected'], $r['roteh_pays_partner'], $r['partner_pays_roteh']];
+                $r['roteh_pays_partner'], $r['partner_pays_roteh']];
         }
         $okRows = collect($s['successful']);
         $ok[] = ['', 'TOTAL / សរុប', '', '', '', '', '', '', '', '', $m['cod_collected'], $m['service_fees'], '',
-            $m['total_collected'], $okRows->sum('roteh_pays_partner'), $okRows->sum('partner_pays_roteh')];
+            $okRows->sum('roteh_pays_partner'), $okRows->sum('partner_pays_roteh')];
 
         $bad = [['#', 'Code', 'Reference', 'Status / ស្ថានភាព', 'Closed at / ពេលបិទ', 'Reason / មូលហេតុ', 'Note', 'Receiver / អ្នកទទួល', 'Phone',
             'Address / អាសយដ្ឋាន', 'Driver / អ្នកបើកបរ', 'COD not collected (៛)', 'Delivery fee (៛)', 'Partner pays ROTEH (៛)']];

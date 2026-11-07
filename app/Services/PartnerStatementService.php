@@ -16,15 +16,14 @@ use Illuminate\Support\Collection;
  *   • Successful  — packages completed that day (by completed_at)
  *   • Unsuccessful — not delivered / returned / cancelled that day
  *
- * Money per package:
- *   COD             = item price the driver collected from the receiver
- *   Delivery fee    = ROTEH service fee
- *   Total collected = COD + delivery fee when the receiver pays it
- *   ROTEH pays partner = COD − delivery fee the Partner still owes  (when ≥ 0)
- *   Partner pays ROTEH = delivery fee the Partner still owes − COD  (when > 0,
- *                        e.g. a package without COD that the Partner pays for)
- *   Balance          = Σ ROTEH pays − Σ Partner pays  (negative = Partner owes)
- * "Still owes" = the Partner pays the fee and did not prepay it (wallet/ABA).
+ * Money per package — ROTEH always charges the delivery fee to the Partner;
+ * the receiver pays only the item price (COD):
+ *   COD collected      = item price the driver collected from the receiver
+ *   Delivery fee       = ROTEH fee, charged to the Partner
+ *   ROTEH pays partner = COD − delivery fee            (when ≥ 0)
+ *   Partner pays ROTEH = delivery fee − COD            (when > 0, e.g. no COD)
+ *   Balance            = Σ ROTEH pays − Σ Partner pays (negative = Partner owes)
+ * A fee the Partner prepaid (ROTEH Pay / ABA) is not deducted again.
  * Unsuccessful packages collect no COD; a fee is charged only if admin set
  * `partner_failed_fee_percent` (default 0 = free).
  */
@@ -117,9 +116,9 @@ class PartnerStatementService
         $done = $cond['completed'];
         $select[] = "SUM(CASE WHEN {$done} THEN package_amount ELSE 0 END) AS cod_collected";
         $select[] = "SUM(CASE WHEN {$done} THEN fee ELSE 0 END) AS service_fees";
-        $owed = "(CASE WHEN payment_by <> 'recipient' AND NOT (COALESCE(payment_method,'cash') IN ('wallet','aba','acleda') AND COALESCE(payment_status,'') IN ('paid','prepaid')) THEN fee ELSE 0 END)";
+        $owed = "(CASE WHEN COALESCE(payment_method,'cash') IN ('wallet','aba','acleda') AND COALESCE(payment_status,'') IN ('paid','prepaid') THEN 0 ELSE fee END)";
         $select[] = "SUM(CASE WHEN {$done} THEN {$owed} ELSE 0 END) AS fees_from_cod";
-        $select[] = "SUM(CASE WHEN {$done} THEN package_amount + (CASE WHEN payment_by = 'recipient' THEN fee ELSE 0 END) ELSE 0 END) AS total_collected";
+        $select[] = "SUM(CASE WHEN {$done} THEN package_amount ELSE 0 END) AS total_collected";
         $select[] = "SUM(CASE WHEN {$done} AND package_amount - {$owed} > 0 THEN package_amount - {$owed} ELSE 0 END) AS roteh_pays";
         $select[] = "SUM(CASE WHEN {$done} AND {$owed} - package_amount > 0 THEN {$owed} - package_amount ELSE 0 END) AS partner_pays";
         $select[] = "SUM(CASE WHEN {$cond['failed']} OR {$cond['returned']} THEN fee ELSE 0 END) AS attempted_fees";
@@ -184,7 +183,8 @@ class PartnerStatementService
         return $rows->groupBy('driver_id')->map(function (Collection $list) {
             $driver = $list->first()->driver;
             $done   = $list->filter(fn ($d) => in_array($d->status, ['delivered', 'completed'], true));
-            $cashFee = fn ($d) => $d->payment_by === 'recipient' && ($d->payment_method ?? 'cash') === 'cash' ? (int) $d->fee : 0;
+            // The receiver pays only the COD — the fee is charged to the Partner.
+            $cashFee = fn ($d) => 0;
             $cod = (int) $done->sum('package_amount');
             $fees = (int) $done->sum($cashFee);
             return [
@@ -344,10 +344,11 @@ class PartnerStatementService
         // a cash fee is settled from the COD or on this statement.
         $prepaid = in_array($d->payment_method, ['wallet', 'aba', 'acleda'], true)
             && in_array($d->payment_status, ['paid', 'prepaid'], true);
+        // The fee is always the Partner's: prepaid, taken from the COD, or owed.
         [$paidBy, $fromCod] = match (true) {
-            $d->payment_by === 'recipient' => ['receiver', 0],
-            $prepaid                       => ['partner_prepaid', 0],
-            default                        => ['partner_from_cod', $fee],
+            $prepaid  => ['partner_prepaid', 0],
+            $cod > 0  => ['partner_from_cod', $fee],
+            default   => ['partner_pays', $fee],
         };
 
         return $this->base($d) + [
@@ -356,7 +357,7 @@ class PartnerStatementService
             'cod_collected'  => $cod,
             'fee_paid_by'    => $paidBy,        // receiver | partner_prepaid | partner_from_cod
             'fee_from_cod'   => $fromCod,
-            'total_collected' => $cod + ($paidBy === 'receiver' ? $fee : 0),
+            'total_collected' => $cod,   // the receiver pays only the item price
             'roteh_pays_partner' => max(0, $cod - $fromCod),
             'partner_pays_roteh' => max(0, $fromCod - $cod),
             'net_to_partner' => $cod - $fromCod,

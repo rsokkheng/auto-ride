@@ -6,7 +6,7 @@
         ? \Carbon\Carbon::parse($s['from'])->format('d/m/Y')
         : \Carbon\Carbon::parse($s['from'])->format('d/m/Y') . ' – ' . \Carbon\Carbon::parse($s['to'])->format('d/m/Y');
     $sizes = ['small' => 'តូច', 'medium' => 'មធ្យម', 'large' => 'ធំ', 'extra_large' => 'ធំខ្លាំង'];
-    $paidBy = ['receiver' => 'អ្នកទទួលបង់ · Receiver', 'partner_prepaid' => 'បង់រួច · Prepaid', 'partner_from_cod' => 'កាត់ពី COD · From COD'];
+    $paidBy = ['partner_prepaid' => 'ដៃគូបង់រួច · Prepaid', 'partner_from_cod' => 'កាត់ពី COD · From COD', 'partner_pays' => 'ដៃគូបង់ ROTEH · Partner pays'];
     $show = fn ($t) => $type === $t || ($type === 'both' && $t !== 'all');
     $groupTag = ['pending' => 't-can', 'confirmed' => 't-can', 'on_the_way' => 't-ret', 'completed' => 't-ok',
                  'failed' => 't-fail', 'returned' => 't-ret', 'cancelled' => 't-can'];
@@ -126,8 +126,8 @@ tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid 
     @endphp
     <div class="cards" style="grid-template-columns:repeat(5,1fr);">
         <div class="card"><div class="v">{{ $sum['successful_count'] }}</div><div class="l">កញ្ចប់ជោគជ័យ · Delivered<br>COD {{ $sum['cod_packages'] }} · គ្មាន COD {{ $sum['non_cod_packages'] }}</div></div>
-        <div class="card"><div class="v">{{ $k($sum['total_collected']) }} ៛</div><div class="l">ប្រាក់សរុបបានប្រមូល · Total collected (COD + fee)</div></div>
-        <div class="card"><div class="v">{{ $k($sum['service_fees']) }} ៛</div><div class="l">ថ្លៃដឹក ROTEH · ROTEH delivery fees</div></div>
+        <div class="card"><div class="v">{{ $k($sum['cod_collected']) }} ៛</div><div class="l">COD បានប្រមូលពីអ្នកទទួល · COD collected</div></div>
+        <div class="card"><div class="v">{{ $k($sum['service_fees']) }} ៛</div><div class="l">ថ្លៃដឹក ROTEH (គិតពីដៃគូ) · Delivery fees charged to partner</div></div>
         <div class="card hl"><div class="v">{{ $k($okPays) }} ៛</div><div class="l">ROTEH ត្រូវបង់ដៃគូ · ROTEH pays partner</div></div>
         <div class="card {{ $okOwes ? 'neg' : '' }}"><div class="v">{{ $k($okOwes) }} ៛</div><div class="l">ដៃគូត្រូវបង់ ROTEH · Partner pays ROTEH</div></div>
     </div>
@@ -139,8 +139,7 @@ tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid 
             <th>អ្នកទទួល<span class="en">Receiver</span></th>
             <th class="r">COD<span class="en">Item price</span></th>
             <th class="r">ថ្លៃដឹក<span class="en">Delivery fee</span></th>
-            <th>អ្នកបង់ថ្លៃដឹក<span class="en">Fee paid by</span></th>
-            <th class="r">សរុបបានប្រមូល<span class="en">Total collected</span></th>
+            <th>ការទូទាត់ថ្លៃដឹក<span class="en">Fee settled</span></th>
             <th class="r">ROTEH បង់ដៃគូ<span class="en">ROTEH pays partner</span></th>
             <th class="r">ដៃគូបង់ ROTEH<span class="en">Partner pays ROTEH</span></th>
         </tr></thead>
@@ -155,12 +154,11 @@ tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid 
                 <td class="r">{{ $r['cod_collected'] ? $k($r['cod_collected']) : 'គ្មាន COD' }}</td>
                 <td class="r">{{ $k($r['fee']) }}</td>
                 <td class="small">{{ $paidBy[$r['fee_paid_by']] ?? $r['fee_paid_by'] }}</td>
-                <td class="r">{{ $k($r['total_collected']) }}</td>
                 <td class="r" style="color:#047857;"><b>{{ $r['roteh_pays_partner'] ? $k($r['roteh_pays_partner']) : '—' }}</b></td>
                 <td class="r" style="color:#b91c1c;"><b>{{ $r['partner_pays_roteh'] ? $k($r['partner_pays_roteh']) : '—' }}</b></td>
             </tr>
         @empty
-            <tr><td colspan="10" class="empty">គ្មានកញ្ចប់ដឹកជោគជ័យនៅថ្ងៃនេះ · No delivered packages</td></tr>
+            <tr><td colspan="9" class="empty">គ្មានកញ្ចប់ដឹកជោគជ័យនៅថ្ងៃនេះ · No delivered packages</td></tr>
         @endforelse
         </tbody>
         @if(count($s['successful']))
@@ -169,7 +167,6 @@ tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid 
             <td class="r">{{ $k($sum['cod_collected']) }}</td>
             <td class="r">{{ $k($sum['service_fees']) }}</td>
             <td></td>
-            <td class="r">{{ $k($sum['total_collected']) }}</td>
             <td class="r">{{ $k($okPays) }}</td>
             <td class="r">{{ $k($okOwes) }}</td>
         </tr></tfoot>
@@ -180,9 +177,9 @@ tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid 
         <div class="amt">{{ $k(abs($okBal)) }} ៛</div>
     </div>
     <p class="note">
-        សរុបបានប្រមូល = COD + ថ្លៃដឹក (ពេលអ្នកទទួលបង់ថ្លៃដឹក)។ ROTEH បង់ដៃគូ = COD − ថ្លៃដឹកដែលដៃគូមិនទាន់បង់។
-        កញ្ចប់គ្មាន COD ហើយដៃគូជាអ្នកបង់ថ្លៃដឹក → ដៃគូបង់ថ្លៃដឹកឲ្យ ROTEH។
-        · Total collected = COD + delivery fee when the receiver pays it. ROTEH pays the partner the COD minus any delivery fee the partner has not paid; for a package without COD the partner pays ROTEH the delivery fee. Amounts in KHR (៛).
+        ថ្លៃដឹក ROTEH គិតពីដៃគូ — អ្នកទទួលបង់តែតម្លៃទំនិញ (COD)។ ROTEH បង់ដៃគូ = COD − ថ្លៃដឹក។ កញ្ចប់គ្មាន COD → ដៃគូបង់ថ្លៃដឹកឲ្យ ROTEH។
+        ថ្លៃដឹកដែលដៃគូបង់រួច (ROTEH Pay / ABA) មិនកាត់ម្តងទៀតទេ។
+        · ROTEH charges the delivery fee to the partner — the receiver pays only the item price (COD). ROTEH pays the partner COD − delivery fee; for a package without COD the partner pays ROTEH the fee. Fees prepaid by ROTEH Pay / ABA are not deducted again. Amounts in KHR (៛).
     </p>
     <div class="sign"><div>ROTEH (អ្នករៀបចំ · Prepared by)</div><div>ដៃគូ (អ្នកទទួល · Received by)</div></div>
 </div>

@@ -254,6 +254,15 @@ class Delivery extends Model
                 },
             ]);
         };
+        // Partner packages: ROTEH always charges the delivery fee to the Partner
+        // (taken from the COD, or the Partner pays) — the receiver pays only the
+        // item price. Enforced here so every path (app, website, API) agrees.
+        static::saving(function (Delivery $d) {
+            if ($d->partner_id && $d->payment_by !== 'sender') {
+                $d->payment_by = 'sender';
+            }
+        });
+
         static::created($record);
         static::updated(function (Delivery $d) use ($record) {
             if ($d->wasChanged('status')) $record($d);

@@ -91,22 +91,23 @@ class PartnerStaffDriverTest extends TestCase
             ->assertJsonPath('data.summary.roteh_pays_partner', 25000);
     }
 
-    public function test_receiver_pays_and_driver_cash_handover(): void
+    public function test_receiver_pays_only_cod_and_driver_cash_handover(): void
     {
+        // Even if "recipient" is sent, the fee is charged to the partner — the driver collects only the COD.
         $d = $this->package(['status' => 'in_progress', 'driver_id' => $this->staff->id, 'payment_by' => 'recipient']);
         $this->as($this->staff)->postJson("/api/v1/deliveries/{$d->id}/complete")->assertOk();
-        $this->assertSame('paid', $d->fresh()->payment_status);
+        $this->assertSame(['sender', 'unpaid'], [$d->fresh()->payment_by, $d->fresh()->payment_status]);
 
         $back = $this->package(['status' => 'in_progress', 'driver_id' => $this->staff->id]);
         $this->as($this->staff)->postJson("/api/v1/deliveries/{$back->id}/fail", ['reason' => 'cannot_contact'])->assertOk();
 
         $rows = app(\App\Services\PartnerStatementService::class)->driverCash(...\App\Services\PartnerStatementService::dayRange(null));
         $this->assertCount(1, $rows);
-        $this->assertSame([1, 30000, 5000, 35000, 1], [$rows[0]['delivered'], $rows[0]['cod_collected'], $rows[0]['cash_fees'], $rows[0]['cash_to_hand_over'], $rows[0]['returning']]);
+        $this->assertSame([1, 30000, 0, 30000, 1], [$rows[0]['delivered'], $rows[0]['cod_collected'], $rows[0]['cash_fees'], $rows[0]['cash_to_hand_over'], $rows[0]['returning']]);
 
         $admin = User::factory()->create(['role' => 'admin']);
         $this->actingAs($admin)->get(route('admin.partner-statements.drivers'))->assertOk()
-            ->assertSee('ប្រាក់ដែលអ្នកបើកបរត្រូវប្រគល់')->assertSee('35,000')->assertSee($this->staff->name);
+            ->assertSee('ប្រាក់ដែលអ្នកបើកបរត្រូវប្រគល់')->assertSee('30,000')->assertSee($this->staff->name);
     }
 
     public function test_admin_cannot_assign_partner_package_to_non_staff(): void

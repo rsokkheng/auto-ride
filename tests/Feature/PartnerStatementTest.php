@@ -31,7 +31,7 @@ class PartnerStatementTest extends TestCase
         PartnerProfile::create(['user_id' => $this->partner->id, 'business_name' => 'ហាងសុខា Shop', 'phone' => '012345678', 'status' => 'approved']);
 
         $at = fn (string $hm) => Carbon::parse("{$this->day} {$hm}", 'Asia/Phnom_Penh')->setTimezone(config('app.timezone'));
-        // Successful: receiver pays fee (COD 40k) · partner pays from COD (COD 30k) · partner prepaid ABA (no COD)
+        // Successful: COD 40k (created as "receiver pays" — still charged to the partner) · COD 30k · partner prepaid ABA (no COD)
         $this->pkg(['status' => 'completed', 'completed_at' => $at('09:00'), 'fee' => 5000, 'package_amount' => 40000, 'payment_by' => 'recipient']);
         $this->pkg(['status' => 'completed', 'completed_at' => $at('10:00'), 'fee' => 5000, 'package_amount' => 30000, 'payment_by' => 'sender', 'payment_method' => 'cash']);
         $this->pkg(['status' => 'completed', 'completed_at' => $at('11:00'), 'fee' => 10000, 'package_amount' => 0, 'payment_by' => 'sender', 'payment_method' => 'aba', 'payment_status' => 'paid']);
@@ -81,12 +81,12 @@ class PartnerStatementTest extends TestCase
           ->assertJsonPath('data.summary.cancelled_count', 1)
           ->assertJsonPath('data.summary.cod_collected', 70000)
           ->assertJsonPath('data.summary.service_fees', 20000)
-          ->assertJsonPath('data.summary.fees_paid_by_receiver', 5000)
+          ->assertJsonPath('data.summary.fees_paid_by_receiver', 0)
           ->assertJsonPath('data.summary.fees_prepaid', 10000)
-          ->assertJsonPath('data.summary.fees_from_cod', 5000)
+          ->assertJsonPath('data.summary.fees_from_cod', 10000)
           ->assertJsonPath('data.summary.cod_not_collected', 25000)
           ->assertJsonPath('data.summary.failed_fees', 0)
-          ->assertJsonPath('data.summary.net_to_partner', 65000) // 40k + (30k − 5k) + 0
+          ->assertJsonPath('data.summary.net_to_partner', 60000) // (40k − 5k) + (30k − 5k) + 0
           ->assertJsonPath('data.successful.1.fee_paid_by', 'partner_from_cod')
           ->assertJsonPath('data.unsuccessful.0.reason', 'cannot_contact');
     }
@@ -98,7 +98,7 @@ class PartnerStatementTest extends TestCase
 
         $this->api("/api/v1/partner/statements?date={$this->day}")
             ->assertJsonPath('data.summary.failed_fees', 5000)        // 2 attempts × 2,500
-            ->assertJsonPath('data.summary.net_to_partner', 60000);
+            ->assertJsonPath('data.summary.net_to_partner', 55000);
     }
 
     public function test_admin_index_print_and_excel(): void
@@ -106,7 +106,7 @@ class PartnerStatementTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
 
         $this->actingAs($admin)->get(route('admin.partner-statements', ['date' => $this->day]))
-            ->assertOk()->assertSee('ហាងសុខា Shop')->assertSee('65,000');
+            ->assertOk()->assertSee('ហាងសុខា Shop')->assertSee('60,000');
 
         $this->actingAs($admin)->get(route('admin.partner-statements.show', [$this->partner, 'date' => $this->day, 'type' => 'successful']))
             ->assertOk()->assertSee('របាយការណ៍កញ្ចប់ដឹកជោគជ័យ')->assertDontSee('របាយការណ៍កញ្ចប់ដឹកមិនបានជោគជ័យ')->assertSee('ដារ៉ា');
@@ -154,7 +154,7 @@ class PartnerStatementTest extends TestCase
         $mine = $ov[$this->partner->id];
         $this->assertSame(['pending' => 1, 'confirmed' => 1, 'on_the_way' => 1, 'completed' => 3, 'failed' => 1, 'returned' => 1, 'cancelled' => 1], $mine['counts']);
         $this->assertSame(9, $mine['total']);
-        $this->assertSame(65000, $mine['net_to_partner']);
+        $this->assertSame(60000, $mine['net_to_partner']);
         // Same numbers as the per-partner statement.
         $st = $this->api("/api/v1/partner/statements?date={$this->day}")->json('data.summary');
         $this->assertSame($mine['counts'], $st['status_counts']);
@@ -180,25 +180,41 @@ class PartnerStatementTest extends TestCase
         $this->pkg(['status' => 'completed', 'completed_at' => $at, 'fee' => 5000, 'package_amount' => 0, 'payment_by' => 'sender', 'payment_method' => 'cash']);
 
         $r = $this->api("/api/v1/partner/statements?date={$this->day}")->assertOk();
-        // 40k COD + 5k fee (receiver) · 30k COD (fee from COD) · 0 (prepaid) · 0 (no COD)
-        $r->assertJsonPath('data.summary.total_collected', 75000)
-          ->assertJsonPath('data.summary.roteh_pays_partner', 65000)   // 40k + 25k
+        // Receivers pay only COD: 40k · 30k · 0 (prepaid) · 0 (no COD)
+        $r->assertJsonPath('data.summary.total_collected', 70000)
+          ->assertJsonPath('data.summary.roteh_pays_partner', 60000)   // (40k − 5k) + (30k − 5k)
           ->assertJsonPath('data.summary.partner_pays_roteh', 5000)    // the no-COD package
-          ->assertJsonPath('data.summary.net_to_partner', 60000)
+          ->assertJsonPath('data.summary.net_to_partner', 55000)
           ->assertJsonPath('data.summary.non_cod_packages', 2)
-          ->assertJsonPath('data.successful.0.total_collected', 45000)
-          ->assertJsonPath('data.successful.0.roteh_pays_partner', 40000)
+          ->assertJsonPath('data.successful.0.total_collected', 40000)
+          ->assertJsonPath('data.successful.0.roteh_pays_partner', 35000)
+          ->assertJsonPath('data.successful.3.fee_paid_by', 'partner_pays')
           ->assertJsonPath('data.successful.3.partner_pays_roteh', 5000)
           ->assertJsonPath('data.successful.3.roteh_pays_partner', 0);
 
         // The admin overview (one SQL query) gives the same numbers.
         $ov = app(\App\Services\PartnerStatementService::class)
             ->overview(...\App\Services\PartnerStatementService::dayRange($this->day))[$this->partner->id];
-        $this->assertSame([75000, 65000, 5000, 60000],
+        $this->assertSame([70000, 60000, 5000, 55000],
             [$ov['total_collected'], $ov['roteh_pays_partner'], $ov['partner_pays_roteh'], $ov['net_to_partner']]);
 
         $admin = User::factory()->create(['role' => 'admin']);
         $this->actingAs($admin)->get(route('admin.partner-statements.show', [$this->partner, 'date' => $this->day, 'type' => 'successful']))
-            ->assertOk()->assertSee('ROTEH pays partner')->assertSee('75,000')->assertSee('60,000');
+            ->assertOk()->assertSee('ROTEH pays partner')->assertSee('70,000')->assertSee('55,000');
+    }
+
+    public function test_reported_case_cod_100k_fee_15k_pays_partner_85k(): void
+    {
+        $other = User::factory()->create(['role' => 'partner', 'api_token' => 'o-' . uniqid(), 'token_expires_at' => now()->addHour()]);
+        $at = Carbon::parse("{$this->day} 10:00", 'Asia/Phnom_Penh')->setTimezone(config('app.timezone'));
+        $d = $this->make(['partner_id' => $other->id, 'sender_id' => $other->id, 'status' => 'completed', 'completed_at' => $at,
+            'fee' => 15000, 'package_amount' => 100000, 'payment_by' => 'recipient', 'payment_method' => 'cash', 'payment_status' => 'paid']);
+        $this->assertSame('sender', $d->fresh()->payment_by); // the fee is always the partner's
+
+        $this->withHeaders(['Authorization' => 'Bearer ' . $other->api_token])
+            ->getJson("/api/v1/partner/statements?date={$this->day}")
+            ->assertJsonPath('data.successful.0.roteh_pays_partner', 85000)
+            ->assertJsonPath('data.successful.0.fee_paid_by', 'partner_from_cod')
+            ->assertJsonPath('data.summary.net_to_partner', 85000);
     }
 }
