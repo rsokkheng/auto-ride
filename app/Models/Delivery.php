@@ -31,13 +31,16 @@ class Delivery extends Model
     public const PRE_PICKUP_STATUSES = ['requested', 'pending', 'created', 'assigned', 'accepted'];
 
     /** Package is with the driver and moving. */
-    public const IN_TRANSIT_STATUSES = ['in_progress', 'picked_up', 'in_transit'];
+    public const IN_TRANSIT_STATUSES = ['in_progress', 'picked_up', 'in_transit', 'delivery_failed'];
 
     /** Job finished successfully — payment due, rateable. */
     public const FINISHED_STATUSES = ['delivered', 'completed'];
 
     /** No further transitions allowed. */
-    public const TERMINAL_STATUSES = ['delivered', 'completed', 'cancelled'];
+    public const TERMINAL_STATUSES = ['delivered', 'completed', 'cancelled', 'returned'];
+
+    /** Why a driver could not hand the package over (delivery_failed). */
+    public const FAILURE_REASONS = ['cannot_contact', 'receiver_refused', 'wrong_address', 'receiver_postponed', 'other'];
 
     public function isTerminal(): bool
     {
@@ -102,6 +105,10 @@ class Delivery extends Model
         'package_type',
         'package_weight',
         'package_photo',
+        'failure_reason',
+        'failure_note',
+        'failed_at',
+        'returned_at',
         'confirmed_at',
         'driver_id',
         'vehicle_id',
@@ -168,6 +175,8 @@ class Delivery extends Model
         'scheduled_at'       => 'datetime',
         'assigned_at'        => 'datetime',
         'confirmed_at'       => 'datetime',
+        'failed_at'          => 'datetime',
+        'returned_at'        => 'datetime',
         'package_weight'     => 'float',
         'started_at'         => 'datetime',
         'completed_at'       => 'datetime',
@@ -197,7 +206,7 @@ class Delivery extends Model
     // ── Partner packages ────────────────────────────────────────────────────
 
     /** Partner-facing package statuses, in workflow order. */
-    public const PACKAGE_STATUSES = ['pending', 'confirmed', 'driver_assigned', 'picked_up', 'in_transit', 'delivered', 'cancelled'];
+    public const PACKAGE_STATUSES = ['pending', 'confirmed', 'driver_assigned', 'picked_up', 'in_transit', 'completed', 'failed', 'returned', 'cancelled'];
 
     /** Map a raw deliveries.status onto the Partner package status. */
     public static function packageStatusFor(string $status): string
@@ -208,7 +217,9 @@ class Delivery extends Model
             'assigned', 'accepted'               => 'driver_assigned',
             'picked_up'                          => 'picked_up',
             'in_progress', 'in_transit'          => 'in_transit',
-            'delivered', 'completed'             => 'delivered',
+            'delivered', 'completed'             => 'completed',
+            'delivery_failed'                    => 'failed',      // driver bringing it back
+            'returned'                           => 'returned',    // back at the shop
             'cancelled'                          => 'cancelled',
             default                              => $status,
         };
@@ -236,7 +247,11 @@ class Delivery extends Model
                 'delivery_id' => $d->id,
                 'status'      => $status,
                 'raw_status'  => (string) $d->status,
-                'note'        => $status === 'cancelled' ? $d->cancellation_reason : null,
+                'note'        => match ($status) {
+                    'cancelled' => $d->cancellation_reason,
+                    'failed'    => $d->failure_reason,
+                    default     => null,
+                },
             ]);
         };
         static::created($record);

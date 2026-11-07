@@ -23,7 +23,9 @@ use Illuminate\Support\Str;
  * and see their history — and still book rides like everyone else.
  *
  * Workflow: pending (created) → confirmed (ROTEH; offered to drivers) →
- * driver_assigned → picked_up → in_transit → delivered | cancelled.
+ * driver_assigned → picked_up → in_transit → completed
+ *   | failed (cannot contact receiver, refused…) → returned (back at the shop)
+ *   | cancelled.
  */
 class PartnerPackageController extends ApiController
 {
@@ -191,7 +193,7 @@ class PartnerPackageController extends ApiController
         $search  = trim((string) $request->query('search', ''));
         $perPage = min(max((int) $request->query('per_page', 20), 1), 50);
 
-        $finished = ['delivered', 'completed', 'cancelled'];
+        $finished = ['delivered', 'completed', 'cancelled', 'returned'];
         $query = Delivery::with('driver:id,name,phone,avatar,rating')
             ->where('partner_id', $user->id)
             ->when($group === 'active', fn ($q) => $q->whereNotIn('status', $finished))
@@ -236,13 +238,15 @@ class PartnerPackageController extends ApiController
 
         return $this->success([
             'counts'      => $counts,
-            'active'      => $counts['pending'] + $counts['confirmed'] + $counts['driver_assigned'] + $counts['picked_up'] + $counts['in_transit'],
+            'active'      => $counts['pending'] + $counts['confirmed'] + $counts['driver_assigned'] + $counts['picked_up'] + $counts['in_transit'] + $counts['failed'],
             'today'       => $base()->whereDate('created_at', today())->count(),
+            'today_completed' => $base()->whereIn('status', ['delivered', 'completed'])->whereDate('completed_at', today())->count(),
+            'today_returned'  => $base()->whereIn('status', ['delivery_failed', 'returned'])->whereDate('failed_at', today())->count(),
             'month'       => $base()->where('created_at', '>=', now()->startOfMonth())->count(),
-            'delivered_month' => $base()->whereIn('status', ['delivered', 'completed'])
+            'completed_month' => $base()->whereIn('status', ['delivered', 'completed'])
                 ->where('created_at', '>=', now()->startOfMonth())->count(),
             'cod_pending' => (int) $base()->where('package_amount', '>', 0)
-                ->whereNotIn('status', ['delivered', 'completed', 'cancelled'])->sum('package_amount'),
+                ->whereNotIn('status', ['delivered', 'completed', 'cancelled', 'returned', 'delivery_failed'])->sum('package_amount'),
         ]);
     }
 
@@ -281,6 +285,99 @@ class PartnerPackageController extends ApiController
         ]);
 
         return $this->success(['package' => $this->format($delivery->fresh(['driver', 'trackingHistories']), true)]);
+    }
+
+    /**
+     * GET /v1/partner/packages/report?period=day|week|month&date=YYYY-MM-DD
+     * Packages created in that day / week (Mon–Sun) / month, Phnom Penh time.
+     */
+    public function report(Request $request)
+    {
+        if ($deny = $this->denyUnlessPartner($user = $this->authUser($request))) return $deny;
+
+        $data = $request->validate([
+            'period' => 'nullable|in:day,week,month',
+            'date'   => 'nullable|date_format:Y-m-d',
+        ]);
+        $period = $data['period'] ?? 'day';
+        $tz     = config('ride.local_timezone', 'Asia/Phnom_Penh');
+        $anchor = isset($data['date']) ? \Carbon\Carbon::parse($data['date'], $tz) : now($tz);
+
+        [$from, $to] = match ($period) {
+            'week'  => [$anchor->copy()->startOfWeek(\Carbon\Carbon::MONDAY), $anchor->copy()->endOfWeek(\Carbon\Carbon::SUNDAY)],
+            'month' => [$anchor->copy()->startOfMonth(), $anchor->copy()->endOfMonth()],
+            default => [$anchor->copy()->startOfDay(), $anchor->copy()->endOfDay()],
+        };
+
+        $appTz = config('app.timezone');
+        $rows = Delivery::where('partner_id', $user->id)
+            ->whereBetween('created_at', [$from->copy()->setTimezone($appTz), $to->copy()->setTimezone($appTz)])
+            ->get(['id', 'status', 'fee', 'package_amount', 'failure_reason', 'created_at', 'completed_at']);
+
+        // Buckets: hours of the day, or days of the week / month.
+        $buckets = [];
+        if ($period === 'day') {
+            for ($h = 0; $h < 24; $h++) $buckets[sprintf('%02d', $h)] = null;
+        } else {
+            for ($d = $from->copy(); $d->lte($to); $d->addDay()) $buckets[$d->toDateString()] = null;
+        }
+        $empty = ['total' => 0, 'completed' => 0, 'not_delivered' => 0, 'cancelled' => 0];
+        $buckets = array_map(fn () => $empty, $buckets);
+
+        $totals = ['total' => 0, 'completed' => 0, 'in_progress' => 0, 'failed' => 0, 'returned' => 0, 'cancelled' => 0];
+        $money  = ['delivery_fees' => 0, 'cod_collected' => 0, 'cod_pending' => 0];
+        $reasons = array_fill_keys(Delivery::FAILURE_REASONS, 0);
+        $minutes = [];
+
+        foreach ($rows as $d) {
+            $ps    = $d->packageStatus();
+            $local = $d->created_at->copy()->setTimezone($tz);
+            $key   = $period === 'day' ? $local->format('H') : $local->toDateString();
+
+            $totals['total']++;
+            $bucketKey = match ($ps) {
+                'completed'           => 'completed',
+                'failed', 'returned'  => 'not_delivered',
+                'cancelled'           => 'cancelled',
+                default               => null,
+            };
+            match ($ps) {
+                'completed' => $totals['completed']++,
+                'failed'    => $totals['failed']++,
+                'returned'  => $totals['returned']++,
+                'cancelled' => $totals['cancelled']++,
+                default     => $totals['in_progress']++,
+            };
+            if (isset($buckets[$key])) {
+                $buckets[$key]['total']++;
+                if ($bucketKey) $buckets[$key][$bucketKey]++;
+            }
+
+            if ($ps === 'completed') {
+                $money['delivery_fees'] += (int) $d->fee;
+                $money['cod_collected'] += (int) $d->package_amount;
+                if ($d->completed_at) $minutes[] = $d->created_at->diffInMinutes($d->completed_at);
+            } elseif (! in_array($ps, ['cancelled', 'returned', 'failed'], true)) {
+                $money['cod_pending'] += (int) $d->package_amount;
+            }
+            if (in_array($ps, ['failed', 'returned'], true) && isset($reasons[$d->failure_reason ?? 'other'])) {
+                $reasons[$d->failure_reason ?? 'other']++;
+            }
+        }
+
+        $handled = $totals['completed'] + $totals['failed'] + $totals['returned'];
+
+        return $this->success([
+            'period'       => $period,
+            'from'         => $from->toDateString(),
+            'to'           => $to->toDateString(),
+            'totals'       => $totals,
+            'money'        => $money,
+            'success_rate' => $handled > 0 ? round($totals['completed'] / $handled * 100, 1) : null,
+            'avg_delivery_minutes' => $minutes ? (int) round(array_sum($minutes) / count($minutes)) : null,
+            'failure_reasons' => $reasons,
+            'series'       => collect($buckets)->map(fn ($v, $k) => ['key' => (string) $k] + $v)->values()->all(),
+        ]);
     }
 
     // ── Shared with the admin panel ───────────────────────────────────────────
@@ -327,7 +424,9 @@ class PartnerPackageController extends ApiController
             'driver_assigned' => ['assigned', 'accepted'],
             'picked_up'       => ['picked_up'],
             'in_transit'      => ['in_progress', 'in_transit'],
-            'delivered'       => ['delivered', 'completed'],
+            'completed'       => ['delivered', 'completed'],
+            'failed'          => ['delivery_failed'],
+            'returned'        => ['returned'],
             'cancelled'       => ['cancelled'],
         ][$packageStatus] ?? [$packageStatus];
     }
@@ -377,6 +476,7 @@ class PartnerPackageController extends ApiController
             'payment_by'        => $d->payment_by,
             'payment_method'    => $d->payment_method,
             'payment_status'    => $d->payment_status,
+            'failure_reason'    => $d->failure_reason,
             'driver'            => $d->driver ? [
                 'id'     => $d->driver->id,
                 'name'   => $d->driver->name,
@@ -401,6 +501,11 @@ class PartnerPackageController extends ApiController
             'qr_payload'      => $d->qr_token ? 'AUTORIDE:DELIVERY:' . $d->qr_token : null,
             'tracking_url'    => $d->tracking_url,
             'cancellation_reason' => $d->cancellation_reason,
+            'failure_reason'  => $d->failure_reason,
+            'failure_note'    => $d->failure_note,
+            'failed_at'       => $d->failed_at?->toIso8601String(),
+            'returned_at'     => $d->returned_at?->toIso8601String(),
+            'completed_at'    => $d->completed_at?->toIso8601String(),
             'can_cancel'      => in_array($d->status, Delivery::PRE_PICKUP_STATUSES, true),
             'is_live'         => in_array($d->status, array_merge(['assigned', 'accepted'], Delivery::IN_TRANSIT_STATUSES), true),
             'timeline'        => $d->trackingHistories->map(fn ($h) => [

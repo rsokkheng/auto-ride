@@ -8,8 +8,9 @@
     <a href="{{ route('admin.partners') }}" class="btn btn-outline-primary"><i class="fas fa-handshake mr-1"></i> Partner Registrations</a>
 </x-admin.page-toolbar>
 
-@php($labels = ['pending' => 'Pending', 'confirmed' => 'Confirmed', 'driver_assigned' => 'Driver Assigned', 'picked_up' => 'Picked Up', 'in_transit' => 'In Transit', 'delivered' => 'Delivered', 'cancelled' => 'Cancelled'])
-@php($tones  = ['pending' => 'warning', 'confirmed' => 'info', 'driver_assigned' => 'primary', 'picked_up' => 'primary', 'in_transit' => 'primary', 'delivered' => 'success', 'cancelled' => 'danger'])
+@php($labels = ['pending' => 'Pending', 'confirmed' => 'Confirmed', 'driver_assigned' => 'Driver Assigned', 'picked_up' => 'Picked Up', 'in_transit' => 'In Transit', 'completed' => 'Completed', 'failed' => 'Not Delivered — returning', 'returned' => 'Returned to Shop', 'cancelled' => 'Cancelled'])
+@php($tones  = ['pending' => 'warning', 'confirmed' => 'info', 'driver_assigned' => 'primary', 'picked_up' => 'primary', 'in_transit' => 'primary', 'completed' => 'success', 'failed' => 'danger', 'returned' => 'muted', 'cancelled' => 'danger'])
+@php($reasons = ['cannot_contact' => 'Cannot contact receiver', 'receiver_refused' => 'Receiver refused', 'wrong_address' => 'Wrong address', 'receiver_postponed' => 'Receiver asked to postpone', 'other' => 'Other'])
 
 <x-admin.stat-grid :cols="4">
     <x-admin.stat-card label="Waiting Confirmation" :value="number_format($stats['pending'])" icon="fa-hourglass-half" tone="warning"
@@ -17,8 +18,9 @@
     <x-admin.stat-card label="Finding Driver" :value="number_format($stats['confirmed'])" icon="fa-magnifying-glass-location" tone="info"
                        :href="route('admin.partner-packages', ['status' => 'confirmed'])" :active="request('status') === 'confirmed'" />
     <x-admin.stat-card label="On the Way" :value="number_format($stats['driver_assigned'] + $stats['picked_up'] + $stats['in_transit'])" icon="fa-truck-fast" tone="primary" />
-    <x-admin.stat-card label="Delivered" :value="number_format($stats['delivered'])" icon="fa-circle-check" tone="success"
-                       :href="route('admin.partner-packages', ['status' => 'delivered'])" :active="request('status') === 'delivered'" />
+    <x-admin.stat-card label="Completed" :value="number_format($stats['completed'])" icon="fa-circle-check" tone="success"
+                       :href="route('admin.partner-packages', ['status' => 'completed'])" :active="request('status') === 'completed'"
+                       :sub="number_format($stats['failed'] + $stats['returned']) . ' not delivered / returned'" />
 </x-admin.stat-grid>
 
 <div class="card">
@@ -70,6 +72,7 @@
                     </td>
                     <td>
                         <span class="status-pill tone-{{ $tones[$ps] ?? 'muted' }}">{{ $labels[$ps] ?? ucfirst($ps) }}</span>
+                        @if(in_array($ps, ['failed', 'returned']) && $d->failure_reason)<div class="text-danger tw:text-xs">{{ $reasons[$d->failure_reason] ?? $d->failure_reason }}</div>@endif
                         @if($d->driver)<div class="text-muted tw:text-xs"><i class="fas fa-motorcycle mr-1"></i>{{ $d->driver->name }}</div>@endif
                         <div class="text-muted tw:text-xs">{{ $d->created_at->format('d M H:i') }}</div>
                     </td>

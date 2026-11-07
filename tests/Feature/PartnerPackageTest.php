@@ -136,7 +136,7 @@ class PartnerPackageTest extends TestCase
         $this->as($p)->getJson('/api/v1/partner/packages?group=history')->assertJsonPath('data.pagination.total', 1);
         $this->as($p)->getJson('/api/v1/partner/packages/summary')
             ->assertJsonPath('data.counts.pending', 1)
-            ->assertJsonPath('data.counts.delivered', 1)
+            ->assertJsonPath('data.counts.completed', 1)
             ->assertJsonPath('data.cod_pending', 40000);
 
         $this->as($p)->postJson("/api/v1/partner/packages/{$done->id}/cancel")->assertStatus(422);
@@ -166,5 +166,97 @@ class PartnerPackageTest extends TestCase
         $this->actingAs($admin)->get(route('admin.partner-packages'))->assertOk()->assertSee('PKG-')->assertSee('Confirm');
         $d = Delivery::whereNotNull('partner_id')->first();
         $this->actingAs($admin)->get(route('admin.deliveries.show', $d))->assertOk()->assertSee('Confirm &amp; find driver', false);
+    }
+
+    private function pickedUpPackage(User $partner, User $driver): Delivery
+    {
+        $id = $this->as($partner)->postJson('/api/v1/partner/packages', $this->packagePayload())->json('data.package.id');
+        $d = Delivery::find($id);
+        $d->update(['driver_id' => $driver->id, 'status' => 'in_progress', 'confirmed_at' => now()]);
+        return $d;
+    }
+
+    public function test_driver_marks_cannot_contact_then_returns_to_shop(): void
+    {
+        $p = $this->partner();
+        $driver = User::factory()->create(['role' => 'driver', 'api_token' => 'd-' . uniqid(), 'token_expires_at' => now()->addHour()]);
+        $d = $this->pickedUpPackage($p, $driver);
+
+        // Return before failing is refused.
+        $this->as($driver)->postJson("/api/v1/deliveries/{$d->id}/return")->assertStatus(422);
+
+        $this->as($driver)->postJson("/api/v1/deliveries/{$d->id}/fail", ['reason' => 'cannot_contact', 'note' => 'Phone off'])
+            ->assertOk()->assertJsonPath('data.delivery.status', 'delivery_failed');
+        $this->assertTrue($driver->fresh()->hasActiveTrip()); // still holding the package
+
+        $this->as($p)->getJson("/api/v1/partner/packages/{$d->id}")
+            ->assertJsonPath('data.package.status', 'failed')
+            ->assertJsonPath('data.package.failure_reason', 'cannot_contact')
+            ->assertJsonPath('data.package.can_cancel', false);
+
+        $this->as($driver)->postJson("/api/v1/deliveries/{$d->id}/return")
+            ->assertOk()->assertJsonPath('data.delivery.status', 'returned');
+        $this->assertFalse($driver->fresh()->hasActiveTrip());
+
+        $res = $this->as($p)->getJson("/api/v1/partner/packages/{$d->id}")
+            ->assertJsonPath('data.package.status', 'returned');
+        $this->assertSame(['pending', 'in_transit', 'failed', 'returned'],
+            collect($res->json('data.package.timeline'))->pluck('status')->all());
+        $this->as($p)->getJson('/api/v1/partner/packages?group=history')->assertJsonPath('data.pagination.total', 1);
+
+        // Another driver can't touch it; a returned package can't be completed.
+        $other = User::factory()->create(['role' => 'driver', 'api_token' => 'o-' . uniqid(), 'token_expires_at' => now()->addHour()]);
+        $this->as($other)->postJson("/api/v1/deliveries/{$d->id}/fail", ['reason' => 'other'])->assertStatus(401);
+        $this->as($driver)->postJson("/api/v1/deliveries/{$d->id}/complete")->assertStatus(422);
+    }
+
+    public function test_failed_package_can_still_be_completed_if_receiver_answers(): void
+    {
+        $p = $this->partner();
+        $driver = User::factory()->create(['role' => 'driver', 'api_token' => 'd-' . uniqid(), 'token_expires_at' => now()->addHour()]);
+        $d = $this->pickedUpPackage($p, $driver);
+
+        $this->as($driver)->postJson("/api/v1/deliveries/{$d->id}/fail", ['reason' => 'cannot_contact'])->assertOk();
+        $this->as($driver)->postJson("/api/v1/deliveries/{$d->id}/complete")->assertOk();
+        $this->assertSame('completed', $d->fresh()->packageStatus());
+    }
+
+    public function test_report_by_day_week_and_month(): void
+    {
+        $p = $this->partner();
+        $driver = User::factory()->create(['role' => 'driver']);
+        $tz = config('ride.local_timezone', 'Asia/Phnom_Penh');
+        $make = function (string $status, string $localTime, array $extra = []) use ($p, $driver, $tz) {
+            $id = $this->as($p)->postJson('/api/v1/partner/packages', $this->packagePayload())->json('data.package.id');
+            $at = \Carbon\Carbon::parse($localTime, $tz)->setTimezone(config('app.timezone'));
+            Delivery::whereKey($id)->update($extra + ['status' => $status, 'driver_id' => $driver->id, 'created_at' => $at]);
+        };
+
+        $make('completed', '2026-11-04 09:15', ['completed_at' => \Carbon\Carbon::parse('2026-11-04 10:00', $tz)->setTimezone(config('app.timezone'))]);
+        $make('completed', '2026-11-04 14:00');
+        $make('returned', '2026-11-04 15:00', ['failure_reason' => 'cannot_contact']);
+        $make('cancelled', '2026-11-05 08:00');
+        $make('created', '2026-11-20 08:00');
+
+        $day = $this->as($p)->getJson('/api/v1/partner/packages/report?period=day&date=2026-11-04')->assertOk();
+        $day->assertJsonPath('data.totals.total', 3)
+            ->assertJsonPath('data.totals.completed', 2)
+            ->assertJsonPath('data.totals.returned', 1)
+            ->assertJsonPath('data.failure_reasons.cannot_contact', 1)
+            ->assertJsonPath('data.money.delivery_fees', 2 * 10000)
+            ->assertJsonPath('data.money.cod_collected', 80000)
+            ->assertJsonPath('data.avg_delivery_minutes', 45)
+            ->assertJsonCount(24, 'data.series');
+        $this->assertEquals(66.7, $day->json('data.success_rate'));
+        $this->assertSame(1, collect($day->json('data.series'))->firstWhere('key', '09')['completed']);
+
+        $this->as($p)->getJson('/api/v1/partner/packages/report?period=week&date=2026-11-04')
+            ->assertJsonPath('data.from', '2026-11-02')->assertJsonPath('data.to', '2026-11-08')
+            ->assertJsonPath('data.totals.total', 4)->assertJsonPath('data.totals.cancelled', 1)
+            ->assertJsonCount(7, 'data.series');
+
+        $this->as($p)->getJson('/api/v1/partner/packages/report?period=month&date=2026-11-04')
+            ->assertJsonPath('data.totals.total', 5)->assertJsonPath('data.totals.in_progress', 1)
+            ->assertJsonCount(30, 'data.series');
     }
 }

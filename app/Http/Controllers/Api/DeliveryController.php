@@ -994,6 +994,9 @@ class DeliveryController extends ApiController
         if ($delivery->status === 'cancelled') {
             return response()->json(['data' => null, 'message' => 'Cannot complete a cancelled job.'], 422);
         }
+        if ($delivery->status === 'returned') {
+            return response()->json(['data' => null, 'message' => 'This package was returned to the shop.'], 422);
+        }
 
         $completionData = $request->validate([
             'dropoff_address' => 'nullable|string|max:255',

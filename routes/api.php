@@ -166,6 +166,8 @@ Route::prefix('v1')->group(function () {
     Route::post('deliveries/{delivery}/cancel', [DeliveryController::class, 'cancel']);
     Route::post('deliveries/{delivery}/track', [DeliveryController::class, 'track']);
     Route::post('deliveries/{delivery}/complete', [DeliveryController::class, 'complete']);
+    Route::post('deliveries/{delivery}/fail', [\App\Http\Controllers\Api\DeliveryOutcomeController::class, 'fail']);
+    Route::post('deliveries/{delivery}/return', [\App\Http\Controllers\Api\DeliveryOutcomeController::class, 'returned']);
     Route::post('deliveries/{delivery}/rate', [DeliveryController::class, 'rate']);
     Route::get('deliveries/{delivery}/share', [DeliveryController::class, 'share']);
     Route::delete('deliveries/{delivery}/share', [DeliveryController::class, 'deactivateShare']);
@@ -389,6 +391,7 @@ Route::prefix('v1')->group(function () {
     Route::get('partner/profile',                       [\App\Http\Controllers\Api\PartnerPackageController::class, 'profile']);
     Route::post('partner/register',                     [\App\Http\Controllers\Api\PartnerPackageController::class, 'register']);
     Route::get('partner/packages/quote',                [\App\Http\Controllers\Api\PartnerPackageController::class, 'quote']);
+    Route::get('partner/packages/report',               [\App\Http\Controllers\Api\PartnerPackageController::class, 'report']);
     Route::get('partner/packages/summary',              [\App\Http\Controllers\Api\PartnerPackageController::class, 'summary']);
     Route::get('partner/packages',                      [\App\Http\Controllers\Api\PartnerPackageController::class, 'index']);
     Route::post('partner/packages',                     [\App\Http\Controllers\Api\PartnerPackageController::class, 'store']);

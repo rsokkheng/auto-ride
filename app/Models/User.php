@@ -126,7 +126,7 @@ class User extends Authenticatable
     // checks the trips themselves.
 
     public const ACTIVE_RIDE_STATUSES     = [Ride::STATUS_ACCEPTED, Ride::STATUS_DRIVER_ARRIVED, Ride::STATUS_IN_PROGRESS];
-    public const ACTIVE_DELIVERY_STATUSES = ['accepted', 'in_progress', 'picked_up', 'in_transit'];
+    public const ACTIVE_DELIVERY_STATUSES = ['accepted', 'in_progress', 'picked_up', 'in_transit', 'delivery_failed'];
 
     /** Drivers with no active ride or delivery. */
     public function scopeWithoutActiveTrip($query)

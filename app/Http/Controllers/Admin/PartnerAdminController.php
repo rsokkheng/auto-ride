@@ -91,7 +91,8 @@ class PartnerAdminController extends Controller
         $raw = [
             'pending' => ['created'], 'confirmed' => ['requested', 'pending'], 'driver_assigned' => ['assigned', 'accepted'],
             'picked_up' => ['picked_up'], 'in_transit' => ['in_progress', 'in_transit'],
-            'delivered' => ['delivered', 'completed'], 'cancelled' => ['cancelled'],
+            'completed' => ['delivered', 'completed'], 'failed' => ['delivery_failed'], 'returned' => ['returned'],
+            'cancelled' => ['cancelled'],
         ];
 
         $packages = Delivery::with(['partner:id,name,phone,company_name', 'driver:id,name,phone'])
