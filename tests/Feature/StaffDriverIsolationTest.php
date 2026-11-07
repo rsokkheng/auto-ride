@@ -89,9 +89,8 @@ class StaffDriverIsolationTest extends TestCase
         $this->assertSame([$owner->id], $offers->driversToOffer($normal)->pluck('id')->all());
         $this->assertSame([$staff->id], $offers->driversToOffer($package)->pluck('id')->all());
 
-        // Lists and accept follow the same rule.
-        $this->as($staff)->getJson('/api/v1/deliveries/available')->assertJsonCount(1, 'data.deliveries.data')
-            ->assertJsonPath('data.deliveries.data.0.id', $package->id);
+        // Lists and accept follow the same rule (staff are assigned by admin, never self-pick).
+        $this->as($staff)->getJson('/api/v1/deliveries/available')->assertJsonCount(0, 'data.deliveries.data');
         $this->as($owner)->getJson('/api/v1/deliveries/available')->assertJsonCount(1, 'data.deliveries.data')
             ->assertJsonPath('data.deliveries.data.0.id', $normal->id);
         $this->as($staff)->postJson("/api/v1/deliveries/{$normal->id}/accept")->assertStatus(403)->assertJsonPath('code', 'partner_only');

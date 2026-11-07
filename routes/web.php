@@ -273,6 +273,7 @@ Route::prefix('admin')->middleware(\App\Http\Middleware\AdminAuth::class)->group
     Route::post('partners/{profile}/suspend',         [\App\Http\Controllers\Admin\PartnerAdminController::class, 'suspend'])->name('admin.partners.suspend');
     Route::get('partner-packages',                     [\App\Http\Controllers\Admin\PartnerAdminController::class, 'packages'])->name('admin.partner-packages');
     Route::post('partner-packages/{delivery}/confirm', [\App\Http\Controllers\Admin\PartnerAdminController::class, 'confirmPackage'])->name('admin.partner-packages.confirm');
+    Route::post('partner-packages/assign',               [\App\Http\Controllers\Admin\PartnerAdminController::class, 'assignPackages'])->name('admin.partner-packages.assign');
 
     // Daily closing (accountant): drivers → partners → finish day
     Route::get('daily-closing',                              [\App\Http\Controllers\Admin\DailyClosingController::class, 'index'])->name('admin.daily-closing');

@@ -84,7 +84,8 @@ class DeliveryController extends ApiController
 
         // A driver already on a trip — or with Delivery switched off — isn't shown new jobs.
         $staff = $user->isSalariedStaff();
-        $busy  = $user->hasActiveTrip() || ! $user->acceptsService($staff ? 'partner' : 'delivery');
+        // Staff don't pick jobs — admin assigns Partner packages to them.
+        $busy  = $staff || $user->hasActiveTrip() || ! $user->acceptsService('delivery');
 
         // Deliveries this driver already declined or let time out don't come back.
         $dismissed = DriverMissedRequest::where('driver_id', $user->id)

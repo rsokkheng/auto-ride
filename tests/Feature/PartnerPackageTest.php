@@ -115,11 +115,14 @@ class PartnerPackageTest extends TestCase
         $this->assertSame('requested', $d->fresh()->status);
         $this->assertNotNull($d->fresh()->confirmed_at);
 
-        $this->as($driver)->getJson('/api/v1/deliveries/available')->assertJsonCount(1, 'data.deliveries.data');
+        // No broadcast: staff never self-pick — admin assigns.
+        $this->as($driver)->getJson('/api/v1/deliveries/available')->assertJsonCount(0, 'data.deliveries.data');
+        $this->actingAs($admin)->post(route('admin.partner-packages.assign'), ['ids' => [$d->id], 'driver_id' => $driver->id]);
+        $this->as($driver)->getJson('/api/v1/driver/staff/packages')->assertJsonCount(1, 'data.active');
 
         $this->as($p)->getJson("/api/v1/partner/packages/{$d->id}")
-            ->assertJsonPath('data.package.status', 'confirmed')
-            ->assertJsonCount(2, 'data.package.timeline');
+            ->assertJsonPath('data.package.status', 'driver_assigned')
+            ->assertJsonCount(3, 'data.package.timeline');
     }
 
     public function test_lists_summary_and_cancel_rules(): void

@@ -992,8 +992,13 @@ class AdminController extends Controller
         ]);
 
         $target = User::find($data['driver_id']);
-        if ($delivery->partner_id && ! $target?->isSalariedStaff()) {
-            return back()->with('error', 'Partner packages can only be assigned to ROTEH staff drivers.');
+        if ($delivery->partner_id) {
+            try {
+                app(\App\Services\StaffAssignmentService::class)->assign($delivery, $target);
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                return back()->with('error', collect($e->errors())->flatten()->first());
+            }
+            return back()->with('success', "PKG-{$delivery->id} assigned to {$target->name}.");
         }
         if (! $delivery->partner_id && $target?->isSalariedStaff()) {
             return back()->with('error', 'ROTEH staff drivers deliver Partner packages only.');

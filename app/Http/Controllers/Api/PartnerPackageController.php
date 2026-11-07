@@ -8,7 +8,6 @@ use App\Models\PartnerProfile;
 use App\Models\PricingSetting;
 use App\Models\User;
 use App\Rules\CambodianPhone;
-use App\Services\DeliveryOfferService;
 use App\Services\FirestoreService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -178,7 +177,7 @@ class PartnerPackageController extends ApiController
             'surge_multiplier'  => 1.0,
         ]);
 
-        if ($autoConfirm) $this->confirmAndOffer($delivery);
+        if ($autoConfirm) self::confirm($delivery);
 
         return $this->success(['package' => $this->format($delivery->fresh(['driver', 'trackingHistories']), true)], 201);
     }
@@ -454,19 +453,18 @@ class PartnerPackageController extends ApiController
 
     // ── Shared with the admin panel ───────────────────────────────────────────
 
-    /** ROTEH confirms a pending package and offers it to nearby drivers. */
-    public static function confirmAndOffer(Delivery $delivery): void
+    /**
+     * ROTEH confirms a pending package. Partner packages are NOT broadcast to
+     * drivers — admin assigns them to a ROTEH staff driver
+     * (StaffAssignmentService).
+     */
+    public static function confirm(Delivery $delivery): void
     {
         if ($delivery->status !== 'created') return;
         $delivery->update(['status' => 'requested', 'confirmed_at' => now()]);
 
         try {
             app(FirestoreService::class)->syncDelivery($delivery->fresh(['sender', 'driver', 'vehicle']));
-        } catch (\Throwable $e) {
-            report($e);
-        }
-        try {
-            app(DeliveryOfferService::class)->offer($delivery);
         } catch (\Throwable $e) {
             report($e);
         }

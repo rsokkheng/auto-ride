@@ -113,7 +113,9 @@ class DriverController extends ApiController
 
         return $this->success([
             'driver'            => $user,
-            'can_go_online'     => $user->wallet_balance >= (int) PricingSetting::get('driver_min_balance_khr', 50000),
+            // ROTEH staff need no wallet deposit.
+            'can_go_online'     => $user->hasMinBalance(),
+            'is_staff'          => $user->isSalariedStaff(),
             'min_balance_khr'   => (int) PricingSetting::get('driver_min_balance_khr', 50000),
             'wallet_balance'    => (int) $user->wallet_balance,
             'active_rides'      => Ride::where('driver_id', $user->id)->whereIn('status', ['accepted', 'on_route', 'in_progress'])->get(),

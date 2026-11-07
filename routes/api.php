@@ -253,6 +253,7 @@ Route::prefix('v1')->group(function () {
     Route::post('driver/availability', [DriverController::class, 'setAvailability']);
     Route::post('driver/go-online', [DriverController::class, 'goOnline']);
     Route::post('driver/modes', [DriverController::class, 'setServiceModes']);
+    Route::get('driver/staff/packages', [\App\Http\Controllers\Api\StaffDriverController::class, 'packages']);
     Route::get('driver/staff/today', [\App\Http\Controllers\Api\StaffDriverController::class, 'today']);
     Route::post('driver/go-offline', [DriverController::class, 'goOffline']);
     Route::post('driver/location', [DriverController::class, 'updateLocation']);

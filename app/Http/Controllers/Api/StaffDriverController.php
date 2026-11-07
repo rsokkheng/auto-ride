@@ -11,6 +11,38 @@ use Illuminate\Http\Request;
  */
 class StaffDriverController extends ApiController
 {
+    /**
+     * GET /v1/driver/staff/packages — packages admin assigned to me:
+     * active ones (to pick up / on the way / to return) and today's finished.
+     */
+    public function packages(Request $request)
+    {
+        $user = $this->authUser($request);
+        if (! $user || ! $user->isSalariedStaff()) return $this->unauthorized();
+
+        $active = \App\Models\Delivery::with(['sender', 'partner.partnerProfile:id,user_id,business_name'])
+            ->where('driver_id', $user->id)->whereNotNull('partner_id')
+            ->whereIn('status', ['assigned', 'accepted', 'picked_up', 'in_progress', 'in_transit', 'delivery_failed'])
+            ->orderByRaw("CASE status WHEN 'delivery_failed' THEN 0 WHEN 'accepted' THEN 2 WHEN 'assigned' THEN 2 ELSE 1 END")
+            ->orderBy('assigned_at')
+            ->get();
+
+        [$from, $to] = PS::dayRange(null);
+        $appTz = config('app.timezone');
+        $done = \App\Models\Delivery::where('driver_id', $user->id)->whereNotNull('partner_id')
+            ->whereIn('status', ['completed', 'delivered', 'returned'])
+            ->where(fn ($q) => $q->whereBetween('completed_at', [$from->copy()->setTimezone($appTz), $to->copy()->setTimezone($appTz)])
+                ->orWhereBetween('returned_at', [$from->copy()->setTimezone($appTz), $to->copy()->setTimezone($appTz)]))
+            ->latest('updated_at')->get();
+
+        $shop = fn ($d) => $d->partner?->partnerProfile?->business_name;
+
+        return $this->success([
+            'active' => $active->map(fn ($d) => $d->toArray() + ['shop_name' => $shop($d)])->values(),
+            'done'   => $done->map(fn ($d) => $d->toArray() + ['shop_name' => $shop($d)])->values(),
+        ]);
+    }
+
     /** GET /v1/driver/staff/today */
     public function today(Request $request)
     {

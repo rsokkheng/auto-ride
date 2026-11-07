@@ -121,4 +121,5 @@ return [
         'receiver_postponed' => '收件人要求改期',
         'other' => '其他原因',
     ],
+    'staff_package_assigned' => ['title' => '📦 新包裹已分配给您', 'body' => ':code——请到 :pickup 取件并扫描二维码。'],
 ];

@@ -65,10 +65,11 @@ class PartnerStaffDriverTest extends TestCase
         $this->as($this->owner)->getJson('/api/v1/deliveries/available')->assertJsonCount(0, 'data.deliveries.data');
         $this->as($this->owner)->postJson("/api/v1/deliveries/{$d->id}/accept")->assertStatus(403)->assertJsonPath('code', 'staff_only');
 
-        // Staff with 0 wallet: sees it and accepts (no wallet minimum for salaried staff).
-        $this->as($this->staff)->getJson('/api/v1/deliveries/available')->assertJsonCount(1, 'data.deliveries.data');
-        $this->as($this->staff)->postJson("/api/v1/deliveries/{$d->id}/accept")->assertOk();
-        $this->assertSame($this->staff->id, $d->fresh()->driver_id);
+        // Staff don't self-pick either — admin assigns; the package lands on their list.
+        $this->as($this->staff)->getJson('/api/v1/deliveries/available')->assertJsonCount(0, 'data.deliveries.data');
+        app(\App\Services\StaffAssignmentService::class)->assign($d, $this->staff);
+        $this->assertSame([$this->staff->id, 'accepted'], [$d->fresh()->driver_id, $d->fresh()->status]);
+        $this->as($this->staff)->getJson('/api/v1/driver/staff/packages')->assertJsonPath('data.active.0.id', $d->id);
     }
 
     public function test_staff_can_go_online_with_empty_wallet_but_owner_cannot(): void

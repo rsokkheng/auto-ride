@@ -123,4 +123,5 @@ return [
         'receiver_postponed' => 'the receiver asked to deliver later',
         'other' => 'other reason',
     ],
+    'staff_package_assigned' => ['title' => '📦 New package assigned', 'body' => ':code — pick it up at :pickup and scan the QR.'],
 ];

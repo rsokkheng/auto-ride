@@ -114,7 +114,12 @@ class PartnerAdminController extends Controller
             $stats[Delivery::packageStatusFor((string) $s)] = ($stats[Delivery::packageStatusFor((string) $s)] ?? 0) + (int) $n;
         }
 
-        return view('admin.partner-packages', compact('packages', 'stats'));
+        $staff = \App\Models\User::salariedStaff()->orderBy('name')->get(['id', 'name', 'phone']);
+        $staffLoad = Delivery::whereIn('driver_id', $staff->pluck('id'))->whereNotNull('partner_id')
+            ->whereIn('status', ['accepted', 'assigned', 'picked_up', 'in_progress', 'in_transit', 'delivery_failed'])
+            ->selectRaw('driver_id, COUNT(*) n')->groupBy('driver_id')->pluck('n', 'driver_id');
+
+        return view('admin.partner-packages', compact('packages', 'stats', 'staff', 'staffLoad'));
     }
 
     /** Confirm a pending package and offer it to nearby drivers. */
@@ -124,7 +129,7 @@ class PartnerAdminController extends Controller
             return back()->with('error', "Package #{$delivery->id} is not waiting for confirmation.");
         }
 
-        PartnerPackageController::confirmAndOffer($delivery);
+        PartnerPackageController::confirm($delivery);
 
         try {
             if ($partner = $delivery->partner) {
@@ -137,7 +142,28 @@ class PartnerAdminController extends Controller
             report($e);
         }
 
-        return back()->with('success', "Package #{$delivery->id} confirmed and sent to nearby drivers.");
+        return back()->with('success', "Package #{$delivery->id} confirmed — now assign a ROTEH staff driver.");
+    }
+
+    /** Assign one or many packages to a ROTEH staff driver. */
+    public function assignPackages(Request $request)
+    {
+        $data = $request->validate([
+            'ids'       => 'required|array|min:1',
+            'ids.*'     => 'integer|exists:deliveries,id',
+            'driver_id' => 'required|integer|exists:users,id',
+        ]);
+        $staff = \App\Models\User::findOrFail($data['driver_id']);
+        $svc = app(\App\Services\StaffAssignmentService::class);
+
+        $done = 0; $errors = [];
+        foreach (Delivery::whereIn('id', $data['ids'])->get() as $d) {
+            try { $svc->assign($d, $staff); $done++; }
+            catch (\Illuminate\Validation\ValidationException $e) { $errors[] = collect($e->errors())->flatten()->first(); }
+        }
+
+        $msg = "{$done} package(s) assigned to {$staff->name}.";
+        return back()->with($errors ? 'error' : 'success', $errors ? $msg . ' Skipped: ' . implode(' ', $errors) : $msg);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

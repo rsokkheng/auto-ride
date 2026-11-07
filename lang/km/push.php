@@ -121,4 +121,5 @@ return [
         'receiver_postponed' => 'អ្នកទទួលស្នើឲ្យដឹកពេលក្រោយ',
         'other' => 'មូលហេតុផ្សេងៗ',
     ],
+    'staff_package_assigned' => ['title' => '📦 មានកញ្ចប់ថ្មីសម្រាប់អ្នក', 'body' => ':code — ទៅយកនៅ :pickup ហើយស្កេន QR។'],
 ];
