@@ -69,13 +69,16 @@ td { padding:4px 8px; font-size:10px; border-bottom:1px solid #f3f4f6; } .r { te
     @forelse($rows as $r)
         <div class="driver">
             <div class="dh">
-                <div><b>{{ $r['driver']?->name }}</b> <span class="en">{{ $r['driver']?->phone }} @if($r['driver']?->driver_type !== 'employee')· ⚠ not staff @endif</span><br>
+                <div><b>{{ $r['driver']?->name }}</b> <span class="en">{{ $r['driver']?->phone }} @if($r['driver']?->driver_type !== \App\Models\User::STAFF_TYPE)· ⚠ not staff @endif</span><br>
                     <span class="en">{{ $r['delivered'] }} delivered · {{ $r['returning'] }} returning · {{ $r['returned'] }} returned to shop</span></div>
-                <div style="text-align:right;"><span class="en">COD {{ $k($r['cod_collected']) }} + fees {{ $k($r['cash_fees']) }}</span><br>
-                    <span class="cash">{{ $k($r['cash_to_hand_over']) }} ៛</span></div>
+                <div style="text-align:right;">
+                    <span class="en">សាច់ប្រាក់ត្រូវប្រគល់ · Cash to hand over</span><br>
+                    <span class="cash">{{ $k($r['cash_khr']) }} ៛ @if($r['cash_usd'] > 0) + ${{ number_format($r['cash_usd'], 2) }} @endif</span>
+                    @if($r['bank_khr'] > 0 || $r['bank_usd'] > 0)<br><span class="en">Bank (check statement): {{ $k($r['bank_khr']) }} ៛ @if($r['bank_usd'] > 0) + ${{ number_format($r['bank_usd'], 2) }} @endif</span>@endif
+                </div>
             </div>
             <table>
-                <thead><tr><th>Code</th><th>Partner</th><th>Receiver</th><th>Status</th><th>Time</th><th class="r">COD</th><th class="r">Fee (cash)</th></tr></thead>
+                <thead><tr><th>Code</th><th>Partner</th><th>Receiver</th><th>Status</th><th>Time</th><th class="r">COD</th><th>Paid via</th></tr></thead>
                 <tbody>
                 @foreach($r['packages'] as $p)
                     <tr>
@@ -86,7 +89,7 @@ td { padding:4px 8px; font-size:10px; border-bottom:1px solid #f3f4f6; } .r { te
                             @if($p['reason'] && $p['status'] !== 'completed')<span class="en">{{ PS::REASONS[$p['reason']][1] ?? '' }}</span>@endif</td>
                         <td>{{ $p['time'] }}</td>
                         <td class="r">{{ $p['cod'] ? $k($p['cod']) : '—' }}</td>
-                        <td class="r">{{ $p['cash_fee'] ? $k($p['cash_fee']) : '—' }}</td>
+                        <td>{{ $p['paid_via'] ?? ($p['cod'] ? 'Cash ៛ (not verified)' : '—') }}</td>
                     </tr>
                 @endforeach
                 </tbody>

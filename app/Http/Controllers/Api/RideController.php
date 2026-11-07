@@ -604,6 +604,13 @@ class RideController extends ApiController
             return response()->json(['data' => null, 'message' => 'Ride already claimed by another driver.'], 422);
         }
 
+        if ($user->isSalariedStaff()) {
+            return response()->json([
+                'data' => null, 'code' => 'partner_only',
+                'message' => 'ROTEH staff drivers deliver Partner packages only.',
+            ], 403);
+        }
+
         if (! $user->hasMinBalance()) {
             return response()->json([
                 'data'            => null,

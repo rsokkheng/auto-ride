@@ -131,6 +131,7 @@
                         ['Deliveries',       'fa-box',              'admin.deliveries',       ['admin.deliveries']],
                         ['Partner Packages', 'fa-boxes-stacked',    'admin.partner-packages', ['admin.partner-packages*'], $pendingPackages, 'badge-warning'],
                         ['Partner Statements','fa-file-invoice',    'admin.partner-statements',['admin.partner-statements*']],
+                        ['Daily Closing',     'fa-cash-register',   'admin.daily-closing',     ['admin.daily-closing*']],
                         ['Rental',      'fa-car-side',         'admin.car-rentals',      ['admin.car-rentals*']],
                         ['Marketplace',      'fa-store',            'admin.marketplace',      ['admin.marketplace']],
                         ['Marketplace Orders','fa-shopping-bag',    'admin.marketplace-orders',['admin.marketplace-orders*']],

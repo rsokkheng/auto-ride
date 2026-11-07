@@ -16,7 +16,7 @@
         'rejected'  => ['Rejected', 'fa-circle-xmark',           'muted'],
         'penalized' => ['Penalized', 'fa-ban',                   'danger'],
     ];
-    $dtLabel  = ['owner' => 'Own vehicle', 'rental' => 'Rental', 'employee' => 'Employee'];
+    $dtLabel  = ['owner' => 'Own vehicle', 'rental' => 'Rental', 'employee' => 'Employee', 'staff' => 'ROTEH Staff · Packages'];
     $initials = fn (?string $name) => collect(preg_split('/\s+/', trim((string) $name)))->filter()->take(2)
         ->map(fn ($w) => mb_strtoupper(mb_substr($w, 0, 1)))->join('') ?: '?';
     $required = 4;

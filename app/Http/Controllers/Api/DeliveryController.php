@@ -83,7 +83,8 @@ class DeliveryController extends ApiController
         if (! $user || $user->role !== 'driver') return $this->unauthorized();
 
         // A driver already on a trip — or with Delivery switched off — isn't shown new jobs.
-        $busy = $user->hasActiveTrip() || ! $user->acceptsService('delivery');
+        $staff = $user->isSalariedStaff();
+        $busy  = $user->hasActiveTrip() || ! $user->acceptsService($staff ? 'partner' : 'delivery');
 
         // Deliveries this driver already declined or let time out don't come back.
         $dismissed = DriverMissedRequest::where('driver_id', $user->id)
@@ -92,8 +93,8 @@ class DeliveryController extends ApiController
         $deliveries = Delivery::with(['sender', 'vehicle'])
             ->whereIn('status', ['requested', 'pending'])
             ->whereNull('driver_id')
-            // Partner packages are for ROTEH staff drivers only.
-            ->when(! $user->isSalariedStaff(), fn ($q) => $q->whereNull('partner_id'))
+            // Partner packages are for ROTEH staff only — and staff get nothing else.
+            ->when($staff, fn ($q) => $q->whereNotNull('partner_id'), fn ($q) => $q->whereNull('partner_id'))
             ->when($busy, fn ($q) => $q->whereRaw('1 = 0'))
             ->when($dismissed->isNotEmpty(), fn ($q) => $q->whereNotIn('id', $dismissed))
             ->orderBy('created_at')
@@ -551,11 +552,17 @@ class DeliveryController extends ApiController
             ], 422);
         }
 
-        // Partner packages are delivered by ROTEH staff (salaried) drivers only.
+        // Partner packages are delivered by ROTEH staff only; staff take nothing else.
         if ($delivery->partner_id && ! $user->isSalariedStaff()) {
             return response()->json([
                 'message' => 'Partner packages are delivered by ROTEH staff drivers only.',
                 'code'    => 'staff_only',
+            ], 403);
+        }
+        if (! $delivery->partner_id && $user->isSalariedStaff()) {
+            return response()->json([
+                'message' => 'ROTEH staff drivers deliver Partner packages only.',
+                'code'    => 'partner_only',
             ], 403);
         }
 
@@ -629,6 +636,14 @@ class DeliveryController extends ApiController
             return response()->json([
                 'data'    => null,
                 'message' => "Cannot start — status is \"{$delivery->status}\". Must be accepted first.",
+            ], 422);
+        }
+
+        // Partner packages: pickup is confirmed by scanning the package QR.
+        if ($delivery->partner_id) {
+            return response()->json([
+                'data' => null, 'code' => 'scan_required',
+                'message' => 'Scan the package QR code to confirm pickup.',
             ], 422);
         }
 
@@ -862,6 +877,21 @@ class DeliveryController extends ApiController
             ]);
         }
 
+        // Partner package handover scan: the driver must then verify the
+        // payment received (cash ៛/$ / bank) — POST /deliveries/{id}/collect
+        // completes it. Never auto-completes.
+        if ($delivery->partner_id && in_array($delivery->status, ['picked_up', 'in_progress', 'in_transit', 'delivery_failed'], true)) {
+            $delivery->update(['delivery_scanned_at' => now()]);
+
+            return $this->success([
+                'action'       => 'verify_payment',
+                'message'      => 'Package scanned. Verify the payment received from the receiver.',
+                'expected_khr' => (int) $delivery->package_amount,
+                'khr_per_usd'  => (int) config('ride.khr_per_usd', 4100),
+                'delivery'     => $delivery->fresh()->only(['id', 'status', 'recipient_name', 'recipient_phone', 'package_amount', 'fee']),
+            ]);
+        }
+
         // In-transit scan: picked_up → in_transit (optional intermediate)
         if ($delivery->status === 'picked_up') {
             $delivery->update(['status' => 'in_transit']);
@@ -1006,6 +1036,14 @@ class DeliveryController extends ApiController
         }
         if ($delivery->status === 'returned') {
             return response()->json(['data' => null, 'message' => 'This package was returned to the shop.'], 422);
+        }
+
+        // Partner packages complete only through scan + verified payment.
+        if ($delivery->partner_id && ! $delivery->collection()->exists()) {
+            return response()->json([
+                'data' => null, 'code' => 'verify_payment_required',
+                'message' => 'Scan the package and verify the payment received to complete it.',
+            ], 422);
         }
 
         $completionData = $request->validate([

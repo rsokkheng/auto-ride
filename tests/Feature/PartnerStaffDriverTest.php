@@ -28,13 +28,21 @@ class PartnerStaffDriverTest extends TestCase
         $this->partner = User::factory()->create(['role' => 'partner', 'wallet_balance' => 0] + $tok());
         PartnerProfile::create(['user_id' => $this->partner->id, 'business_name' => 'Shop', 'phone' => '012345678', 'status' => 'approved']);
         // Staff driver with an empty wallet — salary, no commission.
-        $this->staff = User::factory()->create(['role' => 'driver', 'driver_type' => 'employee', 'salary' => 800000, 'wallet_balance' => 0, 'available' => true] + $tok());
+        $this->staff = User::factory()->create(['role' => 'driver', 'driver_type' => 'staff', 'salary' => 800000, 'wallet_balance' => 0, 'available' => true] + $tok());
         $this->owner = User::factory()->create(['role' => 'driver', 'driver_type' => 'owner', 'wallet_balance' => 100000, 'available' => true] + $tok());
     }
 
     private function as(User $u)
     {
         return $this->withHeaders(['Authorization' => 'Bearer ' . $u->api_token]);
+    }
+
+    /** Handover: scan the package QR, then verify the payment (completes it). */
+    private function handover(Delivery $d, array $paid): void
+    {
+        $this->as($this->staff)->postJson('/api/v1/deliveries/scan-qr', ['qr_token' => $d->fresh()->qr_token])
+            ->assertOk()->assertJsonPath('data.action', 'verify_payment');
+        $this->as($this->staff)->postJson("/api/v1/deliveries/{$d->id}/collect", $paid)->assertOk();
     }
 
     private function package(array $a = []): Delivery
@@ -77,7 +85,7 @@ class PartnerStaffDriverTest extends TestCase
     {
         $d = $this->package(['status' => 'in_progress', 'driver_id' => $this->staff->id]);
 
-        $this->as($this->staff)->postJson("/api/v1/deliveries/{$d->id}/complete")->assertOk();
+        $this->handover($d, ['cash_khr' => 30000]);
 
         $this->assertSame(0, (int) $this->staff->fresh()->wallet_balance);         // salary — nothing per trip
         $rec = TransactionRecord::where('reference_type', Delivery::class)->where('reference_id', $d->id)->firstOrFail();
@@ -95,7 +103,7 @@ class PartnerStaffDriverTest extends TestCase
     {
         // Even if "recipient" is sent, the fee is charged to the partner — the driver collects only the COD.
         $d = $this->package(['status' => 'in_progress', 'driver_id' => $this->staff->id, 'payment_by' => 'recipient']);
-        $this->as($this->staff)->postJson("/api/v1/deliveries/{$d->id}/complete")->assertOk();
+        $this->handover($d, ['cash_khr' => 30000]);
         $this->assertSame(['sender', 'unpaid'], [$d->fresh()->payment_by, $d->fresh()->payment_status]);
 
         $back = $this->package(['status' => 'in_progress', 'driver_id' => $this->staff->id]);

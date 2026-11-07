@@ -230,6 +230,11 @@ class Delivery extends Model
         return self::packageStatusFor((string) $this->status);
     }
 
+    public function collection(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(DeliveryCollection::class);
+    }
+
     public function trackingHistories(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(PackageTrackingHistory::class)->orderBy('id');

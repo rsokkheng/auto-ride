@@ -47,6 +47,12 @@ class CommissionService
                 $driverEarning = $fare - $platformFee - $companyShare;
                 break;
 
+            case 'staff':
+                // ROTEH staff on a salary — the whole fare is ROTEH's.
+                $platformFee   = $fare;
+                $driverEarning = 0;
+                break;
+
             case 'employee':
                 // Driver earns salary — no per-trip wallet credit.
                 $companyShare = $fare - $platformFee;

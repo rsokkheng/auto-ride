@@ -157,7 +157,7 @@ class User extends Authenticatable
     {
         return $query->where(fn ($q) => $q
             ->where('wallet_balance', '>=', self::minDriverBalance())
-            ->orWhere('driver_type', 'employee'));
+            ->orWhere('driver_type', self::STAFF_TYPE));
     }
 
     public function hasMinBalance(): bool
@@ -165,15 +165,22 @@ class User extends Authenticatable
         return $this->isSalariedStaff() || (int) $this->wallet_balance >= self::minDriverBalance();
     }
 
-    /** ROTEH staff driver on a salary — delivers Partner packages, earns nothing per trip. */
+    /**
+     * ROTEH staff driver (driver_type = staff): on a salary, delivers Partner
+     * packages ONLY — never rides, normal deliveries, moving or rentals — and
+     * earns nothing per trip. Separate from 'employee' (company drivers who do
+     * rides), so existing ride drivers are untouched.
+     */
+    public const STAFF_TYPE = 'staff';
+
     public function isSalariedStaff(): bool
     {
-        return $this->role === 'driver' && $this->driver_type === 'employee';
+        return $this->role === 'driver' && $this->driver_type === self::STAFF_TYPE;
     }
 
     public function scopeSalariedStaff($query)
     {
-        return $query->where('role', 'driver')->where('driver_type', 'employee');
+        return $query->where('role', 'driver')->where('driver_type', self::STAFF_TYPE);
     }
 
     // ── Service modes (driver app's Ride / Delivery / Rental toggles) ───────
@@ -185,15 +192,26 @@ class User extends Authenticatable
         'rental'   => 'accepts_rentals',
     ];
 
-    /** Drivers who have the given job type switched on (null = any). */
+    /**
+     * Drivers who can take the given job type (null = any public job).
+     * 'partner' (Partner packages) = ROTEH staff only; every other job type
+     * excludes staff, so ride/delivery drivers and staff never overlap.
+     */
     public function scopeAcceptingService($query, ?string $service)
     {
+        if ($service === 'partner') {
+            return $query->where('driver_type', self::STAFF_TYPE);
+        }
+        $query->where(fn ($q) => $q->whereNull('driver_type')->orWhere('driver_type', '<>', self::STAFF_TYPE));
         $column = self::SERVICE_MODE_COLUMNS[$service] ?? null;
         return $column ? $query->where($column, true) : $query;
     }
 
     public function acceptsService(string $service): bool
     {
+        // Staff take Partner packages only; nobody else takes them.
+        if ($this->isSalariedStaff()) return $service === 'partner';
+        if ($service === 'partner') return false;
         $column = self::SERVICE_MODE_COLUMNS[$service] ?? null;
         return $column === null || (bool) ($this->{$column} ?? true);
     }

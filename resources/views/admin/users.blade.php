@@ -16,8 +16,8 @@
         'admin'     => ['Admins',     'fa-user-shield',   'danger'],
     ];
     $rc       = ['admin' => 'danger', 'driver' => 'success', 'partner' => 'warning', 'passenger' => 'info'];
-    $dtColor  = ['owner' => 'success', 'rental' => 'warning', 'employee' => 'info'];
-    $dtLabel  = ['owner' => 'Own vehicle', 'rental' => 'Rental', 'employee' => 'Employee'];
+    $dtColor  = ['owner' => 'success', 'rental' => 'warning', 'employee' => 'info', 'staff' => 'primary'];
+    $dtLabel  = ['owner' => 'Own vehicle', 'rental' => 'Rental', 'employee' => 'Employee', 'staff' => 'ROTEH Staff · Packages'];
     $initials = fn (?string $name) => collect(preg_split('/\s+/', trim((string) $name)))->filter()->take(2)
         ->map(fn ($w) => mb_strtoupper(mb_substr($w, 0, 1)))->join('') ?: '?';
 @endphp
@@ -173,6 +173,7 @@
                                     <option value="owner">Own Vehicle (Independent)</option>
                                     <option value="employee">Employee — Company Vehicle</option>
                                     <option value="rental">Rental — Rents from Company</option>
+                                    <option value="staff">ROTEH Staff — Partner packages only (salary)</option>
                                 </select>
                             </div>
                             <div class="form-group col-md-6">
@@ -233,7 +234,7 @@ function toggleDriverInfo() {
 
 function toggleSalary() {
     var type = document.getElementById('f-driver-type').value;
-    document.getElementById('salary-field').style.display = type === 'employee' ? 'block' : 'none';
+    document.getElementById('salary-field').style.display = (type === 'employee' || type === 'staff') ? 'block' : 'none';
 }
 
 function previewAvatar(input) {

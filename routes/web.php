@@ -274,6 +274,14 @@ Route::prefix('admin')->middleware(\App\Http\Middleware\AdminAuth::class)->group
     Route::get('partner-packages',                     [\App\Http\Controllers\Admin\PartnerAdminController::class, 'packages'])->name('admin.partner-packages');
     Route::post('partner-packages/{delivery}/confirm', [\App\Http\Controllers\Admin\PartnerAdminController::class, 'confirmPackage'])->name('admin.partner-packages.confirm');
 
+    // Daily closing (accountant): drivers → partners → finish day
+    Route::get('daily-closing',                              [\App\Http\Controllers\Admin\DailyClosingController::class, 'index'])->name('admin.daily-closing');
+    Route::post('daily-closing/drivers/{driver}',           [\App\Http\Controllers\Admin\DailyClosingController::class, 'closeDriver'])->name('admin.daily-closing.driver.close');
+    Route::post('daily-closing/drivers/{driver}/reopen',    [\App\Http\Controllers\Admin\DailyClosingController::class, 'reopenDriver'])->name('admin.daily-closing.driver.reopen');
+    Route::post('daily-closing/partners/{partner}',         [\App\Http\Controllers\Admin\DailyClosingController::class, 'closePartner'])->name('admin.daily-closing.partner.close');
+    Route::post('daily-closing/partners/{partner}/reopen',  [\App\Http\Controllers\Admin\DailyClosingController::class, 'reopenPartner'])->name('admin.daily-closing.partner.reopen');
+    Route::post('daily-closing/finish',                      [\App\Http\Controllers\Admin\DailyClosingController::class, 'finish'])->name('admin.daily-closing.finish');
+
     // Daily Partner statements (successful / unsuccessful)
     Route::get('partner-statements',                       [\App\Http\Controllers\PartnerStatementController::class, 'adminIndex'])->name('admin.partner-statements');
     Route::get('partner-statements/drivers/cash',          [\App\Http\Controllers\PartnerStatementController::class, 'adminDriverCash'])->name('admin.partner-statements.drivers');

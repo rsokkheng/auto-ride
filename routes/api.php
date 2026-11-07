@@ -166,6 +166,7 @@ Route::prefix('v1')->group(function () {
     Route::post('deliveries/{delivery}/cancel', [DeliveryController::class, 'cancel']);
     Route::post('deliveries/{delivery}/track', [DeliveryController::class, 'track']);
     Route::post('deliveries/{delivery}/complete', [DeliveryController::class, 'complete']);
+    Route::post('deliveries/{delivery}/collect', [\App\Http\Controllers\Api\DeliveryCollectionController::class, 'store']);
     Route::post('deliveries/{delivery}/fail', [\App\Http\Controllers\Api\DeliveryOutcomeController::class, 'fail']);
     Route::post('deliveries/{delivery}/return', [\App\Http\Controllers\Api\DeliveryOutcomeController::class, 'returned']);
     Route::post('deliveries/{delivery}/rate', [DeliveryController::class, 'rate']);
@@ -252,6 +253,7 @@ Route::prefix('v1')->group(function () {
     Route::post('driver/availability', [DriverController::class, 'setAvailability']);
     Route::post('driver/go-online', [DriverController::class, 'goOnline']);
     Route::post('driver/modes', [DriverController::class, 'setServiceModes']);
+    Route::get('driver/staff/today', [\App\Http\Controllers\Api\StaffDriverController::class, 'today']);
     Route::post('driver/go-offline', [DriverController::class, 'goOffline']);
     Route::post('driver/location', [DriverController::class, 'updateLocation']);
     Route::post('driver/rides/{ride}/decline', [DriverController::class, 'declineRide']);

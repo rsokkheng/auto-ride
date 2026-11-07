@@ -223,6 +223,10 @@ class DriverController extends ApiController
 
     private function applyServiceModes(User $user, array $modes): void
     {
+        if ($user->isSalariedStaff()) {
+            // Staff deliver Partner packages only.
+            $modes = ['ride' => false, 'delivery' => true, 'rental' => false];
+        }
         $user->update([
             'accepts_rides'      => (bool) $modes['ride'],
             'accepts_deliveries' => (bool) $modes['delivery'],

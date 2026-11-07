@@ -176,7 +176,7 @@ class PartnerStatementService
                 ->where(fn ($w) => $w->whereIn('status', ['delivered', 'completed'])->whereBetween('completed_at', [$a, $b]))
                 ->orWhere(fn ($w) => $w->where('status', 'delivery_failed')->whereBetween('failed_at', [$a, $b]))
                 ->orWhere(fn ($w) => $w->where('status', 'returned')->whereBetween('returned_at', [$a, $b])))
-            ->with(['driver:id,name,phone,driver_type', 'partner:id,name,company_name', 'partner.partnerProfile:id,user_id,business_name'])
+            ->with(['driver:id,name,phone,driver_type', 'partner:id,name,company_name', 'partner.partnerProfile:id,user_id,business_name', 'collection'])
             ->orderBy('completed_at')
             ->get();
 
@@ -187,8 +187,13 @@ class PartnerStatementService
             $cashFee = fn ($d) => 0;
             $cod = (int) $done->sum('package_amount');
             $fees = (int) $done->sum($cashFee);
+            $col = $done->pluck('collection')->filter();
             return [
                 'driver'          => $driver,
+                'cash_khr'        => (int) $col->sum('cash_khr') + (int) $done->whereNull('collection')->sum('package_amount'),
+                'cash_usd'        => round((float) $col->sum('cash_usd'), 2),
+                'bank_khr'        => (int) $col->sum('bank_khr'),
+                'bank_usd'        => round((float) $col->sum('bank_usd'), 2),
                 'delivered'       => $done->count(),
                 'cod_collected'   => $cod,
                 'cash_fees'       => $fees,
@@ -204,6 +209,9 @@ class PartnerStatementService
                     'cod'       => in_array($d->status, ['delivered', 'completed'], true) ? (int) $d->package_amount : 0,
                     'cash_fee'  => in_array($d->status, ['delivered', 'completed'], true) ? $cashFee($d) : 0,
                     'time'      => ($d->completed_at ?? $d->returned_at ?? $d->failed_at)?->copy()->setTimezone(self::tz())->format('H:i'),
+                    'paid_via'  => $d->collection?->methodLabel(),
+                    'cash_usd'  => $d->collection?->cash_usd ?? 0,
+                    'bank'      => $d->collection ? ($d->collection->bank_khr + (int) round($d->collection->bank_usd * $d->collection->khr_per_usd)) : 0,
                 ])->values()->all(),
             ];
         })->sortByDesc('cash_to_hand_over')->values();
@@ -254,7 +262,7 @@ class PartnerStatementService
         $successful = Delivery::where('partner_id', $partner->id)
             ->whereIn('status', ['delivered', 'completed'])
             ->whereBetween('completed_at', [$a, $b])
-            ->with('driver:id,name,phone')
+            ->with(['driver:id,name,phone', 'collection'])
             ->orderBy('completed_at')
             ->get()
             ->map(fn (Delivery $d) => $this->successRow($d))
@@ -313,6 +321,13 @@ class PartnerStatementService
                     ->mapWithKeys(fn ($g) => [$g => collect($all)->where('group', $g)->count()])->all(),
                 'total_count'         => count($all),
             ],
+            // Accountant's close with this partner for the day (null = still open).
+            'closing'      => $from->isSameDay($to)
+                ? \App\Models\PartnerClosing::with('closer:id,name')->where('partner_id', $partner->id)
+                    ->whereDate('business_date', $from->toDateString())->first()?->only([
+                        'settle_method', 'settle_ref', 'note', 'closed_at', 'net_to_partner',
+                    ])
+                : null,
         ];
     }
 
@@ -358,6 +373,13 @@ class PartnerStatementService
             'fee_paid_by'    => $paidBy,        // receiver | partner_prepaid | partner_from_cod
             'fee_from_cod'   => $fromCod,
             'total_collected' => $cod,   // the receiver pays only the item price
+            'paid_via'       => $d->collection?->methodLabel(),
+            'collected'      => $d->collection ? [
+                'cash_khr' => $d->collection->cash_khr, 'cash_usd' => $d->collection->cash_usd,
+                'bank_khr' => $d->collection->bank_khr, 'bank_usd' => $d->collection->bank_usd,
+                'bank_name' => $d->collection->bank_name, 'bank_ref' => $d->collection->bank_ref,
+                'difference_khr' => $d->collection->difference_khr, 'note' => $d->collection->note,
+            ] : null,
             'roteh_pays_partner' => max(0, $cod - $fromCod),
             'partner_pays_roteh' => max(0, $fromCod - $cod),
             'net_to_partner' => $cod - $fromCod,

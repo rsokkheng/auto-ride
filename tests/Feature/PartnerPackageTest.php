@@ -107,7 +107,7 @@ class PartnerPackageTest extends TestCase
         Storage::disk('public')->assertExists($d->package_photo);
 
         // Drivers don't see it before ROTEH confirms.
-        $driver = User::factory()->create(['role' => 'driver', 'driver_type' => 'employee', 'api_token' => 'd-' . uniqid(), 'token_expires_at' => now()->addHour(), 'available' => true]);
+        $driver = User::factory()->create(['role' => 'driver', 'driver_type' => 'staff', 'api_token' => 'd-' . uniqid(), 'token_expires_at' => now()->addHour(), 'available' => true]);
         $this->as($driver)->getJson('/api/v1/deliveries/available')->assertJsonCount(0, 'data.deliveries.data');
 
         $admin = User::factory()->create(['role' => 'admin']);
@@ -217,7 +217,9 @@ class PartnerPackageTest extends TestCase
         $d = $this->pickedUpPackage($p, $driver);
 
         $this->as($driver)->postJson("/api/v1/deliveries/{$d->id}/fail", ['reason' => 'cannot_contact'])->assertOk();
-        $this->as($driver)->postJson("/api/v1/deliveries/{$d->id}/complete")->assertOk();
+        // Receiver answered later: scan at handover, verify payment → completed.
+        $this->as($driver)->postJson('/api/v1/deliveries/scan-qr', ['qr_token' => $d->fresh()->qr_token])->assertOk();
+        $this->as($driver)->postJson("/api/v1/deliveries/{$d->id}/collect", ['cash_khr' => (int) $d->package_amount])->assertOk();
         $this->assertSame('completed', $d->fresh()->packageStatus());
     }
 

@@ -317,7 +317,7 @@ class AdminController extends Controller
             'password'        => 'required|string|min:6',
             'phone'           => 'nullable|string|max:20',
             'role'            => 'required|in:admin,driver,passenger,partner',
-            'driver_type'     => 'nullable|in:employee,owner,rental',
+            'driver_type'     => 'nullable|in:employee,owner,rental,staff',
             'company_id'      => 'nullable|exists:companies,id',
             'salary'          => 'nullable|integer|min:0',
             'commission_rate' => 'nullable|numeric|min:0|max:100',
@@ -330,6 +330,15 @@ class AdminController extends Controller
             $data['company_id']      = null;
             $data['salary']          = 0;
             $data['commission_rate'] = null;
+        }
+
+        // ROTEH staff: Partner packages only, created & vouched for by admin.
+        if (($data['driver_type'] ?? null) === User::STAFF_TYPE) {
+            $data['accepts_rides']      = false;
+            $data['accepts_deliveries'] = true;
+            $data['accepts_rentals']    = false;
+            $data['approval_status']    = 'approved';
+            $data['commission_rate']    = null;
         }
 
         // Handle optional avatar upload on create.
@@ -365,7 +374,7 @@ class AdminController extends Controller
             'phone'           => 'nullable|string|max:20',
             'role'            => 'required|in:admin,driver,passenger,partner',
             'wallet_balance'  => 'nullable|integer|min:0',
-            'driver_type'     => 'nullable|in:employee,owner,rental',
+            'driver_type'     => 'nullable|in:employee,owner,rental,staff',
             'company_id'      => 'nullable|exists:companies,id',
             'salary'          => 'nullable|integer|min:0',
             'commission_rate' => 'nullable|numeric|min:0|max:100',
@@ -380,6 +389,15 @@ class AdminController extends Controller
             $data['company_id']      = null;
             $data['salary']          = 0;
             $data['commission_rate'] = null;
+        }
+
+        // ROTEH staff: Partner packages only, created & vouched for by admin.
+        if (($data['driver_type'] ?? null) === User::STAFF_TYPE) {
+            $data['accepts_rides']      = false;
+            $data['accepts_deliveries'] = true;
+            $data['accepts_rentals']    = false;
+            $data['approval_status']    = 'approved';
+            $data['commission_rate']    = null;
         }
 
         // Handle avatar upload if a file was attached.
@@ -973,8 +991,12 @@ class AdminController extends Controller
             'driver_id' => 'required|exists:users,id',
         ]);
 
-        if ($delivery->partner_id && ! User::find($data['driver_id'])?->isSalariedStaff()) {
-            return back()->with('error', 'Partner packages can only be assigned to ROTEH staff drivers (salaried).');
+        $target = User::find($data['driver_id']);
+        if ($delivery->partner_id && ! $target?->isSalariedStaff()) {
+            return back()->with('error', 'Partner packages can only be assigned to ROTEH staff drivers.');
+        }
+        if (! $delivery->partner_id && $target?->isSalariedStaff()) {
+            return back()->with('error', 'ROTEH staff drivers deliver Partner packages only.');
         }
 
         $delivery->update([

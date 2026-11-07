@@ -113,6 +113,13 @@ tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid 
             <span class="en">Generated {{ \Carbon\Carbon::parse($s['generated_at'])->format('d/m/Y H:i') }}</span>
         </div>
     </div>
+    @if(!empty($s['closing']))
+        <div class="balance" style="margin:0 0 10px;">
+            <div>✅ បានបិទបញ្ជីជាមួយ ROTEH · Closed with ROTEH — {{ ucfirst(str_replace('_', ' ', $s['closing']['settle_method'] ?? '')) }}
+                @if(!empty($s['closing']['settle_ref'])) · {{ $s['closing']['settle_ref'] }} @endif</div>
+            <div class="en">{{ \Carbon\Carbon::parse($s['closing']['closed_at'])->timezone(\App\Services\PartnerStatementService::tz())->format('d/m/Y H:i') }}</div>
+        </div>
+    @endif
     <div class="info">
         <div><span>ដៃគូ · Partner:</span> <b>{{ $s['partner']['business_name'] }}</b></div>
         <div><span>ទូរស័ព្ទ · Phone:</span> {{ $s['partner']['phone'] }}</div>
@@ -151,7 +158,9 @@ tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid 
                     <div class="small">{{ $sizes[$r['package_size']] ?? $r['package_size'] }}@if($r['express']) · ⚡@endif</div></td>
                 <td>{{ \Illuminate\Support\Str::after($r['completed_at'], ' ') }}<div class="small">{{ $r['driver'] }}</div></td>
                 <td>{{ $r['receiver_name'] }}<div class="small">{{ $r['receiver_phone'] }}</div><div class="small">{{ \Illuminate\Support\Str::limit($r['dropoff_address'], 50) }}</div></td>
-                <td class="r">{{ $r['cod_collected'] ? $k($r['cod_collected']) : 'គ្មាន COD' }}</td>
+                <td class="r">{{ $r['cod_collected'] ? $k($r['cod_collected']) : 'គ្មាន COD' }}
+                    @if(!empty($r['paid_via']))<div class="small">{{ $r['paid_via'] }}</div>@endif
+                    @if(!empty($r['collected']['difference_khr']))<div class="small" style="color:#b91c1c;">diff {{ $k($r['collected']['difference_khr']) }}</div>@endif</td>
                 <td class="r">{{ $k($r['fee']) }}</td>
                 <td class="small">{{ $paidBy[$r['fee_paid_by']] ?? $r['fee_paid_by'] }}</td>
                 <td class="r" style="color:#047857;"><b>{{ $r['roteh_pays_partner'] ? $k($r['roteh_pays_partner']) : '—' }}</b></td>

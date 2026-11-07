@@ -681,7 +681,9 @@
                             @php
                                 // Partner packages: ROTEH staff (salaried) drivers only.
                                 $drivers = \App\Models\User::where('role', 'driver')
-                                    ->when($delivery->partner_id, fn ($q) => $q->where('driver_type', 'employee'))
+                                    ->when($delivery->partner_id,
+                                        fn ($q) => $q->where('driver_type', \App\Models\User::STAFF_TYPE),
+                                        fn ($q) => $q->where(fn ($w) => $w->whereNull('driver_type')->orWhere('driver_type', '<>', \App\Models\User::STAFF_TYPE)))
                                     ->orderBy('name')->get();
                             @endphp
                             @foreach($drivers as $dr)
