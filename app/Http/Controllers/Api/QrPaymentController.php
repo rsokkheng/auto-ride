@@ -138,7 +138,7 @@ class QrPaymentController extends ApiController
     private function buildKhqrPayload(string $reference, int $amountKhr): string
     {
         // Simplified EMV QR payload for KHQR
-        $merchant = config('app.name', 'AutoRide');
+        $merchant = config('app.name', 'ROTEH');
         $amount   = number_format($amountKhr / 100, 2, '.', ''); // KHR in Riel (no decimals typical)
 
         return implode('|', [

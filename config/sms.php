@@ -12,12 +12,12 @@ return [
     'nexmo' => [
         'key'    => env('NEXMO_KEY'),
         'secret' => env('NEXMO_SECRET'),
-        'from'   => env('NEXMO_FROM', 'AutoRide'),
+        'from'   => env('NEXMO_FROM', 'ROTEH'),
     ],
 
     'http' => [
         'url'     => env('SMS_HTTP_URL'),
         'api_key' => env('SMS_HTTP_API_KEY'),
-        'from'    => env('SMS_HTTP_FROM', 'AutoRide'),
+        'from'    => env('SMS_HTTP_FROM', 'ROTEH'),
     ],
 ];
