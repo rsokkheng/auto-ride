@@ -197,13 +197,17 @@ class PartnerPackageTest extends TestCase
             ->assertJsonPath('data.package.failure_reason', 'cannot_contact')
             ->assertJsonPath('data.package.can_cancel', false);
 
+        // Driver taps Finish → package is at ROTEH (driver no longer holds it).
         $this->as($driver)->postJson("/api/v1/deliveries/{$d->id}/return")
-            ->assertOk()->assertJsonPath('data.delivery.status', 'returned');
+            ->assertOk()->assertJsonPath('data.delivery.status', 'at_roteh');
         $this->assertFalse($driver->fresh()->hasActiveTrip());
+        $this->as($p)->getJson("/api/v1/partner/packages/{$d->id}")->assertJsonPath('data.package.status', 'at_roteh');
 
+        // ROTEH hands it back to the shop.
+        app(\App\Services\DailyClosingService::class)->returnToShop([$d->fresh()]);
         $res = $this->as($p)->getJson("/api/v1/partner/packages/{$d->id}")
             ->assertJsonPath('data.package.status', 'returned');
-        $this->assertSame(['pending', 'in_transit', 'failed', 'returned'],
+        $this->assertSame(['pending', 'in_transit', 'failed', 'at_roteh', 'returned'],
             collect($res->json('data.package.timeline'))->pluck('status')->all());
         $this->as($p)->getJson('/api/v1/partner/packages?group=history')->assertJsonPath('data.pagination.total', 1);
 

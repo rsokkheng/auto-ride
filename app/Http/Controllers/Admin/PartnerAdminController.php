@@ -91,7 +91,7 @@ class PartnerAdminController extends Controller
         $raw = [
             'pending' => ['created'], 'confirmed' => ['requested', 'pending'], 'driver_assigned' => ['assigned', 'accepted'],
             'picked_up' => ['picked_up'], 'in_transit' => ['in_progress', 'in_transit'],
-            'completed' => ['delivered', 'completed'], 'failed' => ['delivery_failed'], 'returned' => ['returned'],
+            'completed' => ['delivered', 'completed'], 'failed' => ['delivery_failed'], 'at_roteh' => ['at_roteh'], 'returned' => ['returned'],
             'cancelled' => ['cancelled'],
         ];
 
@@ -143,6 +143,18 @@ class PartnerAdminController extends Controller
         }
 
         return back()->with('success', "Package #{$delivery->id} confirmed — now assign a ROTEH staff driver.");
+    }
+
+    /** Packages brought back to ROTEH → handed back to the shop. */
+    public function returnPackagesToShop(Request $request)
+    {
+        $data = $request->validate(['ids' => 'required|array|min:1', 'ids.*' => 'integer|exists:deliveries,id']);
+        $n = app(\App\Services\DailyClosingService::class)
+            ->returnToShop(Delivery::whereIn('id', $data['ids'])->whereNotNull('partner_id')->get());
+
+        return back()->with($n ? 'success' : 'error', $n
+            ? "{$n} package(s) marked as returned to the shop."
+            : 'Only packages that are at ROTEH can be returned to the shop.');
     }
 
     /** Assign one or many packages to a ROTEH staff driver. */

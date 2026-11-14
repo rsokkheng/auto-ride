@@ -112,7 +112,7 @@ return [
     'partner_approved' => ['title' => '🎉 您已成为 ROTEH 伙伴', 'body' => '您的伙伴账户 :name 已通过审核，现在可以创建包裹交由 ROTEH 配送。'],
     'partner_rejected' => ['title' => '伙伴注册未通过', 'body' => '您的伙伴注册未通过。原因：:reason'],
     'partner_package_confirmed' => ['title' => '📦 包裹已确认', 'body' => ':code 已确认，ROTEH 正在寻找司机取件。'],
-    'delivery_failed_sender' => ['title' => '⚠️ 包裹未送达', 'body' => ':code 未能送达：:reason。司机正在将其送回。'],
+    'delivery_failed_sender' => ['title' => '⚠️ 包裹未送达', 'body' => ':code 未能送达：:reason。司机正在将其送回 ROTEH。'],
     'delivery_returned_sender' => ['title' => '↩️ 包裹已退回', 'body' => ':code 已退回您的店铺。'],
     'failure_reasons' => [
         'cannot_contact' => '无法联系收件人',
@@ -122,4 +122,5 @@ return [
         'other' => '其他原因',
     ],
     'staff_package_assigned' => ['title' => '📦 新包裹已分配给您', 'body' => ':code——请到 :pickup 取件并扫描二维码。'],
+    'delivery_at_roteh_sender' => ['title' => '📦 包裹已回到 ROTEH', 'body' => ':code 未能送达，现已回到 ROTEH，将退还给您的店铺。'],
 ];

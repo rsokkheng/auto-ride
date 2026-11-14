@@ -9,7 +9,7 @@
     $paidBy = ['partner_prepaid' => 'ដៃគូបង់រួច · Prepaid', 'partner_from_cod' => 'កាត់ពី COD · From COD', 'partner_pays' => 'ដៃគូបង់ ROTEH · Partner pays'];
     $show = fn ($t) => $type === $t || ($type === 'both' && $t !== 'all');
     $groupTag = ['pending' => 't-can', 'confirmed' => 't-can', 'on_the_way' => 't-ret', 'completed' => 't-ok',
-                 'failed' => 't-fail', 'returned' => 't-ret', 'cancelled' => 't-can'];
+                 'failed' => 't-fail', 'at_roteh' => 't-ret', 'returned' => 't-ret', 'cancelled' => 't-can'];
 @endphp
 <!DOCTYPE html>
 <html lang="km">
@@ -215,8 +215,8 @@ tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid 
     </div>
     <div class="cards">
         <div class="card neg"><div class="v">{{ $sum['unsuccessful_count'] }}</div><div class="l">មិនជោគជ័យ · Unsuccessful</div></div>
-        <div class="card"><div class="v">{{ $sum['returned_count'] }}</div><div class="l">ប្រគល់មកហាងវិញ · Returned</div></div>
-        <div class="card"><div class="v">{{ $sum['returning_count'] }}</div><div class="l">កំពុងយកត្រឡប់ · Returning</div></div>
+        <div class="card"><div class="v">{{ $sum['returned_count'] }}</div><div class="l">ប្រគល់ហាងវិញ · Returned to shop</div></div>
+        <div class="card"><div class="v">{{ $sum['returning_count'] + $sum['at_roteh_count'] }}</div><div class="l">កំពុងយកត្រឡប់ / នៅ ROTEH · Coming back</div></div>
         <div class="card"><div class="v">{{ $k($sum['cod_not_collected']) }} ៛</div><div class="l">COD មិនបានប្រមូល · COD not collected</div></div>
     </div>
     <div class="tbl"><table>
@@ -236,7 +236,7 @@ tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid 
                 <td>{{ $i + 1 }}</td>
                 <td><span class="code">{{ $r['code'] }}</span>@if($r['reference'])<div class="small">#{{ $r['reference'] }}</div>@endif</td>
                 <td>
-                    <span class="tag {{ ['failed' => 't-fail', 'returned' => 't-ret', 'cancelled' => 't-can'][$r['status']] ?? '' }}">{{ PS::UNSUCCESSFUL_STATUS[$r['status']][1] ?? $r['status'] }}</span>
+                    <span class="tag {{ ['failed' => 't-fail', 'at_roteh' => 't-ret', 'returned' => 't-ret', 'cancelled' => 't-can'][$r['status']] ?? '' }}">{{ PS::UNSUCCESSFUL_STATUS[$r['status']][1] ?? $r['status'] }}</span>
                     <div class="small">{{ \Illuminate\Support\Str::after($r['closed_at'] ?? '', ' ') }} @if($r['driver'])· {{ $r['driver'] }}@endif</div>
                 </td>
                 <td>@if($r['reason']){{ PS::REASONS[$r['reason']][1] ?? $r['reason'] }}<div class="small">{{ PS::REASONS[$r['reason']][0] ?? '' }}</div>@endif

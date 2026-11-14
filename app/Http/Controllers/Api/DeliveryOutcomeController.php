@@ -10,7 +10,8 @@ use Illuminate\Http\Request;
 /**
  * Driver outcomes besides "completed":
  *   POST /v1/deliveries/{id}/fail    {reason, note?} — could not hand it over
- *   POST /v1/deliveries/{id}/return                  — package is back at the shop
+ *   POST /v1/deliveries/{id}/return                  — Finish: package brought back to ROTEH
+ *                                                      (ROTEH hands it back to the shop at the partner close)
  * A failed package can still be completed if the receiver is reached later.
  */
 class DeliveryOutcomeController extends ApiController
@@ -54,7 +55,7 @@ class DeliveryOutcomeController extends ApiController
         $user = $this->authUser($request);
         if (! $user || $user->role !== 'driver' || $delivery->driver_id !== $user->id) return $this->unauthorized();
 
-        if ($delivery->status === 'returned') {
+        if (in_array($delivery->status, ['at_roteh', 'returned'], true)) {
             return $this->success(['delivery' => $delivery->load('sender', 'driver', 'vehicle')]);
         }
         if ($delivery->status !== 'delivery_failed') {
@@ -64,9 +65,12 @@ class DeliveryOutcomeController extends ApiController
             ], 422);
         }
 
-        $delivery->update(['status' => 'returned', 'returned_at' => now()]);
+        // Partner packages come back to ROTEH; other deliveries go straight back to the sender.
+        $delivery->update($delivery->partner_id
+            ? ['status' => 'at_roteh', 'hub_returned_at' => now()]
+            : ['status' => 'returned', 'returned_at' => now(), 'hub_returned_at' => now()]);
         $this->sync($delivery);
-        $this->notifySender($delivery, 'delivery_returned_sender', []);
+        $this->notifySender($delivery, $delivery->partner_id ? 'delivery_at_roteh_sender' : 'delivery_returned_sender', []);
 
         return $this->success(['delivery' => $delivery->fresh(['sender', 'driver', 'vehicle'])]);
     }

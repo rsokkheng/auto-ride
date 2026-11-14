@@ -1035,8 +1035,8 @@ class DeliveryController extends ApiController
         if ($delivery->status === 'cancelled') {
             return response()->json(['data' => null, 'message' => 'Cannot complete a cancelled job.'], 422);
         }
-        if ($delivery->status === 'returned') {
-            return response()->json(['data' => null, 'message' => 'This package was returned to the shop.'], 422);
+        if (in_array($delivery->status, ['returned', 'at_roteh'], true)) {
+            return response()->json(['data' => null, 'message' => 'This package was brought back to ROTEH.'], 422);
         }
 
         // Partner packages complete only through scan + verified payment.

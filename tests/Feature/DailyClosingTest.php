@@ -150,4 +150,47 @@ class DailyClosingTest extends TestCase
         $this->as($owner)->postJson("/api/v1/deliveries/{$d->id}/complete")->assertOk();
         $this->assertSame('completed', $d->fresh()->status);
     }
+
+    public function test_failed_package_back_to_roteh_fee_charged_and_handed_back_at_partner_close(): void
+    {
+        $d = $this->package(60000, 15000);
+        $this->scan($d);                                                         // picked up
+        $this->as($this->staff)->postJson("/api/v1/deliveries/{$d->id}/fail", ['reason' => 'cannot_contact'])->assertOk();
+        $this->as($this->staff)->postJson("/api/v1/deliveries/{$d->id}/return")->assertOk()
+            ->assertJsonPath('data.delivery.status', 'at_roteh');                // driver taps Finish
+
+        // Fee charged even though it failed; nothing to pay out.
+        $this->as($this->partner)->getJson("/api/v1/partner/statements?date={$this->today}")
+            ->assertJsonPath('data.unsuccessful.0.status', 'at_roteh')
+            ->assertJsonPath('data.unsuccessful.0.fee_charged', 15000)
+            ->assertJsonPath('data.summary.partner_pays_roteh', 15000)
+            ->assertJsonPath('data.summary.net_to_partner', -15000);
+
+        // Driver close: must confirm the returned package was received.
+        $this->actingAs($this->admin)->post(route('admin.daily-closing.driver.close', $this->staff),
+            ['date' => $this->today, 'received_cash_khr' => 0])->assertSessionHasErrors('returns_received');
+        $this->actingAs($this->admin)->post(route('admin.daily-closing.driver.close', $this->staff),
+            ['date' => $this->today, 'received_cash_khr' => 0, 'returns_received' => 1])->assertSessionHas('success');
+
+        // Partner close hands the package back to the shop.
+        $this->actingAs($this->admin)->post(route('admin.daily-closing.partner.close', $this->partner),
+            ['date' => $this->today, 'settle_method' => 'cash'])->assertSessionHas('success');
+        $this->assertSame('returned', $d->fresh()->status);
+        $this->assertNotNull($d->fresh()->returned_at);
+        $this->as($this->partner)->getJson("/api/v1/partner/statements?date={$this->today}")
+            ->assertJsonPath('data.closing.net_to_partner', -15000)
+            ->assertJsonPath('data.unsuccessful.0.status', 'returned');
+    }
+
+    public function test_bulk_returned_to_shop_from_partner_packages(): void
+    {
+        $d = $this->package(10000);
+        $this->scan($d);
+        $this->as($this->staff)->postJson("/api/v1/deliveries/{$d->id}/fail", ['reason' => 'wrong_address']);
+        $this->as($this->staff)->postJson("/api/v1/deliveries/{$d->id}/return");
+
+        $this->actingAs($this->admin)->get(route('admin.partner-packages'))->assertOk()->assertSee('package(s) at ROTEH');
+        $this->actingAs($this->admin)->post(route('admin.partner-packages.return'), ['ids' => [$d->id]])->assertSessionHas('success');
+        $this->assertSame('returned', $d->fresh()->status);
+    }
 }

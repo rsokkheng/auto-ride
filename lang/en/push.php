@@ -114,7 +114,7 @@ return [
     'partner_approved' => ['title' => '🎉 You are now a ROTEH Partner', 'body' => 'Your Partner account for :name is approved. You can now create packages for ROTEH to deliver.'],
     'partner_rejected' => ['title' => 'Partner registration not approved', 'body' => 'Your Partner registration was not approved. Reason: :reason'],
     'partner_package_confirmed' => ['title' => '📦 Package confirmed', 'body' => ':code is confirmed. ROTEH is finding a driver to pick it up.'],
-    'delivery_failed_sender' => ['title' => '⚠️ Package not delivered', 'body' => ':code could not be delivered: :reason. The driver is bringing it back to you.'],
+    'delivery_failed_sender' => ['title' => '⚠️ Package not delivered', 'body' => ':code could not be delivered: :reason. The driver is bringing it back to ROTEH.'],
     'delivery_returned_sender' => ['title' => '↩️ Package returned', 'body' => ':code has been returned to your shop.'],
     'failure_reasons' => [
         'cannot_contact' => 'cannot contact the receiver',
@@ -124,4 +124,5 @@ return [
         'other' => 'other reason',
     ],
     'staff_package_assigned' => ['title' => '📦 New package assigned', 'body' => ':code — pick it up at :pickup and scan the QR.'],
+    'delivery_at_roteh_sender' => ['title' => '📦 Package back at ROTEH', 'body' => ':code could not be delivered and is now at ROTEH. It will be handed back to your shop.'],
 ];

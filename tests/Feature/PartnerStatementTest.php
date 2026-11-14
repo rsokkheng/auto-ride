@@ -83,10 +83,10 @@ class PartnerStatementTest extends TestCase
           ->assertJsonPath('data.summary.service_fees', 20000)
           ->assertJsonPath('data.summary.fees_paid_by_receiver', 0)
           ->assertJsonPath('data.summary.fees_prepaid', 10000)
-          ->assertJsonPath('data.summary.fees_from_cod', 10000)
+          ->assertJsonPath('data.summary.fees_from_cod', 20000)          // 2 × 5k from COD + 2 failed attempts × 5k
           ->assertJsonPath('data.summary.cod_not_collected', 25000)
-          ->assertJsonPath('data.summary.failed_fees', 0)
-          ->assertJsonPath('data.summary.net_to_partner', 60000) // (40k − 5k) + (30k − 5k) + 0
+          ->assertJsonPath('data.summary.failed_fees', 10000)            // full fee even when delivery fails
+          ->assertJsonPath('data.summary.net_to_partner', 50000) // (40k − 5k) + (30k − 5k) − 10k failed fees
           ->assertJsonPath('data.successful.1.fee_paid_by', 'partner_from_cod')
           ->assertJsonPath('data.unsuccessful.0.reason', 'cannot_contact');
     }
@@ -106,7 +106,7 @@ class PartnerStatementTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
 
         $this->actingAs($admin)->get(route('admin.partner-statements', ['date' => $this->day]))
-            ->assertOk()->assertSee('ហាងសុខា Shop')->assertSee('60,000');
+            ->assertOk()->assertSee('ហាងសុខា Shop')->assertSee('50,000');
 
         $this->actingAs($admin)->get(route('admin.partner-statements.show', [$this->partner, 'date' => $this->day, 'type' => 'successful']))
             ->assertOk()->assertSee('របាយការណ៍កញ្ចប់ដឹកជោគជ័យ')->assertDontSee('របាយការណ៍កញ្ចប់ដឹកមិនបានជោគជ័យ')->assertSee('ដារ៉ា');
@@ -152,9 +152,9 @@ class PartnerStatementTest extends TestCase
 
         $ov = app(\App\Services\PartnerStatementService::class)->overview(...\App\Services\PartnerStatementService::dayRange($this->day));
         $mine = $ov[$this->partner->id];
-        $this->assertSame(['pending' => 1, 'confirmed' => 1, 'on_the_way' => 1, 'completed' => 3, 'failed' => 1, 'returned' => 1, 'cancelled' => 1], $mine['counts']);
+        $this->assertSame(['pending' => 1, 'confirmed' => 1, 'on_the_way' => 1, 'completed' => 3, 'failed' => 1, 'at_roteh' => 0, 'returned' => 1, 'cancelled' => 1], $mine['counts']);
         $this->assertSame(9, $mine['total']);
-        $this->assertSame(60000, $mine['net_to_partner']);
+        $this->assertSame(50000, $mine['net_to_partner']);
         // Same numbers as the per-partner statement.
         $st = $this->api("/api/v1/partner/statements?date={$this->day}")->json('data.summary');
         $this->assertSame($mine['counts'], $st['status_counts']);
@@ -183,8 +183,8 @@ class PartnerStatementTest extends TestCase
         // Receivers pay only COD: 40k · 30k · 0 (prepaid) · 0 (no COD)
         $r->assertJsonPath('data.summary.total_collected', 70000)
           ->assertJsonPath('data.summary.roteh_pays_partner', 60000)   // (40k − 5k) + (30k − 5k)
-          ->assertJsonPath('data.summary.partner_pays_roteh', 5000)    // the no-COD package
-          ->assertJsonPath('data.summary.net_to_partner', 55000)
+          ->assertJsonPath('data.summary.partner_pays_roteh', 15000)   // no-COD package 5k + 2 failed attempts × 5k
+          ->assertJsonPath('data.summary.net_to_partner', 45000)
           ->assertJsonPath('data.summary.non_cod_packages', 2)
           ->assertJsonPath('data.successful.0.total_collected', 40000)
           ->assertJsonPath('data.successful.0.roteh_pays_partner', 35000)
@@ -195,7 +195,7 @@ class PartnerStatementTest extends TestCase
         // The admin overview (one SQL query) gives the same numbers.
         $ov = app(\App\Services\PartnerStatementService::class)
             ->overview(...\App\Services\PartnerStatementService::dayRange($this->day))[$this->partner->id];
-        $this->assertSame([70000, 60000, 5000, 55000],
+        $this->assertSame([70000, 60000, 15000, 45000],
             [$ov['total_collected'], $ov['roteh_pays_partner'], $ov['partner_pays_roteh'], $ov['net_to_partner']]);
 
         $admin = User::factory()->create(['role' => 'admin']);

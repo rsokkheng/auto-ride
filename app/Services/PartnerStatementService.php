@@ -38,7 +38,8 @@ class PartnerStatementService
     ];
 
     public const UNSUCCESSFUL_STATUS = [
-        'failed'    => ['Not delivered — returning', 'មិនបានដឹកដល់ — កំពុងយកត្រឡប់'],
+        'failed'    => ['Not delivered — driver bringing it to ROTEH', 'មិនបានដឹកដល់ — អ្នកបើកបរកំពុងយកមក ROTEH'],
+        'at_roteh'  => ['At ROTEH — to hand back to shop', 'នៅ ROTEH — រង់ចាំប្រគល់ហាង'],
         'returned'  => ['Returned to shop', 'បានប្រគល់ត្រឡប់មកហាង'],
         'cancelled' => ['Cancelled', 'បានបោះបង់'],
     ];
@@ -67,10 +68,14 @@ class PartnerStatementService
         'confirmed'  => ['Confirmed — finding driver', 'បានបញ្ជាក់ — កំពុងរកអ្នកបើកបរ'],
         'on_the_way' => ['On the way', 'កំពុងដឹក'],
         'completed'  => ['Completed', 'បានបញ្ចប់'],
-        'failed'     => ['Not delivered — returning', 'មិនបានដឹកដល់ — កំពុងយកត្រឡប់'],
+        'failed'     => ['Not delivered — driver bringing it to ROTEH', 'មិនបានដឹកដល់ — អ្នកបើកបរកំពុងយកមក ROTEH'],
+        'at_roteh'   => ['At ROTEH — to hand back to shop', 'នៅ ROTEH — រង់ចាំប្រគល់ហាង'],
         'returned'   => ['Returned to shop', 'បានប្រគល់ត្រឡប់មកហាង'],
         'cancelled'  => ['Cancelled', 'បានបោះបង់'],
     ];
+
+    /** Unsuccessful (attempted, not delivered) package groups — fee charged. */
+    public const FAILED_GROUPS = ['failed', 'at_roteh', 'returned'];
 
     /**
      * SQL pieces for "packages of the day": created that day and still open
@@ -90,8 +95,10 @@ class PartnerStatementService
             $cond[$g] = "(status IN ({$in($statuses)}) AND created_at BETWEEN ? AND ?)";
         }
         $cond['completed'] = "(status IN ('delivered','completed') AND completed_at BETWEEN ? AND ?)";
+        // Unsuccessful packages belong to the day the delivery failed (fee charged that day).
         $cond['failed']    = "(status = 'delivery_failed' AND failed_at BETWEEN ? AND ?)";
-        $cond['returned']  = "(status = 'returned' AND returned_at BETWEEN ? AND ?)";
+        $cond['at_roteh']  = "(status = 'at_roteh' AND failed_at BETWEEN ? AND ?)";
+        $cond['returned']  = "(status = 'returned' AND COALESCE(failed_at, returned_at) BETWEEN ? AND ?)";
         $cond['cancelled'] = "(status = 'cancelled' AND COALESCE(cancelled_at, updated_at) BETWEEN ? AND ?)";
 
         return [$cond, array_fill_keys(array_keys($cond), [$a, $b])];
@@ -121,11 +128,12 @@ class PartnerStatementService
         $select[] = "SUM(CASE WHEN {$done} THEN package_amount ELSE 0 END) AS total_collected";
         $select[] = "SUM(CASE WHEN {$done} AND package_amount - {$owed} > 0 THEN package_amount - {$owed} ELSE 0 END) AS roteh_pays";
         $select[] = "SUM(CASE WHEN {$done} AND {$owed} - package_amount > 0 THEN {$owed} - package_amount ELSE 0 END) AS partner_pays";
-        $select[] = "SUM(CASE WHEN {$cond['failed']} OR {$cond['returned']} THEN fee ELSE 0 END) AS attempted_fees";
-        $select[] = "SUM(CASE WHEN {$cond['failed']} OR {$cond['returned']} THEN package_amount ELSE 0 END) AS cod_not_collected";
+        $failedAny = "({$cond['failed']} OR {$cond['at_roteh']} OR {$cond['returned']})";
+        $select[] = "SUM(CASE WHEN {$failedAny} THEN fee ELSE 0 END) AS attempted_fees";
+        $select[] = "SUM(CASE WHEN {$failedAny} THEN package_amount ELSE 0 END) AS cod_not_collected";
         array_push($bindings, ...$bind['completed'], ...$bind['completed'], ...$bind['completed'],
             ...$bind['completed'], ...$bind['completed'], ...$bind['completed'],
-            ...$bind['failed'], ...$bind['returned'], ...$bind['failed'], ...$bind['returned']);
+            ...$bind['failed'], ...$bind['at_roteh'], ...$bind['returned'], ...$bind['failed'], ...$bind['at_roteh'], ...$bind['returned']);
 
         $where = '(' . implode(' OR ', $cond) . ')';
         $whereBindings = array_merge(...array_values($bind));
@@ -144,7 +152,7 @@ class PartnerStatementService
                     'counts'            => $counts,
                     'total'             => array_sum($counts),
                     'successful'        => $counts['completed'],
-                    'unsuccessful'      => $counts['failed'] + $counts['returned'] + $counts['cancelled'],
+                    'unsuccessful'      => $counts['failed'] + $counts['at_roteh'] + $counts['returned'] + $counts['cancelled'],
                     'open'              => $counts['pending'] + $counts['confirmed'] + $counts['on_the_way'],
                     'cod_collected'     => (int) $r->cod_collected,
                     'cod_not_collected' => (int) $r->cod_not_collected,
@@ -175,7 +183,7 @@ class PartnerStatementService
             ->where(fn ($q) => $q
                 ->where(fn ($w) => $w->whereIn('status', ['delivered', 'completed'])->whereBetween('completed_at', [$a, $b]))
                 ->orWhere(fn ($w) => $w->where('status', 'delivery_failed')->whereBetween('failed_at', [$a, $b]))
-                ->orWhere(fn ($w) => $w->where('status', 'returned')->whereBetween('returned_at', [$a, $b])))
+                ->orWhere(fn ($w) => $w->whereIn('status', ['at_roteh', 'returned'])->whereBetween('hub_returned_at', [$a, $b])))
             ->with(['driver:id,name,phone,driver_type', 'partner:id,name,company_name', 'partner.partnerProfile:id,user_id,business_name', 'collection'])
             ->orderBy('completed_at')
             ->get();
@@ -199,7 +207,7 @@ class PartnerStatementService
                 'cash_fees'       => $fees,
                 'cash_to_hand_over' => $cod + $fees,
                 'returning'       => $list->where('status', 'delivery_failed')->count(),
-                'returned'        => $list->where('status', 'returned')->count(),
+                'returned'        => $list->whereIn('status', ['at_roteh', 'returned'])->count(),   // handed to ROTEH
                 'packages'        => $list->map(fn (Delivery $d) => [
                     'code'      => 'PKG-' . str_pad((string) $d->id, 6, '0', STR_PAD_LEFT),
                     'partner'   => $d->partner?->partnerProfile?->business_name ?: ($d->partner?->company_name ?: $d->partner?->name),
@@ -208,7 +216,7 @@ class PartnerStatementService
                     'receiver'  => $d->recipient_name,
                     'cod'       => in_array($d->status, ['delivered', 'completed'], true) ? (int) $d->package_amount : 0,
                     'cash_fee'  => in_array($d->status, ['delivered', 'completed'], true) ? $cashFee($d) : 0,
-                    'time'      => ($d->completed_at ?? $d->returned_at ?? $d->failed_at)?->copy()->setTimezone(self::tz())->format('H:i'),
+                    'time'      => ($d->completed_at ?? $d->hub_returned_at ?? $d->failed_at)?->copy()->setTimezone(self::tz())->format('H:i'),
                     'paid_via'  => $d->collection?->methodLabel(),
                     'cash_usd'  => $d->collection?->cash_usd ?? 0,
                     'bank'      => $d->collection ? ($d->collection->bank_khr + (int) round($d->collection->bank_usd * $d->collection->khr_per_usd)) : 0,
@@ -233,12 +241,13 @@ class PartnerStatementService
                 'pending'                                    => 'pending',
                 'confirmed'                                  => 'confirmed',
                 'driver_assigned', 'picked_up', 'in_transit' => 'on_the_way',
-                default                                      => $ps, // completed | failed | returned | cancelled
+                default                                      => $ps, // completed | failed | at_roteh | returned | cancelled
             };
             $tz = self::tz();
             $closed = match ($group) {
                 'completed' => $d->completed_at,
                 'failed'    => $d->failed_at,
+                'at_roteh'  => $d->hub_returned_at,
                 'returned'  => $d->returned_at,
                 'cancelled' => $d->cancelled_at ?? $d->updated_at,
                 default     => null,
@@ -246,7 +255,7 @@ class PartnerStatementService
             return $this->base($d) + [
                 'group'     => $group,
                 'closed_at' => $closed?->copy()->setTimezone($tz)->format('Y-m-d H:i'),
-                'reason'    => in_array($group, ['failed', 'returned'], true) ? ($d->failure_reason ?? 'other') : null,
+                'reason'    => in_array($group, self::FAILED_GROUPS, true) ? ($d->failure_reason ?? 'other') : null,
                 'payment_by' => $d->payment_by,
             ];
         })->values()->all();
@@ -270,8 +279,8 @@ class PartnerStatementService
 
         $unsuccessful = Delivery::where('partner_id', $partner->id)
             ->where(fn ($q) => $q
-                ->where(fn ($w) => $w->where('status', 'delivery_failed')->whereBetween('failed_at', [$a, $b]))
-                ->orWhere(fn ($w) => $w->where('status', 'returned')->whereBetween('returned_at', [$a, $b]))
+                ->where(fn ($w) => $w->whereIn('status', ['delivery_failed', 'at_roteh'])->whereBetween('failed_at', [$a, $b]))
+                ->orWhere(fn ($w) => $w->where('status', 'returned')->whereBetween(\DB::raw('COALESCE(failed_at, returned_at)'), [$a, $b]))
                 ->orWhere(fn ($w) => $w->where('status', 'cancelled')
                     ->whereBetween(\DB::raw('COALESCE(cancelled_at, updated_at)'), [$a, $b])))
             ->with('driver:id,name,phone')
@@ -301,6 +310,7 @@ class PartnerStatementService
                 'successful_count'    => $successful->count(),
                 'unsuccessful_count'  => $unsuccessful->count(),
                 'returned_count'      => $unsuccessful->where('status', 'returned')->count(),
+                'at_roteh_count'      => $unsuccessful->where('status', 'at_roteh')->count(),
                 'returning_count'     => $unsuccessful->where('status', 'failed')->count(),
                 'cancelled_count'     => $unsuccessful->where('status', 'cancelled')->count(),
                 'cod_collected'       => $sum($successful, 'cod_collected'),
@@ -388,9 +398,10 @@ class PartnerStatementService
 
     private function failRow(Delivery $d, float $failedPct): array
     {
-        $status = $d->packageStatus(); // failed | returned | cancelled
+        $status = $d->packageStatus(); // failed | at_roteh | returned | cancelled
         $at = match ($status) {
             'failed'   => $d->failed_at,
+            'at_roteh' => $d->hub_returned_at,
             'returned' => $d->returned_at,
             default    => $d->cancelled_at ?? $d->updated_at,
         };

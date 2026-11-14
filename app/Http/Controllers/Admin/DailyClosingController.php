@@ -41,6 +41,7 @@ class DailyClosingController extends Controller
             'received_cash_khr' => 'required|integer|min:0',
             'received_cash_usd' => 'nullable|numeric|min:0',
             'bank_verified'     => 'nullable|boolean',
+            'returns_received'  => 'nullable|boolean',
             'note'              => 'nullable|string|max:500',
         ]);
         $this->closing->closeDriver($driver, $data['date'], $data, Auth::user());

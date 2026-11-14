@@ -37,10 +37,12 @@ class DailyClosingService
         [$from, $to] = PS::dayRange($date);
         $appTz = config('app.timezone');
 
+        [$a, $b] = [$from->copy()->setTimezone($appTz), $to->copy()->setTimezone($appTz)];
+        // Handed back to ROTEH today, and still with the driver (failed today).
         $returned = Delivery::where('driver_id', $driverId)->whereNotNull('partner_id')
             ->where(fn ($q) => $q
-                ->where(fn ($w) => $w->where('status', 'returned')->whereBetween('returned_at', [$from->copy()->setTimezone($appTz), $to->copy()->setTimezone($appTz)]))
-                ->orWhere(fn ($w) => $w->where('status', 'delivery_failed')->whereBetween('failed_at', [$from->copy()->setTimezone($appTz), $to->copy()->setTimezone($appTz)])))
+                ->where(fn ($w) => $w->whereIn('status', ['at_roteh', 'returned'])->whereBetween('hub_returned_at', [$a, $b]))
+                ->orWhere(fn ($w) => $w->where('status', 'delivery_failed')->whereBetween('failed_at', [$a, $b])))
             ->get(['id', 'status']);
 
         return [
@@ -52,7 +54,7 @@ class DailyClosingService
             'expected_khr'  => (int) $rows->sum('expected_khr'),
             'total_khr'     => (int) $rows->sum('total_khr'),
             'difference_khr' => (int) $rows->sum('difference_khr'),
-            'returned'      => $returned->where('status', 'returned')->count(),
+            'returned'      => $returned->whereIn('status', ['at_roteh', 'returned'])->count(),  // brought back to ROTEH
             'returning'     => $returned->where('status', 'delivery_failed')->count(),
             'collections'   => $rows,
         ];
@@ -66,7 +68,7 @@ class DailyClosingService
         $ids = DeliveryCollection::whereDate('business_date', $date)->distinct()->pluck('driver_id')
             ->merge(Delivery::whereNotNull('partner_id')->whereNotNull('driver_id')
                 ->where(fn ($q) => $q
-                    ->whereBetween('returned_at', [$from->copy()->setTimezone($appTz), $to->copy()->setTimezone($appTz)])
+                    ->whereBetween('hub_returned_at', [$from->copy()->setTimezone($appTz), $to->copy()->setTimezone($appTz)])
                     ->orWhereBetween('failed_at', [$from->copy()->setTimezone($appTz), $to->copy()->setTimezone($appTz)]))
                 ->distinct()->pluck('driver_id'))
             ->merge(DriverClosing::whereDate('business_date', $date)->pluck('driver_id'))
@@ -99,6 +101,9 @@ class DailyClosingService
         if ($bankExpected && empty($in['bank_verified'])) {
             throw ValidationException::withMessages(['bank_verified' => 'Check the bank transfers against the bank statement first.']);
         }
+        if ($e['returned'] > 0 && empty($in['returns_received'])) {
+            throw ValidationException::withMessages(['returns_received' => "Confirm you received the {$e['returned']} returned package(s) from the driver."]);
+        }
 
         return DB::transaction(function () use ($driver, $date, $e, $receivedKhr, $receivedUsd, $diff, $rate, $in, $by) {
             $closing = DriverClosing::updateOrCreate(
@@ -113,6 +118,7 @@ class DailyClosingService
                     'received_cash_khr' => $receivedKhr,
                     'received_cash_usd' => $receivedUsd,
                     'bank_verified'     => (bool) ($in['bank_verified'] ?? false),
+                    'returns_received'  => (bool) ($in['returns_received'] ?? false),
                     'khr_per_usd'       => $rate,
                     'difference_khr'    => $diff,
                     'note'              => $in['note'] ?? null,
@@ -144,9 +150,13 @@ class DailyClosingService
         $closings = PartnerClosing::with('closer:id,name')->whereDate('business_date', $date)->get()->keyBy('partner_id');
         $ids = $ov->keys()->merge($closings->keys())->unique();
 
-        return User::whereIn('id', $ids)->with('partnerProfile')->orderBy('name')->get()
+        $atRoteh = Delivery::whereIn('partner_id', $ids)->where('status', 'at_roteh')
+            ->selectRaw('partner_id, COUNT(*) n')->groupBy('partner_id')->pluck('n', 'partner_id');
+
+        return User::whereIn('id', $ids->merge($atRoteh->keys())->unique())->with('partnerProfile')->orderBy('name')->get()
             ->map(fn (User $p) => [
-                'partner' => $p,
+                'partner'   => $p,
+                'at_roteh'  => (int) ($atRoteh[$p->id] ?? 0),   // packages to hand back to the shop
                 'name'    => $p->partnerProfile?->business_name ?: ($p->company_name ?: $p->name),
                 'summary' => $ov[$p->id] ?? null,
                 'closing' => $closings[$p->id] ?? null,
@@ -156,6 +166,10 @@ class DailyClosingService
     public function closePartner(User $partner, string $date, array $in, User $by): PartnerClosing
     {
         $this->assertDayOpen($date);
+
+        // Closing with the partner = handing their returned packages back to the shop.
+        $this->returnToShop(Delivery::where('partner_id', $partner->id)->where('status', 'at_roteh')->get());
+
         [$from, $to] = PS::dayRange($date);
         $s = $this->statements->build($partner, $from, $to)['summary'];
 
@@ -182,6 +196,31 @@ class DailyClosingService
     {
         $this->assertDayOpen($date);
         PartnerClosing::where('partner_id', $partner->id)->whereDate('business_date', $date)->delete();
+    }
+
+    /**
+     * Packages at ROTEH (driver brought them back) → handed back to the shop.
+     * @param iterable<Delivery> $packages
+     */
+    public function returnToShop(iterable $packages): int
+    {
+        $n = 0;
+        foreach ($packages as $d) {
+            if ($d->status !== 'at_roteh') continue;
+            $d->update(['status' => 'returned', 'returned_at' => now()]);
+            $n++;
+            try {
+                if ($partner = $d->partner) {
+                    [$title, $body] = FcmService::message('delivery_returned_sender', [
+                        'code' => 'PKG-' . str_pad((string) $d->id, 6, '0', STR_PAD_LEFT),
+                    ]);
+                    app(FcmService::class)->notifyUser($partner, $title, $body, ['type' => 'partner_package', 'delivery_id' => (string) $d->id]);
+                }
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+        return $n;
     }
 
     // ── Day ──────────────────────────────────────────────────────────────────

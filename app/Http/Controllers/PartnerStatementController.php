@@ -130,7 +130,7 @@ class PartnerStatementController extends Controller
             'open'         => $rows->filter(fn ($r) => $r['open'] > 0),
             'successful'   => $rows->filter(fn ($r) => $r['successful'] > 0),
             'unsuccessful' => $rows->filter(fn ($r) => $r['unsuccessful'] > 0),
-            'returned'     => $rows->filter(fn ($r) => $r['counts']['returned'] + $r['counts']['failed'] > 0),
+            'returned'     => $rows->filter(fn ($r) => $r['counts']['returned'] + $r['counts']['at_roteh'] + $r['counts']['failed'] > 0),
             'owes'         => $rows->filter(fn ($r) => $r['net_to_partner'] < 0),
             default        => $rows,
         };

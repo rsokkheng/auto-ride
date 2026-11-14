@@ -7,8 +7,8 @@
         ? \Carbon\Carbon::parse($report['from'])->format('d M Y')
         : \Carbon\Carbon::parse($report['from'])->format('d M Y') . ' – ' . \Carbon\Carbon::parse($report['to'])->format('d M Y');
     $statusLabels = ['pending' => 'Pending', 'confirmed' => 'Confirmed', 'driver_assigned' => 'Driver assigned', 'picked_up' => 'Picked up',
-        'in_transit' => 'In transit', 'completed' => 'Completed', 'failed' => 'Not delivered', 'returned' => 'Returned to shop', 'cancelled' => 'Cancelled'];
-    $statusTone = ['completed' => 'success', 'failed' => 'danger', 'returned' => 'warning', 'cancelled' => 'secondary'];
+        'in_transit' => 'In transit', 'completed' => 'Completed', 'failed' => 'Not delivered', 'at_roteh' => 'At ROTEH', 'returned' => 'Returned to shop', 'cancelled' => 'Cancelled'];
+    $statusTone = ['completed' => 'success', 'failed' => 'danger', 'at_roteh' => 'warning', 'returned' => 'warning', 'cancelled' => 'secondary'];
     $reasonLabels = ['cannot_contact' => 'Cannot contact receiver', 'receiver_refused' => 'Receiver refused', 'wrong_address' => 'Wrong address',
         'receiver_postponed' => 'Receiver asked to deliver later', 'other' => 'Other'];
     $maxBar = max(1, collect($report['series'])->max('total'));
@@ -128,7 +128,7 @@ table.data tr:nth-child(even) td { background:#f9fafb; }
             <td>{{ $d->created_at?->copy()->setTimezone($tz)->format('d/m H:i') }}</td>
             <td>
                 <span class="badge b-{{ $statusTone[$ps] ?? 'info' }}">{{ $statusLabels[$ps] ?? $ps }}</span>
-                @if(in_array($ps, ['failed', 'returned']) && $d->failure_reason)<br><span style="color:#991b1b;font-size:7.5px;">{{ $reasonLabels[$d->failure_reason] ?? '' }}</span>@endif
+                @if(in_array($ps, ['failed', 'at_roteh', 'returned']) && $d->failure_reason)<br><span style="color:#991b1b;font-size:7.5px;">{{ $reasonLabels[$d->failure_reason] ?? '' }}</span>@endif
             </td>
             <td>{{ $latin($d->partner_reference) ? $d->partner_reference : '' }}</td>
             <td>{{ $d->recipient_phone }}</td>

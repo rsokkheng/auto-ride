@@ -112,7 +112,7 @@ return [
     'partner_approved' => ['title' => '🎉 អ្នកជាដៃគូ ROTEH ហើយ', 'body' => 'គណនីដៃគូ :name ត្រូវបានអនុម័ត។ ឥឡូវអ្នកអាចបង្កើតកញ្ចប់ឲ្យ ROTEH ដឹកបានហើយ។'],
     'partner_rejected' => ['title' => 'ការចុះឈ្មោះដៃគូមិនត្រូវបានអនុម័ត', 'body' => 'ការចុះឈ្មោះជាដៃគូរបស់អ្នកមិនត្រូវបានអនុម័តទេ។ មូលហេតុ៖ :reason'],
     'partner_package_confirmed' => ['title' => '📦 កញ្ចប់ត្រូវបានបញ្ជាក់', 'body' => ':code ត្រូវបានបញ្ជាក់។ ROTEH កំពុងស្វែងរកអ្នកបើកបរមកយក។'],
-    'delivery_failed_sender' => ['title' => '⚠️ កញ្ចប់មិនបានដឹកដល់', 'body' => ':code មិនអាចដឹកដល់បានទេ៖ :reason។ អ្នកបើកបរកំពុងយកត្រឡប់មកវិញ។'],
+    'delivery_failed_sender' => ['title' => '⚠️ កញ្ចប់មិនបានដឹកដល់', 'body' => ':code មិនអាចដឹកដល់បានទេ៖ :reason។ អ្នកបើកបរកំពុងយកត្រឡប់មក ROTEH។'],
     'delivery_returned_sender' => ['title' => '↩️ កញ្ចប់ត្រូវបានប្រគល់វិញ', 'body' => ':code ត្រូវបានប្រគល់ត្រឡប់មកហាងរបស់អ្នកវិញហើយ។'],
     'failure_reasons' => [
         'cannot_contact' => 'មិនអាចទាក់ទងអ្នកទទួលបាន',
@@ -122,4 +122,5 @@ return [
         'other' => 'មូលហេតុផ្សេងៗ',
     ],
     'staff_package_assigned' => ['title' => '📦 មានកញ្ចប់ថ្មីសម្រាប់អ្នក', 'body' => ':code — ទៅយកនៅ :pickup ហើយស្កេន QR។'],
+    'delivery_at_roteh_sender' => ['title' => '📦 កញ្ចប់នៅ ROTEH', 'body' => ':code មិនអាចដឹកដល់បាន ហើយឥឡូវនៅ ROTEH។ នឹងប្រគល់ត្រឡប់ទៅហាងរបស់អ្នក។'],
 ];

@@ -8,8 +8,8 @@
     <a href="{{ route('admin.partners') }}" class="btn btn-outline-primary"><i class="fas fa-handshake mr-1"></i> Partner Registrations</a>
 </x-admin.page-toolbar>
 
-@php($labels = ['pending' => 'Pending', 'confirmed' => 'Confirmed', 'driver_assigned' => 'Driver Assigned', 'picked_up' => 'Picked Up', 'in_transit' => 'In Transit', 'completed' => 'Completed', 'failed' => 'Not Delivered — returning', 'returned' => 'Returned to Shop', 'cancelled' => 'Cancelled'])
-@php($tones  = ['pending' => 'warning', 'confirmed' => 'info', 'driver_assigned' => 'primary', 'picked_up' => 'primary', 'in_transit' => 'primary', 'completed' => 'success', 'failed' => 'danger', 'returned' => 'muted', 'cancelled' => 'danger'])
+@php($labels = ['pending' => 'Pending', 'confirmed' => 'Confirmed', 'driver_assigned' => 'Driver Assigned', 'picked_up' => 'Picked Up', 'in_transit' => 'In Transit', 'completed' => 'Completed', 'failed' => 'Not Delivered — to ROTEH', 'at_roteh' => 'At ROTEH — to return', 'returned' => 'Returned to Shop', 'cancelled' => 'Cancelled'])
+@php($tones  = ['pending' => 'warning', 'confirmed' => 'info', 'driver_assigned' => 'primary', 'picked_up' => 'primary', 'in_transit' => 'primary', 'completed' => 'success', 'failed' => 'danger', 'at_roteh' => 'warning', 'returned' => 'muted', 'cancelled' => 'danger'])
 @php($reasons = ['cannot_contact' => 'Cannot contact receiver', 'receiver_refused' => 'Receiver refused', 'wrong_address' => 'Wrong address', 'receiver_postponed' => 'Receiver asked to postpone', 'other' => 'Other'])
 
 <x-admin.stat-grid :cols="4">
@@ -45,6 +45,18 @@
     </div>
 </form>
 
+@if(($stats['at_roteh'] ?? 0) > 0)
+<form method="POST" action="{{ route('admin.partner-packages.return') }}" id="returnForm" class="mb-3">
+    @csrf
+    <div class="alert alert-warning d-flex flex-wrap align-items-center mb-0" style="gap:8px;">
+        <i class="fas fa-box-open"></i>
+        <b>{{ $stats['at_roteh'] }} package(s) at ROTEH</b> waiting to go back to the shop — tick them below, then
+        <button class="btn btn-sm btn-warning"><i class="fas fa-store mr-1"></i>Returned to shop</button>
+        <span class="text-muted tw:text-xs">(closing the partner in Daily Closing does this too)</span>
+    </div>
+</form>
+@endif
+
 <div class="card">
     <div class="card-header">
         <x-admin.filter-bar :action="route('admin.partner-packages')" placeholder="Search PKG code, partner, recipient or reference" :count="$packages->total()" noun="package">
@@ -70,7 +82,8 @@
                 @php($ps = $d->packageStatus())
                 @php($assignable = in_array($d->status, \App\Services\StaffAssignmentService::ASSIGNABLE, true) && ! $d->pickup_scanned_at)
                 <tr>
-                    <td>@if($assignable)<input type="checkbox" class="sel" form="assignForm" name="ids[]" value="{{ $d->id }}">@endif</td>
+                    <td>@if($assignable)<input type="checkbox" class="sel" form="assignForm" name="ids[]" value="{{ $d->id }}">
+                        @elseif($d->status === 'at_roteh')<input type="checkbox" class="selret" form="returnForm" name="ids[]" value="{{ $d->id }}" title="Returned to shop">@endif</td>
                     <td>
                         <a href="{{ route('admin.deliveries.show', $d) }}" style="font-weight:600;">PKG-{{ str_pad($d->id, 6, '0', STR_PAD_LEFT) }}</a>
                         <div class="text-muted tw:text-xs">
@@ -97,7 +110,7 @@
                     </td>
                     <td>
                         <span class="status-pill tone-{{ $tones[$ps] ?? 'muted' }}">{{ $labels[$ps] ?? ucfirst($ps) }}</span>
-                        @if(in_array($ps, ['failed', 'returned']) && $d->failure_reason)<div class="text-danger tw:text-xs">{{ $reasons[$d->failure_reason] ?? $d->failure_reason }}</div>@endif
+                        @if(in_array($ps, ['failed', 'at_roteh', 'returned']) && $d->failure_reason)<div class="text-danger tw:text-xs">{{ $reasons[$d->failure_reason] ?? $d->failure_reason }}</div>@endif
                         @if($d->driver)<div class="text-muted tw:text-xs"><i class="fas fa-motorcycle mr-1"></i>{{ $d->driver->name }}</div>@endif
                         <div class="text-muted tw:text-xs">{{ $d->created_at->format('d M H:i') }}</div>
                     </td>

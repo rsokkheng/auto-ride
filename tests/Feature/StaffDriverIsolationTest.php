@@ -122,7 +122,10 @@ class StaffDriverIsolationTest extends TestCase
             ->assertJsonPath('data.is_staff', true)
             ->assertJsonPath('data.salary', 900000)
             ->assertJsonPath('data.delivered', 1)
-            ->assertJsonPath('data.cash_to_hand_over', 40000);
+            ->assertJsonPath('data.cash_to_hand_over', 40000)
+            ->assertJsonPath('data.completed', 1)
+            ->assertJsonPath('data.to_pick_up', 0)
+            ->assertJsonPath('data.success_rate', 100);
 
         $owner = $this->driver('owner');
         $this->as($owner)->getJson('/api/v1/driver/staff/today')->assertJsonPath('data.is_staff', false);

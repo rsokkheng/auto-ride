@@ -74,7 +74,7 @@
                     <td class="text-right">{{ $k($e['cash_khr']) }} ៛</td>
                     <td class="text-right">{{ $usd($e['cash_usd']) }}</td>
                     <td class="text-right">{{ $k($e['bank_khr']) }} ៛@if($e['bank_usd'] > 0)<div class="tw:text-xs">{{ $usd($e['bank_usd']) }}</div>@endif</td>
-                    <td class="text-right">{{ $e['returned'] + $e['returning'] }}@if($e['returning'])<div class="tw:text-xs text-danger">{{ $e['returning'] }} still out</div>@endif</td>
+                    <td class="text-right">{{ $e['returned'] }} <span class="text-muted tw:text-xs">to ROTEH</span>@if($e['returning'])<div class="tw:text-xs text-danger">{{ $e['returning'] }} still with driver</div>@endif</td>
                     <td>
                         @if($c)
                             <span class="status-pill tone-success"><i class="fas fa-check mr-1"></i>Closed</span>
@@ -96,7 +96,8 @@
                                         data-action="{{ route('admin.daily-closing.driver.close', $d) }}" data-name="{{ $d->name }}"
                                         data-khr="{{ $e['cash_khr'] }}" data-usd="{{ $e['cash_usd'] }}"
                                         data-bank="{{ $e['bank_khr'] > 0 || $e['bank_usd'] > 0 ? 1 : 0 }}"
-                                        data-banktext="{{ $k($e['bank_khr']) }} ៛{{ $e['bank_usd'] > 0 ? ' + ' . $usd($e['bank_usd']) : '' }}">
+                                        data-banktext="{{ $k($e['bank_khr']) }} ៛{{ $e['bank_usd'] > 0 ? ' + ' . $usd($e['bank_usd']) : '' }}"
+                                        data-returns="{{ $e['returned'] }}">
                                     <i class="fas fa-check mr-1"></i>Close</button>
                             @endif
                         @endif
@@ -125,7 +126,8 @@
                 @php $p = $r['partner']; $s = $r['summary']; $c = $r['closing']; $net = $c?->net_to_partner ?? ($s['net_to_partner'] ?? 0); @endphp
                 <tr>
                     <td><b>{{ $r['name'] }}</b>
-                        <div class="tw:text-xs"><a target="_blank" href="{{ route('admin.partner-statements.show', [$p, 'date' => $date]) }}">Statement</a></div></td>
+                        <div class="tw:text-xs"><a target="_blank" href="{{ route('admin.partner-statements.show', [$p, 'date' => $date]) }}">Statement</a>
+                            @if($r['at_roteh'])· <span class="text-danger"><i class="fas fa-box-open"></i> {{ $r['at_roteh'] }} to hand back</span>@endif</div></td>
                     <td class="text-right">{{ $c?->successful_count ?? ($s['successful'] ?? 0) }}</td>
                     <td class="text-right">{{ $c?->unsuccessful_count ?? ($s['unsuccessful'] ?? 0) }}</td>
                     <td class="text-right">{{ $k($c?->cod_collected ?? ($s['cod_collected'] ?? 0)) }} ៛</td>
@@ -149,7 +151,8 @@
                             @else
                                 <button class="btn btn-sm btn-success" data-toggle="modal" data-target="#partnerModal"
                                         data-action="{{ route('admin.daily-closing.partner.close', $p) }}" data-name="{{ $r['name'] }}"
-                                        data-net="{{ $k(abs($net)) }} ៛ — {{ $net < 0 ? 'Partner pays ROTEH' : 'ROTEH pays partner' }}">
+                                        data-net="{{ $k(abs($net)) }} ៛ — {{ $net < 0 ? 'Partner pays ROTEH' : 'ROTEH pays partner' }}"
+                                        data-returns="{{ $r['at_roteh'] }}">
                                     <i class="fas fa-check mr-1"></i>Close</button>
                             @endif
                         @endif
@@ -202,6 +205,10 @@
             <input class="form-check-input" type="checkbox" name="bank_verified" value="1" id="bankVerified">
             <label class="form-check-label" for="bankVerified">Bank transfers checked on the bank statement (<span class="js-bank"></span>)</label>
         </div>
+        <div class="form-check mb-2 js-returnsrow">
+            <input class="form-check-input" type="checkbox" name="returns_received" value="1" id="returnsReceived">
+            <label class="form-check-label" for="returnsReceived">Received <b class="js-returns"></b> returned package(s) from the driver</label>
+        </div>
         <div class="form-group mb-0"><label>Note <small class="text-muted">— required if the cash differs</small></label>
             <input type="text" name="note" maxlength="500" class="form-control"></div>
     </div>
@@ -214,6 +221,7 @@
     <div class="modal-header"><h5 class="modal-title">Close partner — <span class="js-name"></span></h5><button type="button" class="close" data-dismiss="modal">&times;</button></div>
     <div class="modal-body">
         <p class="mb-2">Balance: <b class="js-net"></b></p>
+        <div class="alert alert-warning py-2 js-handback">Closing hands <b class="js-hb"></b> returned package(s) back to the shop.</div>
         <div class="form-group"><label>Settled by</label>
             <select name="settle_method" class="form-control" required>
                 <option value="cash">Cash</option>
@@ -238,12 +246,16 @@ $('#driverModal').on('show.bs.modal', function (e) {
     m.find('.js-khr').val(b.data('khr')); m.find('.js-usd').val(b.data('usd'));
     m.find('.js-bank').text(b.data('banktext'));
     m.find('.js-bankrow').toggle(b.data('bank') == 1);
+    m.find('.js-returns').text(b.data('returns'));
+    m.find('.js-returnsrow').toggle(Number(b.data('returns')) > 0);
 });
 $('#partnerModal').on('show.bs.modal', function (e) {
     const b = $(e.relatedTarget);
     $('#partnerForm').attr('action', b.data('action'));
     $(this).find('.js-name').text(b.data('name'));
     $(this).find('.js-net').text(b.data('net'));
+    $(this).find('.js-hb').text(b.data('returns'));
+    $(this).find('.js-handback').toggle(Number(b.data('returns')) > 0);
 });
 </script>
 @endpush

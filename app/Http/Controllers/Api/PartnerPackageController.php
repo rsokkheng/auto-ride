@@ -23,7 +23,7 @@ use Illuminate\Support\Str;
  *
  * Workflow: pending (created) → confirmed (ROTEH; offered to drivers) →
  * driver_assigned → picked_up → in_transit → completed
- *   | failed (cannot contact receiver, refused…) → returned (back at the shop)
+ *   | failed (cannot contact receiver, refused…) → at_roteh → returned (handed back to the shop)
  *   | cancelled.
  */
 class PartnerPackageController extends ApiController
@@ -240,12 +240,12 @@ class PartnerPackageController extends ApiController
             'active'      => $counts['pending'] + $counts['confirmed'] + $counts['driver_assigned'] + $counts['picked_up'] + $counts['in_transit'] + $counts['failed'],
             'today'       => $base()->whereDate('created_at', today())->count(),
             'today_completed' => $base()->whereIn('status', ['delivered', 'completed'])->whereDate('completed_at', today())->count(),
-            'today_returned'  => $base()->whereIn('status', ['delivery_failed', 'returned'])->whereDate('failed_at', today())->count(),
+            'today_returned'  => $base()->whereIn('status', ['delivery_failed', 'at_roteh', 'returned'])->whereDate('failed_at', today())->count(),
             'month'       => $base()->where('created_at', '>=', now()->startOfMonth())->count(),
             'completed_month' => $base()->whereIn('status', ['delivered', 'completed'])
                 ->where('created_at', '>=', now()->startOfMonth())->count(),
             'cod_pending' => (int) $base()->where('package_amount', '>', 0)
-                ->whereNotIn('status', ['delivered', 'completed', 'cancelled', 'returned', 'delivery_failed'])->sum('package_amount'),
+                ->whereNotIn('status', ['delivered', 'completed', 'cancelled', 'returned', 'delivery_failed', 'at_roteh'])->sum('package_amount'),
         ]);
     }
 
@@ -408,14 +408,14 @@ class PartnerPackageController extends ApiController
             $totals['total']++;
             $bucketKey = match ($ps) {
                 'completed'           => 'completed',
-                'failed', 'returned'  => 'not_delivered',
+                'failed', 'at_roteh', 'returned' => 'not_delivered',
                 'cancelled'           => 'cancelled',
                 default               => null,
             };
             match ($ps) {
                 'completed' => $totals['completed']++,
                 'failed'    => $totals['failed']++,
-                'returned'  => $totals['returned']++,
+                'returned', 'at_roteh' => $totals['returned']++,
                 'cancelled' => $totals['cancelled']++,
                 default     => $totals['in_progress']++,
             };
@@ -428,10 +428,10 @@ class PartnerPackageController extends ApiController
                 $money['delivery_fees'] += (int) $d->fee;
                 $money['cod_collected'] += (int) $d->package_amount;
                 if ($d->completed_at) $minutes[] = $d->created_at->diffInMinutes($d->completed_at);
-            } elseif (! in_array($ps, ['cancelled', 'returned', 'failed'], true)) {
+            } elseif (! in_array($ps, ['cancelled', 'returned', 'at_roteh', 'failed'], true)) {
                 $money['cod_pending'] += (int) $d->package_amount;
             }
-            if (in_array($ps, ['failed', 'returned'], true) && isset($reasons[$d->failure_reason ?? 'other'])) {
+            if (in_array($ps, ['failed', 'at_roteh', 'returned'], true) && isset($reasons[$d->failure_reason ?? 'other'])) {
                 $reasons[$d->failure_reason ?? 'other']++;
             }
         }
@@ -496,6 +496,7 @@ class PartnerPackageController extends ApiController
             'in_transit'      => ['in_progress', 'in_transit'],
             'completed'       => ['delivered', 'completed'],
             'failed'          => ['delivery_failed'],
+            'at_roteh'        => ['at_roteh'],
             'returned'        => ['returned'],
             'cancelled'       => ['cancelled'],
         ][$packageStatus] ?? [$packageStatus];
@@ -575,6 +576,7 @@ class PartnerPackageController extends ApiController
             'failure_note'    => $d->failure_note,
             'failed_at'       => $d->failed_at?->toIso8601String(),
             'returned_at'     => $d->returned_at?->toIso8601String(),
+            'hub_returned_at' => $d->hub_returned_at?->toIso8601String(),
             'completed_at'    => $d->completed_at?->toIso8601String(),
             'can_cancel'      => in_array($d->status, Delivery::PRE_PICKUP_STATUSES, true),
             'is_live'         => in_array($d->status, array_merge(['assigned', 'accepted'], Delivery::IN_TRANSIT_STATUSES), true),
