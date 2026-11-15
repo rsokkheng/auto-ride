@@ -489,6 +489,43 @@ a.stat-card.is-active { border-color: var(--primary); box-shadow: 0 0 0 1px var(
 .form-section-title { font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-400); margin: 1.1rem 0 .55rem; }
 .form-section-title:first-child { margin-top: 0; }
 
+/* Roles & Permissions */
+.role-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.role-card { display: flex; flex-direction: column; background: #fff; border: var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 1.1rem 1.15rem 1rem; }
+.role-card.is-protected { border-top: 3px solid var(--violet); }
+.role-head { display: flex; align-items: flex-start; gap: .75rem; }
+.role-icon { width: 40px; height: 40px; flex: none; border-radius: 11px; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; }
+.role-name { font-weight: 700; color: var(--ink-900); font-size: 1rem; line-height: 1.25; }
+.role-sub { font-size: .76rem; color: var(--ink-500); }
+.perm-meter { height: 6px; border-radius: 999px; background: var(--ink-100); overflow: hidden; margin: .85rem 0 .35rem; }
+.perm-meter > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--primary), var(--violet)); }
+.perm-chips { display: flex; flex-wrap: wrap; gap: .3rem; margin: .5rem 0 .9rem; min-height: 26px; }
+.perm-chip { display: inline-flex; align-items: center; gap: .3rem; font-size: .72rem; font-weight: 500; padding: 2px 8px; border-radius: 6px; background: var(--ink-50); border: 1px solid var(--ink-200); color: var(--ink-700); }
+.perm-chip i { font-size: .65rem; color: var(--ink-400); }
+.role-foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding-top: .75rem; border-top: 1px solid var(--ink-100); }
+.avatar-stack { display: flex; align-items: center; }
+.avatar-stack .avatar-chip { width: 26px; height: 26px; font-size: .62rem; border: 2px solid #fff; margin-left: -7px; }
+.avatar-stack .avatar-chip:first-child { margin-left: 0; }
+.avatar-stack .more { font-size: .72rem; color: var(--ink-500); margin-left: .4rem; }
+
+.perm-matrix th, .perm-matrix td { vertical-align: middle; }
+.perm-matrix thead th { text-align: center; white-space: nowrap; }
+.perm-matrix thead th:first-child { text-align: left; }
+.perm-matrix .matrix-group td { background: var(--ink-50); font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-500); padding-top: .45rem; padding-bottom: .45rem; }
+.perm-matrix .yes { color: var(--success); }
+.perm-matrix .no { color: var(--ink-300); }
+
+.perm-picker { border: var(--border); border-radius: var(--radius); max-height: 380px; overflow-y: auto; }
+.perm-picker .picker-group { display: flex; align-items: center; justify-content: space-between; padding: .5rem .85rem; background: var(--ink-50); border-bottom: 1px solid var(--ink-100); font-size: .7rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-500); position: sticky; top: 0; z-index: 1; }
+.perm-picker .picker-group button { font-size: .72rem; text-transform: none; letter-spacing: 0; font-weight: 600; padding: 0; border: 0; background: none; color: var(--primary); }
+.perm-option { display: flex; align-items: flex-start; gap: .7rem; padding: .6rem .85rem; margin: 0; cursor: pointer; border-bottom: 1px solid var(--ink-100); }
+.perm-option:last-child { border-bottom: 0; }
+.perm-option:hover { background: var(--ink-50); }
+.perm-option input { margin-top: .2rem; width: 16px; height: 16px; accent-color: var(--primary); flex: none; }
+.perm-option .opt-title { font-weight: 600; color: var(--ink-900); font-size: .86rem; }
+.perm-option .opt-desc { font-size: .74rem; color: var(--ink-500); line-height: 1.35; }
+.perm-option.is-locked { cursor: not-allowed; opacity: .75; }
+
 @media (max-width: 767.98px) {
     .content-header { padding: 16px .25rem 10px; }
     .content-header .breadcrumb { display: none; }

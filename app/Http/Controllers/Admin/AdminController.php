@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Support\AdminPermissions;
 use App\Support\Localized;
 use App\Http\Controllers\Controller;
 use App\Models\ChatConversation;
@@ -427,12 +428,17 @@ class AdminController extends Controller
 
     // ─── Roles & Permissions (Spatie) ─────────────────────────────────────────
 
-    public function roles()
+    public function roles(Request $request)
     {
+        $search = trim((string) $request->query('search', ''));
+        $admins = User::where('role', 'admin')->with('roles.permissions')->orderBy('name')->get();
+
         return view('admin.roles', [
-            'roles'       => \Spatie\Permission\Models\Role::with('permissions')->orderBy('name')->get(),
-            'permissions' => \Spatie\Permission\Models\Permission::orderBy('name')->get(),
-            'admins'      => User::where('role', 'admin')->with('roles')->orderBy('name')->get(),
+            'tab'         => $request->query('tab') === 'staff' ? 'staff' : 'roles',
+            'roles'       => \Spatie\Permission\Models\Role::with('permissions')->withCount('users')->orderByRaw('name = ? DESC', [AdminPermissions::SUPER_ADMIN])->orderBy('name')->get(),
+            'permissions' => \Spatie\Permission\Models\Permission::orderBy('name')->pluck('name'),
+            'admins'      => $admins,
+            'staff'       => $search === '' ? $admins : $admins->filter(fn ($a) => str_contains(mb_strtolower($a->name . ' ' . $a->email), mb_strtolower($search)))->values(),
         ]);
     }
 
@@ -458,16 +464,29 @@ class AdminController extends Controller
             'permissions.*' => 'string|exists:permissions,name',
         ]);
 
+        // Super Admin keeps its name and every permission — it's the way back in.
+        if ($role->name === AdminPermissions::SUPER_ADMIN) {
+            $data = ['name' => $role->name, 'permissions' => AdminPermissions::all()];
+        }
+        $permissions = $data['permissions'] ?? [];
+
+        if ($this->locksMeOut(roleOverride: [$role->id => $permissions])) {
+            return back()->with('error', 'You would lose access to Roles & Permissions — keep "Roles & Permissions" on this role or give yourself another role first.');
+        }
+
         $role->update(['name' => $data['name']]);
-        $role->syncPermissions($data['permissions'] ?? []);
+        $role->syncPermissions($permissions);
 
         return redirect()->route('admin.roles')->with('success', "Role \"{$role->name}\" updated.");
     }
 
     public function destroyRole(\Spatie\Permission\Models\Role $role)
     {
-        if ($role->name === 'Super Admin') {
+        if ($role->name === AdminPermissions::SUPER_ADMIN) {
             return redirect()->route('admin.roles')->with('error', 'The Super Admin role cannot be deleted.');
+        }
+        if ($this->locksMeOut(roleOverride: [$role->id => []])) {
+            return back()->with('error', 'You would lose access to Roles & Permissions by deleting your own role.');
         }
 
         $role->delete();
@@ -482,11 +501,34 @@ class AdminController extends Controller
             'role_ids.*' => 'integer|exists:roles,id',
         ]);
 
-        $user  = User::findOrFail($data['user_id']);
+        $user = User::findOrFail($data['user_id']);
+        if ($user->role !== 'admin') {
+            return back()->with('error', 'Roles can only be given to admin accounts.');
+        }
         $roles = \Spatie\Permission\Models\Role::whereIn('id', $data['role_ids'] ?? [])->get();
+        if ($user->id === Auth::id() && $this->locksMeOut(myRoles: $roles)) {
+            return back()->with('error', 'You can\'t remove your own access to Roles & Permissions.');
+        }
+
         $user->syncRoles($roles);
 
-        return redirect()->route('admin.roles')->with('success', "Roles updated for {$user->name}.");
+        return redirect()->route('admin.roles', ['tab' => 'staff'])->with('success', "Roles updated for {$user->name}.");
+    }
+
+    /**
+     * Would the signed-in admin lose "manage-roles" after this change?
+     * @param array<int, string[]> $roleOverride role id => its new permissions
+     */
+    private function locksMeOut(array $roleOverride = [], ?\Illuminate\Support\Collection $myRoles = null): bool
+    {
+        $me = Auth::user();
+        if (! $me) return false;
+
+        return ! ($myRoles ?? $me->roles()->with('permissions')->get())->contains(fn ($r) => in_array(
+            'manage-roles',
+            $roleOverride[$r->id] ?? $r->permissions()->pluck('name')->all(),
+            true
+        ));
     }
 
     // ─── Vehicles ────────────────────────────────────────────────────────────
