@@ -121,30 +121,38 @@
             @php
                 $pendingSettlements = rescue(fn() => \App\Models\Settlement::where('status','pending')->count(), 0, false);
 
-                // [label, icon, route, active-patterns, badge count, badge class, gate]
+                // Item: [label, icon, route, active-patterns, badge count, badge class, gate]
+                // Group: ['label', 'icon', 'children' => [items…]] — collapsible, opens on its active page,
+                // shows its children's badge total while closed, hidden when every child is gated away.
                 $menu = [
                     ['header' => null, 'items' => [
                         ['Dashboard', 'fa-house', 'admin.dashboard', ['admin.dashboard']],
                     ]],
                     ['header' => 'Operations', 'items' => [
-                        ['Rides',            'fa-route',            'admin.rides',            ['admin.rides']],
-                        ['Deliveries',       'fa-box',              'admin.deliveries',       ['admin.deliveries']],
-                        ['Partner Packages', 'fa-boxes-stacked',    'admin.partner-packages', ['admin.partner-packages*'], $pendingPackages, 'badge-warning'],
-                        ['Partner Statements','fa-file-invoice',    'admin.partner-statements',['admin.partner-statements*']],
-                        ['Daily Closing',     'fa-cash-register',   'admin.daily-closing',     ['admin.daily-closing*']],
-                        ['Rental',      'fa-car-side',         'admin.car-rentals',      ['admin.car-rentals*']],
-                        ['Marketplace',      'fa-store',            'admin.marketplace',      ['admin.marketplace']],
-                        ['Marketplace Orders','fa-shopping-bag',    'admin.marketplace-orders',['admin.marketplace-orders*']],
-                        ['Charging Stations','fa-charging-station', 'admin.charging-stations',['admin.charging-stations']],
+                        ['Rides',             'fa-route',            'admin.rides',             ['admin.rides']],
+                        ['Deliveries',        'fa-box',              'admin.deliveries',        ['admin.deliveries']],
+                        ['Rental',            'fa-car-side',         'admin.car-rentals',       ['admin.car-rentals*']],
+                        ['Charging Stations', 'fa-charging-station', 'admin.charging-stations', ['admin.charging-stations']],
+                    ]],
+                    ['header' => 'Business', 'items' => [
+                        ['label' => 'Partners', 'icon' => 'fa-handshake', 'children' => [
+                            ['Partners',      'fa-store',         'admin.partners',           ['admin.partners*'], $pendingPartners, 'badge-warning'],
+                            ['Packages',      'fa-boxes-stacked', 'admin.partner-packages',   ['admin.partner-packages*'], $pendingPackages, 'badge-warning'],
+                            ['Daily Closing', 'fa-cash-register', 'admin.daily-closing',      ['admin.daily-closing*']],
+                            ['Statements',    'fa-file-invoice',  'admin.partner-statements', ['admin.partner-statements*']],
+                            ['Contracts',     'fa-file-contract', 'admin.partner-contracts',  ['admin.partner-contracts*']],
+                        ]],
+                        ['label' => 'Marketplace', 'icon' => 'fa-shop', 'children' => [
+                            ['Products', 'fa-tags',         'admin.marketplace',        ['admin.marketplace']],
+                            ['Orders',   'fa-shopping-bag', 'admin.marketplace-orders', ['admin.marketplace-orders*']],
+                        ]],
+                        ['Companies',         'fa-building',  'admin.companies',         ['admin.companies']],
+                        ['Business Accounts', 'fa-briefcase', 'admin.business-accounts', ['admin.business-accounts*']],
                     ]],
                     ['header' => 'People', 'items' => [
-                        ['Users',             'fa-users',        'admin.users',             ['admin.users'], 0, '', 'manage-users'],
-                        ['Drivers',           'fa-id-card',      'admin.drivers',           ['admin.drivers*'], $pendingDrivers, 'badge-danger'],
-                        ['Vehicles',          'fa-car',          'admin.vehicles',          ['admin.vehicles']],
-                        ['Companies',         'fa-building',     'admin.companies',         ['admin.companies']],
-                        ['Business Accounts', 'fa-briefcase',    'admin.business-accounts', ['admin.business-accounts*']],
-                        ['Partners',          'fa-handshake',    'admin.partners',          ['admin.partners*'], $pendingPartners, 'badge-warning'],
-                        ['Partner Contracts', 'fa-file-contract','admin.partner-contracts', ['admin.partner-contracts*']],
+                        ['Users',    'fa-users',   'admin.users',    ['admin.users'], 0, '', 'manage-users'],
+                        ['Drivers',  'fa-id-card', 'admin.drivers',  ['admin.drivers*'], $pendingDrivers, 'badge-danger'],
+                        ['Vehicles', 'fa-car',     'admin.vehicles', ['admin.vehicles']],
                     ]],
                     ['header' => 'Finance', 'items' => [
                         ['Transactions',    'fa-receipt',              'admin.transactions',       ['admin.transactions'], $pendingTx, 'badge-danger'],
@@ -154,13 +162,17 @@
                         ['Settlements',     'fa-file-invoice-dollar',  'admin.settlements.index',  ['admin.settlements.*'], $pendingSettlements, 'badge-warning'],
                     ]],
                     ['header' => 'Pricing', 'items' => [
-                        ['Ride Pricing',        'fa-tags',          'admin.ride-pricing',       ['admin.ride-pricing']],
-                        ['Delivery Fare',       'fa-box-open',      'admin.delivery-fare',      ['admin.delivery-fare']],
-                        ['Moving Fare',         'fa-truck-moving',  'admin.moving-fare',        ['admin.moving-fare']],
-                        ['Fare Management',     'fa-sliders-h',     'admin.fare-management',    ['admin.fare-management']],
-                        ['Surge Zones',         'fa-bolt',          'admin.surge-zones',        ['admin.surge-zones']],
-                        ['Airport Zones',       'fa-plane-departure','admin.airport-zones',     ['admin.airport-zones*']],
-                        ['Subscription Plans',  'fa-layer-group',   'admin.subscription-plans', ['admin.subscription-plans*']],
+                        ['label' => 'Fares', 'icon' => 'fa-tags', 'children' => [
+                            ['Ride Pricing',    'fa-motorcycle',   'admin.ride-pricing',    ['admin.ride-pricing']],
+                            ['Delivery Fare',   'fa-box-open',     'admin.delivery-fare',   ['admin.delivery-fare']],
+                            ['Moving Fare',     'fa-truck-moving', 'admin.moving-fare',     ['admin.moving-fare']],
+                            ['Fare Management', 'fa-sliders-h',    'admin.fare-management', ['admin.fare-management']],
+                        ]],
+                        ['label' => 'Zones', 'icon' => 'fa-map-location-dot', 'children' => [
+                            ['Surge Zones',   'fa-bolt',            'admin.surge-zones',   ['admin.surge-zones']],
+                            ['Airport Zones', 'fa-plane-departure', 'admin.airport-zones', ['admin.airport-zones*']],
+                        ]],
+                        ['Subscription Plans', 'fa-layer-group', 'admin.subscription-plans', ['admin.subscription-plans*']],
                     ]],
                     ['header' => 'Marketing', 'items' => [
                         ['Banners', 'fa-images',    'admin.banners',       ['admin.banners']],
@@ -205,17 +217,31 @@
 
                         @foreach($section['items'] as $item)
                             @if(isset($item['children']))
-                                @php $open = collect($item['children'])->contains(fn($c) => request()->routeIs(...$c[3])); @endphp
+                                @php
+                                    $children = array_filter($item['children'], fn ($c) => empty($c[6]) || Gate::allows($c[6]));
+                                    $open     = collect($children)->contains(fn ($c) => request()->routeIs(...$c[3]));
+                                    $total    = collect($children)->sum(fn ($c) => $c[4] ?? 0);
+                                @endphp
+                                @continue(! $children)
                                 <li class="nav-item {{ $open ? 'menu-open' : '' }}">
                                     <a href="#" class="nav-link {{ $open ? 'active' : '' }}">
                                         <i class="nav-icon fas {{ $item['icon'] }}"></i>
-                                        <p>{{ $item['label'] }} <i class="right fas fa-angle-left"></i></p>
+                                        <p>
+                                            {{ $item['label'] }}
+                                            <i class="right fas fa-angle-left"></i>
+                                            @if($total && ! $open)<span class="right badge badge-warning nav-group-badge">{{ $total }}</span>@endif
+                                        </p>
                                     </a>
                                     <ul class="nav nav-treeview">
-                                        @foreach($item['children'] as $c)
+                                        @foreach($children as $c)
+                                            @php $count = $c[4] ?? 0; @endphp
                                             <li class="nav-item">
                                                 <a href="{{ route($c[2]) }}" class="nav-link {{ request()->routeIs(...$c[3]) ? 'active' : '' }}">
-                                                    <i class="far fa-circle nav-icon"></i><p>{{ $c[0] }}</p>
+                                                    <i class="nav-icon {{ $c[1] ? 'fas ' . $c[1] : 'far fa-circle' }}"></i>
+                                                    <p>
+                                                        {{ $c[0] }}
+                                                        @if($count)<span class="right badge {{ $c[5] ?? '' }}">{{ $count }}</span>@endif
+                                                    </p>
                                                 </a>
                                             </li>
                                         @endforeach

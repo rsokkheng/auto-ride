@@ -112,6 +112,10 @@ hr { border-top-color: var(--ink-200); }
 .nav-sidebar .nav-treeview .nav-link { font-size: .8rem; padding: .35rem .75rem; }
 .nav-sidebar .nav-treeview .nav-link .nav-icon { font-size: .45rem; }
 .nav-sidebar .nav-treeview .nav-link.active { background: transparent !important; color: #fff !important; }
+.nav-sidebar .nav-treeview .nav-link .nav-icon.fas { font-size: .74rem; width: 1.5rem; }
+.nav-sidebar .nav-treeview .nav-link.active { background: rgba(255, 255, 255, .07) !important; }
+.nav-sidebar .nav-treeview { margin: 2px 0 6px .9rem; padding-left: .35rem; border-left: 1px solid rgba(148, 163, 184, .18); }
+.nav-sidebar .nav-link > p > .nav-group-badge { right: 2.4rem !important; }
 .nav-sidebar .badge { font-size: .66rem; font-weight: 600; padding: .25em .55em; border-radius: 999px; }
 .nav-sidebar .badge-danger  { background: var(--danger) !important; color: #fff !important; }
 .nav-sidebar .badge-warning { background: var(--warning) !important; color: #fff !important; }
