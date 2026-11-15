@@ -785,7 +785,9 @@ class AdminController extends Controller
 
         return view('admin.deliveries', [
             'deliveries'    => $deliveries,
-            'senders'       => User::where('role', 'passenger')->orderBy('name')->get(),
+            'senders'       => $partnerOnly
+                ? User::whereIn('id', Delivery::whereNotNull('partner_id')->select('partner_id'))->orderBy('name')->get()
+                : User::where('role', 'passenger')->orderBy('name')->get(),
             'drivers'       => User::where('role', 'driver')->orderBy('name')->get(),
             'partners'      => $partnerOnly
                 ? User::whereIn('id', Delivery::whereNotNull('partner_id')->select('partner_id'))->with('partnerProfile')->orderBy('name')->get()
@@ -926,6 +928,13 @@ class AdminController extends Controller
 
     public function updateDelivery(Request $request, Delivery $delivery)
     {
+        // Partner orders are always parcel deliveries, and their status and driver move through the
+        // Partner Packages workflow (confirm / assign / return), so the edit form can't change them.
+        if ($delivery->partner_id) {
+            $request->merge(['service_type' => 'delivery', 'status' => $delivery->status, 'driver_id' => $delivery->driver_id]);
+        }
+        $statuses = ['requested', 'pending', 'accepted', 'in_progress', 'completed', 'cancelled'];
+
         $data = $request->validate([
             'service_type'       => 'required|in:delivery,moving',
             'sender_id'          => 'required|exists:users,id',
@@ -936,7 +945,7 @@ class AdminController extends Controller
             'driver_id'          => 'nullable|exists:users,id',
             'pickup_address'     => 'required|string|max:255',
             'dropoff_address'    => 'required|string|max:255',
-            'status'             => 'required|in:requested,pending,accepted,in_progress,completed,cancelled',
+            'status'             => ['required', \Illuminate\Validation\Rule::in($delivery->partner_id ? [$delivery->status] : $statuses)],
             'fee'                => 'nullable|numeric|min:0',
             'package_amount'     => 'nullable|integer|min:0',
             'payment_by'         => 'nullable|in:sender,recipient',
@@ -995,7 +1004,9 @@ class AdminController extends Controller
 
         $delivery->update($data);
 
-        return redirect()->route('admin.deliveries', ['type' => $data['service_type']])->with('success', 'Order updated successfully.');
+        return $delivery->partner_id
+            ? redirect()->route('admin.partner-deliveries')->with('success', 'Order updated successfully.')
+            : redirect()->route('admin.deliveries', ['type' => $data['service_type']])->with('success', 'Order updated successfully.');
     }
 
     public function assignDelivery(Request $request, Delivery $delivery)

@@ -15,13 +15,15 @@
     </x-admin.page-toolbar>
 @endif
 
-<x-admin.stat-grid :cols="5">
+<x-admin.stat-grid :cols="$partnerOnly ? 3 : 5">
     <x-admin.stat-card label="All Orders" :value="number_format($counts['all'])" icon="fa-layer-group" tone="primary"
                        :href="route($listRoute)" :active="$activeType === 'all' && ! request('unassigned')" />
+    @unless($partnerOnly)
     <x-admin.stat-card label="Deliveries" :value="number_format($counts['delivery'])" icon="fa-box" tone="info"
                        :href="route($listRoute, ['type' => 'delivery'])" :active="$activeType === 'delivery'" />
     <x-admin.stat-card label="Moving Jobs" :value="number_format($counts['moving'])" icon="fa-truck-moving" tone="warning"
                        :href="route($listRoute, ['type' => 'moving'])" :active="$activeType === 'moving'" />
+    @endunless
     <x-admin.stat-card label="In Progress" :value="number_format($counts['active'])" icon="fa-route" tone="violet" sub="not finished yet" />
     <x-admin.stat-card label="Need a Driver" :value="number_format($counts['unassigned'])" icon="fa-user-plus" tone="danger"
                        :href="route($listRoute, ['unassigned' => 1])" :active="request()->boolean('unassigned')" />
@@ -102,6 +104,8 @@
                         'payment_model'     => $d->payment_model ?? 'customer_pays',
                         'split_pct_customer'=> $d->split_pct_customer ?? 50,
                         'partner_reference' => $d->partner_reference ?? '',
+                        'status_label'      => ucfirst(str_replace('_', ' ', $d->partner_id ? $d->packageStatus() : $d->status)),
+                        'driver_label'      => $d->driver?->name ?? 'Not assigned yet',
                     ]) }}">
                     <td>
                         <div class="tw:flex tw:items-center tw:gap-3">
@@ -215,8 +219,8 @@
                 <input type="hidden" name="_method" id="formMethod" value="POST">
                 <input type="hidden" name="service_type" id="f-service-type" value="delivery">
 
-                {{-- ── Service-type selector ── --}}
-                <div class="modal-body pb-1">
+                {{-- ── Service-type selector (partner orders are always deliveries) ── --}}
+                <div class="modal-body pb-1" @if($partnerOnly) hidden @endif>
                     <div class="form-group mb-3">
                         <label class="font-weight-bold d-block mb-2">Service Type <span class="text-danger">*</span></label>
                         <div class="d-flex" style="gap:10px;">
@@ -245,7 +249,7 @@
                     {{-- Sender --}}
                     <div class="form-row">
                         <div class="form-group col-md-6">
-                            <label>Sender Account <span class="text-danger">*</span></label>
+                            <label>{{ $partnerOnly ? 'Partner Account' : 'Sender Account' }} <span class="text-danger">*</span></label>
                             <select name="sender_id" id="f-sender" class="form-control" required>
                                 <option value="">— Select account —</option>
                                 @foreach($senders as $s)
@@ -492,13 +496,19 @@
 
                     {{-- Driver --}}
                     <div class="form-group">
-                        <label>Assign Driver</label>
-                        <select name="driver_id" id="f-driver" class="form-control">
-                            <option value="">— Unassigned —</option>
-                            @foreach($drivers as $dr)
-                                <option value="{{ $dr->id }}">{{ $dr->name }}{{ $dr->phone ? ' — '.$dr->phone : '' }}</option>
-                            @endforeach
-                        </select>
+                        <label>{{ $partnerOnly ? 'Driver' : 'Assign Driver' }}</label>
+                        @if($partnerOnly)
+                            <input type="hidden" name="driver_id" id="f-driver">
+                            <input type="text" id="f-driver-label" class="form-control" readonly>
+                            <small class="text-muted">Assign ROTEH staff from Partner Packages.</small>
+                        @else
+                            <select name="driver_id" id="f-driver" class="form-control">
+                                <option value="">— Unassigned —</option>
+                                @foreach($drivers as $dr)
+                                    <option value="{{ $dr->id }}">{{ $dr->name }}{{ $dr->phone ? ' — '.$dr->phone : '' }}</option>
+                                @endforeach
+                            </select>
+                        @endif
                     </div>
 
                     {{-- Addresses --}}
@@ -515,14 +525,21 @@
                     <div class="form-row">
                         <div class="form-group col-md-3">
                             <label>Status <span class="text-danger">*</span></label>
-                            <select name="status" id="f-status" class="form-control" required>
-                                <option value="requested">Requested</option>
-                                <option value="pending">Pending</option>
-                                <option value="accepted">Accepted</option>
-                                <option value="in_progress">In Progress</option>
-                                <option value="completed">Completed</option>
-                                <option value="cancelled">Cancelled</option>
-                            </select>
+                            @if($partnerOnly)
+                                {{-- Partner orders change status through Partner Packages and the driver app, not here. --}}
+                                <input type="hidden" name="status" id="f-status">
+                                <input type="text" id="f-status-label" class="form-control" readonly>
+                                <small class="text-muted">Change it from Partner Packages.</small>
+                            @else
+                                <select name="status" id="f-status" class="form-control" required>
+                                    <option value="requested">Requested</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="accepted">Accepted</option>
+                                    <option value="in_progress">In Progress</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="cancelled">Cancelled</option>
+                                </select>
+                            @endif
                         </div>
                         <div class="form-group col-md-3">
                             <label>Total Fee (KHR ៛)</label>
@@ -667,6 +684,7 @@
 @push('scripts')
 <script>
 const storeUrl   = "{{ route('admin.deliveries.store') }}";
+const PARTNER_ONLY = @json($partnerOnly);
 const updateBase = '/admin/deliveries/';
 
 // ── Elevator toggle ──────────────────────────────────────────────────────────
@@ -839,11 +857,11 @@ function openEdit(btn) {
     const d = JSON.parse(btn.getAttribute('data-delivery'));
 
     document.getElementById('modalTitle').textContent =
-        (d.service_type === 'moving' ? 'Edit Moving Order' : 'Edit Delivery') + ' #' + d.id;
+        (PARTNER_ONLY ? 'Edit Partner Delivery' : d.service_type === 'moving' ? 'Edit Moving Order' : 'Edit Delivery') + ' #' + d.id;
     document.getElementById('deliveryForm').action = updateBase + d.id;
     document.getElementById('formMethod').value    = 'PUT';
 
-    setServiceType(d.service_type || 'delivery');
+    setServiceType(PARTNER_ONLY ? 'delivery' : (d.service_type || 'delivery'));
 
     document.getElementById('f-sender').value           = d.sender_id;
     document.getElementById('f-sender-name').value      = d.sender_name;
@@ -854,6 +872,10 @@ function openEdit(btn) {
     document.getElementById('f-pickup').value           = d.pickup_address;
     document.getElementById('f-dropoff').value          = d.dropoff_address;
     document.getElementById('f-status').value           = d.status;
+    if (PARTNER_ONLY) {
+        document.getElementById('f-status-label').value = d.status_label;
+        document.getElementById('f-driver-label').value = d.driver_label;
+    }
     document.getElementById('f-fee').value              = d.fee;
     const pkgAmt = document.getElementById('f-package-amount');
     if (pkgAmt) pkgAmt.value = d.package_amount || '';
