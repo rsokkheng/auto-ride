@@ -82,6 +82,7 @@ Route::prefix('admin')->middleware(\App\Http\Middleware\AdminAuth::class)->group
 
     // Deliveries
     Route::get('deliveries', [AdminController::class, 'deliveries'])->name('admin.deliveries');
+    Route::get('partner-deliveries', [AdminController::class, 'partnerDeliveries'])->name('admin.partner-deliveries');
     Route::get('deliveries/{delivery}', [AdminController::class, 'showDelivery'])->name('admin.deliveries.show');
     Route::post('deliveries', [AdminController::class, 'storeDelivery'])->name('admin.deliveries.store');
     Route::put('deliveries/{delivery}', [AdminController::class, 'updateDelivery'])->name('admin.deliveries.update');

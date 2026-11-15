@@ -740,14 +740,22 @@ class AdminController extends Controller
 
     // ─── Deliveries ──────────────────────────────────────────────────────────
 
-    public function deliveries(\Illuminate\Http\Request $request)
+    /** Orders sent in by delivery partners — the same list as deliveries(), partner orders only. */
+    public function partnerDeliveries(\Illuminate\Http\Request $request)
+    {
+        return $this->deliveries($request, partnerOnly: true);
+    }
+
+    /** Admin/customer orders. Partner orders have their own list (partnerDeliveries). */
+    public function deliveries(\Illuminate\Http\Request $request, bool $partnerOnly = false)
     {
         $type      = $request->input('type', 'all');
         $status    = $request->input('status');
         $search    = $request->input('search');
-        $partnerId = $request->input('partner_id');
+        $partnerId = $partnerOnly ? $request->input('partner_id') : null;
 
-        $query = Delivery::with(['sender', 'driver', 'partner'])->orderBy('created_at', 'desc');
+        $scoped = fn () => $partnerOnly ? Delivery::whereNotNull('partner_id') : Delivery::whereNull('partner_id');
+        $query  = $scoped()->with(['sender', 'driver', 'partner.partnerProfile'])->orderBy('created_at', 'desc');
 
         if ($type !== 'all') {
             $query->where('service_type', $type);
@@ -779,18 +787,23 @@ class AdminController extends Controller
             'deliveries'    => $deliveries,
             'senders'       => User::where('role', 'passenger')->orderBy('name')->get(),
             'drivers'       => User::where('role', 'driver')->orderBy('name')->get(),
-            'partners'      => User::where('role', 'partner')->orderBy('name')->get(),
+            'partners'      => $partnerOnly
+                ? User::whereIn('id', Delivery::whereNotNull('partner_id')->select('partner_id'))->with('partnerProfile')->orderBy('name')->get()
+                    ->mapWithKeys(fn ($u) => [$u->id => $u->partnerProfile?->business_name ?: $u->name])
+                : collect(),
+            'partnerOnly'   => $partnerOnly,
+            'listRoute'     => $partnerOnly ? 'admin.partner-deliveries' : 'admin.deliveries',
             'activeType'    => $type,
             'activeStatus'  => $status,
             'search'        => $search,
             'activePartner' => $partnerId,
             'commissionPct' => (float) \App\Models\PricingSetting::get('delivery_commission_pct', \App\Models\PricingSetting::get('driver_commission_pct', config('commission.platform_rate.owner', 25))),
             'counts'        => [
-                'all'        => Delivery::count(),
-                'delivery'   => Delivery::where('service_type', 'delivery')->count(),
-                'moving'     => Delivery::where('service_type', 'moving')->count(),
-                'active'     => Delivery::whereNotIn('status', ['completed', 'delivered', 'cancelled'])->count(),
-                'unassigned' => Delivery::whereNull('driver_id')->whereNotIn('status', ['completed', 'delivered', 'cancelled'])->count(),
+                'all'        => $scoped()->count(),
+                'delivery'   => $scoped()->where('service_type', 'delivery')->count(),
+                'moving'     => $scoped()->where('service_type', 'moving')->count(),
+                'active'     => $scoped()->whereNotIn('status', ['completed', 'delivered', 'cancelled'])->count(),
+                'unassigned' => $scoped()->whereNull('driver_id')->whereNotIn('status', ['completed', 'delivered', 'cancelled'])->count(),
             ],
         ]);
     }
@@ -1030,14 +1043,14 @@ class AdminController extends Controller
             }
         }
 
-        return redirect()->route('admin.deliveries')
+        return redirect()->route($delivery->partner_id ? 'admin.partner-deliveries' : 'admin.deliveries')
             ->with('success', "Delivery #{$delivery->id} assigned to {$driver->name}.");
     }
 
     public function destroyDelivery(Delivery $delivery)
     {
         $delivery->delete();
-        return redirect()->route('admin.deliveries')->with('success', 'Delivery deleted.');
+        return redirect()->route($delivery->partner_id ? 'admin.partner-deliveries' : 'admin.deliveries')->with('success', 'Delivery deleted.');
     }
 
     // ─── Marketplace ─────────────────────────────────────────────────────────

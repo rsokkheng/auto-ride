@@ -1,24 +1,30 @@
 @extends('admin.layout')
-@section('title', 'Deliveries')
-@section('page-title', 'Deliveries')
+@section('title', $partnerOnly ? 'Partner Deliveries' : 'Deliveries')
+@section('page-title', $partnerOnly ? 'Partner Deliveries' : 'Deliveries')
 
 @section('content')
 
-<x-admin.page-toolbar subtitle="Package deliveries and moving jobs, including orders sent in by partner businesses.">
-    <button class="btn btn-secondary" onclick="openCreate('moving')"><i class="fas fa-truck-moving mr-1"></i> New Moving Order</button>
-    <button class="btn btn-primary" onclick="openCreate('delivery')"><i class="fas fa-plus mr-1"></i> New Delivery</button>
-</x-admin.page-toolbar>
+@if($partnerOnly)
+    <x-admin.page-toolbar subtitle="Orders sent in by delivery partners only. Admin and customer orders are under Operations → Deliveries.">
+        <a href="{{ route('admin.partner-packages') }}" class="btn btn-outline-primary"><i class="fas fa-boxes-stacked mr-1"></i> Partner Packages</a>
+    </x-admin.page-toolbar>
+@else
+    <x-admin.page-toolbar subtitle="Package deliveries and moving jobs. Orders from delivery partners are under Partners → Deliveries.">
+        <button class="btn btn-secondary" onclick="openCreate('moving')"><i class="fas fa-truck-moving mr-1"></i> New Moving Order</button>
+        <button class="btn btn-primary" onclick="openCreate('delivery')"><i class="fas fa-plus mr-1"></i> New Delivery</button>
+    </x-admin.page-toolbar>
+@endif
 
 <x-admin.stat-grid :cols="5">
     <x-admin.stat-card label="All Orders" :value="number_format($counts['all'])" icon="fa-layer-group" tone="primary"
-                       :href="route('admin.deliveries')" :active="$activeType === 'all' && ! request('unassigned')" />
+                       :href="route($listRoute)" :active="$activeType === 'all' && ! request('unassigned')" />
     <x-admin.stat-card label="Deliveries" :value="number_format($counts['delivery'])" icon="fa-box" tone="info"
-                       :href="route('admin.deliveries', ['type' => 'delivery'])" :active="$activeType === 'delivery'" />
+                       :href="route($listRoute, ['type' => 'delivery'])" :active="$activeType === 'delivery'" />
     <x-admin.stat-card label="Moving Jobs" :value="number_format($counts['moving'])" icon="fa-truck-moving" tone="warning"
-                       :href="route('admin.deliveries', ['type' => 'moving'])" :active="$activeType === 'moving'" />
+                       :href="route($listRoute, ['type' => 'moving'])" :active="$activeType === 'moving'" />
     <x-admin.stat-card label="In Progress" :value="number_format($counts['active'])" icon="fa-route" tone="violet" sub="not finished yet" />
     <x-admin.stat-card label="Need a Driver" :value="number_format($counts['unassigned'])" icon="fa-user-plus" tone="danger"
-                       :href="route('admin.deliveries', ['unassigned' => 1])" :active="request()->boolean('unassigned')" />
+                       :href="route($listRoute, ['unassigned' => 1])" :active="request()->boolean('unassigned')" />
 </x-admin.stat-grid>
 
 @php
@@ -30,14 +36,15 @@
     $payTone      = ['unpaid' => 'secondary', 'pending' => 'warning', 'paid' => 'success', 'refunded' => 'danger'];
     $sizeTone     = ['small' => 'success', 'medium' => 'warning', 'large' => 'danger', 'extra_large' => 'dark'];
     $statuses     = ['created','assigned','accepted','picked_up','in_transit','delivered','completed','requested','pending','in_progress','cancelled'];
+    $ordinal      = fn (int $n) => $n . (['th', 'st', 'nd', 'rd'][($n % 100 - 20) % 10] ?? ['th', 'st', 'nd', 'rd'][$n % 100] ?? 'th');
 @endphp
 <div class="card">
     <div class="card-header">
-        <x-admin.filter-bar :action="route('admin.deliveries')" placeholder="Recipient, sender, phone or partner ref" :count="$deliveries->total()" noun="order">
+        <x-admin.filter-bar :action="route($listRoute)" placeholder="Recipient, sender, phone or partner ref" :count="$deliveries->total()" noun="order">
             <input type="hidden" name="type" value="{{ $activeType }}">
             <x-admin.filter-select name="status" :options="collect($statuses)->mapWithKeys(fn ($s) => [$s => ucfirst(str_replace('_', ' ', $s))])->all()" all="All statuses" />
-            @if(count($partners) > 0)
-                <x-admin.filter-select name="partner_id" :options="$partners->pluck('name', 'id')->all()" all="All partners" />
+            @if($partnerOnly && count($partners) > 0)
+                <x-admin.filter-select name="partner_id" :options="$partners->all()" all="All partners" />
             @endif
         </x-admin.filter-bar>
     </div>
@@ -115,7 +122,7 @@
                         <div>{{ $d->sender_name ?? $d->sender?->name ?? '—' }} <i class="fas fa-arrow-right mx-1 text-muted" style="font-size:.6rem;"></i> {{ $d->recipient_name ?? '—' }}</div>
                         <div class="text-muted tw:text-xs">
                             {{ $d->recipient_phone ?? '' }}
-                            @if($d->partner) · <i class="fas fa-handshake"></i> {{ $d->partner->name }}@endif
+                            @if($d->partner) · <i class="fas fa-handshake"></i> {{ $d->partner->partnerProfile?->business_name ?: $d->partner->name }}@endif
                             @if($d->partner_reference) · ref {{ $d->partner_reference }}@endif
                         </div>
                         <button type="button" class="btn btn-link p-0 tw:text-xs"
@@ -180,7 +187,7 @@
                     </td>
                 </tr>
             @empty
-                <x-admin.empty-row colspan="8" icon="fa-box" title="No orders yet" :clear="route('admin.deliveries')" />
+                <x-admin.empty-row colspan="8" icon="fa-box" title="No orders yet" :clear="route($listRoute)" />
             @endforelse
             </tbody>
         </table>
@@ -309,7 +316,7 @@
                                         <label>Pickup Floor</label>
                                         <select name="floor_pickup" id="f-floor-pickup" class="form-control">
                                             @for($i = 0; $i <= 20; $i++)
-                                                <option value="{{ $i }}">{{ $i === 0 ? 'Ground / 1st Floor' : ordinal($i + 1).' Floor' }}</option>
+                                                <option value="{{ $i }}">{{ $i === 0 ? 'Ground / 1st Floor' : $ordinal($i + 1).' Floor' }}</option>
                                             @endfor
                                         </select>
                                     </div>
@@ -317,7 +324,7 @@
                                         <label>Dropoff Floor</label>
                                         <select name="floor_dropoff" id="f-floor-dropoff" class="form-control">
                                             @for($i = 0; $i <= 20; $i++)
-                                                <option value="{{ $i }}">{{ $i === 0 ? 'Ground / 1st Floor' : ordinal($i + 1).' Floor' }}</option>
+                                                <option value="{{ $i }}">{{ $i === 0 ? 'Ground / 1st Floor' : $ordinal($i + 1).' Floor' }}</option>
                                             @endfor
                                         </select>
                                     </div>
@@ -658,13 +665,6 @@
 @endsection
 
 @push('scripts')
-@php
-function ordinal(int $n): string {
-    $s = ['th','st','nd','rd'];
-    $v = $n % 100;
-    return $n . ($s[($v - 20) % 10] ?? $s[$v] ?? $s[0]);
-}
-@endphp
 <script>
 const storeUrl   = "{{ route('admin.deliveries.store') }}";
 const updateBase = '/admin/deliveries/';
