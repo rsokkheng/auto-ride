@@ -137,8 +137,8 @@
                     ['header' => 'Business', 'items' => [
                         ['label' => 'Partners', 'icon' => 'fa-handshake', 'children' => [
                             ['Partners',      'fa-store',         'admin.partners',           ['admin.partners*'], $pendingPartners, 'badge-warning'],
+                              ['Packages',      'fa-boxes-stacked', 'admin.partner-packages',   ['admin.partner-packages*'], $pendingPackages, 'badge-warning'],
                             ['Deliveries',    'fa-truck-fast',    'admin.partner-deliveries', ['admin.partner-deliveries']],
-                            ['Packages',      'fa-boxes-stacked', 'admin.partner-packages',   ['admin.partner-packages*'], $pendingPackages, 'badge-warning'],
                             ['Daily Closing', 'fa-cash-register', 'admin.daily-closing',      ['admin.daily-closing*']],
                             ['Statements',    'fa-file-invoice',  'admin.partner-statements', ['admin.partner-statements*']],
                             ['Contracts',     'fa-file-contract', 'admin.partner-contracts',  ['admin.partner-contracts*']],
