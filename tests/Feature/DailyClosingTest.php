@@ -109,7 +109,9 @@ class DailyClosingTest extends TestCase
 
         // Close partner → statement shows it closed.
         $this->actingAs($this->admin)->post(route('admin.daily-closing.partner.close', $this->partner),
-            ['date' => $this->today, 'settle_method' => 'bank', 'settle_ref' => 'ABA-555'])->assertSessionHas('success');
+            ['date' => $this->today, 'settle_method' => 'bank', 'settle_ref' => 'ABA-555'])->assertSessionHasErrors('settle_bank_name');
+        $this->actingAs($this->admin)->post(route('admin.daily-closing.partner.close', $this->partner),
+            ['date' => $this->today, 'settle_method' => 'bank', 'settle_bank_name' => 'ABA', 'settle_ref' => 'ABA-555'])->assertSessionHas('success');
         $this->as($this->partner)->getJson("/api/v1/partner/statements?date={$this->today}")
             ->assertJsonPath('data.closing.settle_method', 'bank')->assertJsonPath('data.closing.net_to_partner', 85000);
 
@@ -118,6 +120,49 @@ class DailyClosingTest extends TestCase
         $this->assertTrue(DailyClosing::isClosed($this->today));
         $this->actingAs($this->admin)->post(route('admin.daily-closing.driver.reopen', $this->staff), ['date' => $this->today])->assertSessionHasErrors('day');
         $this->actingAs($this->admin)->get(route('admin.daily-closing', ['date' => $this->today]))->assertOk()->assertSee('Day finished');
+    }
+
+    public function test_driver_hands_over_by_bank_or_cash_plus_bank_and_partner_settles_cash_plus_bank(): void
+    {
+        // Driver collected 100,000 ៛ cash.
+        $d = $this->package(100000);
+        $this->scan($d); $this->scan($d);
+        $this->as($this->staff)->postJson("/api/v1/deliveries/{$d->id}/collect", ['cash_khr' => 100000])->assertOk();
+        $close = fn (array $in) => $this->actingAs($this->admin)
+            ->post(route('admin.daily-closing.driver.close', $this->staff), ['date' => $this->today] + $in);
+
+        // Bank transfer instead of cash: needs the bank; cash fields are ignored.
+        $close(['handover_method' => 'bank', 'received_bank_khr' => 100000])->assertSessionHasErrors('handover_bank_name');
+        $close(['handover_method' => 'bank', 'received_cash_khr' => 100000, 'received_bank_khr' => 60000, 'handover_bank_name' => 'ABA'])
+            ->assertSessionHasErrors('note');
+        $close(['handover_method' => 'bank', 'received_bank_khr' => 100000, 'handover_bank_name' => 'ABA', 'handover_bank_ref' => 'TX9'])
+            ->assertSessionHas('success');
+        $c = \App\Models\DriverClosing::first();
+        $this->assertSame(['bank', 0, 100000, 'ABA', 'TX9', 0], [$c->handover_method, (int) $c->received_cash_khr, (int) $c->received_bank_khr, $c->handover_bank_name, $c->handover_bank_ref, (int) $c->difference_khr]);
+
+        // Reopen → part cash, part bank ($10 by bank = 41,000 ៛).
+        $this->post(route('admin.daily-closing.driver.reopen', $this->staff), ['date' => $this->today]);
+        $close(['handover_method' => 'both', 'received_cash_khr' => 59000, 'received_bank_usd' => 10, 'handover_bank_name' => 'Wing'])
+            ->assertSessionHas('success');
+        $c = \App\Models\DriverClosing::first();
+        $this->assertSame(['both', 59000, 10.0, 0], [$c->handover_method, (int) $c->received_cash_khr, $c->received_bank_usd, (int) $c->difference_khr]);
+        $this->get(route('admin.daily-closing', ['date' => $this->today]))->assertOk()->assertSee('Bank (Wing)');
+
+        // Partner balance 85,000 ៛ settled 50,000 cash + 35,000 ABA.
+        $pclose = fn (array $in) => $this->post(route('admin.daily-closing.partner.close', $this->partner), ['date' => $this->today] + $in);
+        $pclose(['settle_method' => 'cash_bank', 'settle_cash_khr' => 50000, 'settle_bank_name' => 'ABA'])->assertSessionHasErrors('settle_cash_khr');
+        $pclose(['settle_method' => 'cash_bank', 'settle_cash_khr' => 50000, 'settle_bank_khr' => 30000, 'settle_bank_name' => 'ABA'])->assertSessionHasErrors('note');
+        $pclose(['settle_method' => 'cash_bank', 'settle_cash_khr' => 50000, 'settle_bank_khr' => 35000, 'settle_bank_name' => 'ABA'])->assertSessionHas('success');
+
+        $pc = \App\Models\PartnerClosing::first();
+        $this->assertSame('Cash + Bank (50,000 ៛ cash · 35,000 ៛ ABA)', $pc->methodLabel());
+        $this->get(route('admin.daily-closing', ['date' => $this->today]))->assertSee('Cash + Bank (50,000 ៛ cash · 35,000 ៛ ABA)');
+        $this->as($this->partner)->getJson("/api/v1/partner/statements?date={$this->today}")
+            ->assertJsonPath('data.closing.settle_method', 'cash_bank')->assertJsonPath('data.closing.settle_bank_khr', 35000);
+
+        $this->post(route('admin.daily-closing.finish'), ['date' => $this->today])->assertSessionHas('success');
+        $totals = DailyClosing::first()->totals;
+        $this->assertSame([59000, 10.0, 50000, 35000], [$totals['cash_khr_received'], (float) $totals['handover_bank_usd'], $totals['partner_settled_cash_khr'], $totals['partner_settled_bank_khr']]);
     }
 
     public function test_short_payment_with_note_and_no_cod_package(): void

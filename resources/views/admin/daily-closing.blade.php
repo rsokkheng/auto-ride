@@ -12,7 +12,7 @@
 
 @section('content')
 
-<x-admin.page-toolbar subtitle="Partner packages — 1) close with each staff driver (cash ៛ / $ and bank), 2) close with each partner (statement settled), 3) finish the day. Rate: 1 USD = {{ number_format($rate) }} ៛.">
+<x-admin.page-toolbar subtitle="Partner packages — 1) close with each staff driver (cash handed over in cash or by bank), 2) close with each partner (statement settled), 3) finish the day. Rate: 1 USD = {{ number_format($rate) }} ៛.">
     <form method="GET" action="{{ route('admin.daily-closing') }}" class="d-flex align-items-center" style="gap:6px;">
         <label class="mb-0 text-muted">Business date</label>
         <input type="date" name="date" value="{{ $date }}" max="{{ now(\App\Services\PartnerStatementService::tz())->toDateString() }}"
@@ -78,8 +78,13 @@
                     <td>
                         @if($c)
                             <span class="status-pill tone-success"><i class="fas fa-check mr-1"></i>Closed</span>
-                            <div class="tw:text-xs text-muted">{{ $k($c->received_cash_khr) }} ៛ + {{ $usd($c->received_cash_usd) }}
-                                @if($c->difference_khr) · <span class="text-danger">diff {{ $k($c->difference_khr) }} ៛</span>@endif</div>
+                            @if($c->handover_method !== 'bank')
+                                <div class="tw:text-xs text-muted"><i class="fas fa-money-bill-wave mr-1"></i>Cash {{ $k($c->received_cash_khr) }} ៛ + {{ $usd($c->received_cash_usd) }}</div>
+                            @endif
+                            @if($c->handover_method !== 'cash')
+                                <div class="tw:text-xs text-muted"><i class="fas fa-building-columns mr-1"></i>Bank{{ $c->handover_bank_name ? ' (' . $c->handover_bank_name . ')' : '' }} {{ $k($c->received_bank_khr) }} ៛ + {{ $usd($c->received_bank_usd) }}@if($c->handover_bank_ref) · {{ $c->handover_bank_ref }}@endif</div>
+                            @endif
+                            @if($c->difference_khr)<div class="tw:text-xs text-danger">diff {{ $k($c->difference_khr) }} ៛</div>@endif
                             <div class="tw:text-xs text-muted">{{ $c->closer?->name }} {{ $c->closed_at?->timezone(\App\Services\PartnerStatementService::tz())->format('H:i') }}</div>
                         @else
                             <span class="status-pill tone-warning">Open</span>
@@ -137,7 +142,7 @@
                     <td>
                         @if($c)
                             <span class="status-pill tone-success"><i class="fas fa-check mr-1"></i>Closed</span>
-                            <div class="tw:text-xs text-muted">{{ ucfirst(str_replace('_', ' ', $c->settle_method)) }}@if($c->settle_ref) · {{ $c->settle_ref }}@endif</div>
+                            <div class="tw:text-xs text-muted">{{ $c->methodLabel() }}@if($c->settle_ref) · {{ $c->settle_ref }}@endif</div>
                         @else
                             <span class="status-pill tone-warning">Open</span>
                         @endif
@@ -151,7 +156,7 @@
                             @else
                                 <button class="btn btn-sm btn-success" data-toggle="modal" data-target="#partnerModal"
                                         data-action="{{ route('admin.daily-closing.partner.close', $p) }}" data-name="{{ $r['name'] }}"
-                                        data-net="{{ $k(abs($net)) }} ៛ — {{ $net < 0 ? 'Partner pays ROTEH' : 'ROTEH pays partner' }}"
+                                        data-net="{{ $k(abs($net)) }} ៛ — {{ $net < 0 ? 'Partner pays ROTEH' : 'ROTEH pays partner' }}" data-balance="{{ abs((int) $net) }}"
                                         data-returns="{{ $r['at_roteh'] }}">
                                     <i class="fas fa-check mr-1"></i>Close</button>
                             @endif
@@ -196,20 +201,46 @@
     <input type="hidden" name="date" value="{{ $date }}">
     <div class="modal-header"><h5 class="modal-title">Close driver — <span class="js-name"></span></h5><button type="button" class="close" data-dismiss="modal">&times;</button></div>
     <div class="modal-body">
-        <p class="text-muted mb-2">Expected cash: <b class="js-exp"></b></p>
-        <div class="form-row">
-            <div class="form-group col-6"><label>Cash ៛ received</label><input type="number" name="received_cash_khr" min="0" step="100" class="form-control js-khr" required></div>
-            <div class="form-group col-6"><label>Cash $ received</label><input type="number" name="received_cash_usd" min="0" step="0.01" class="form-control js-usd"></div>
+        <p class="text-muted mb-2">Cash the driver collected: <b class="js-exp"></b></p>
+        <div class="form-section-title">Driver hands it over by</div>
+        <div class="choice-cards mb-3" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));">
+            @foreach([
+                'cash' => ['Cash', 'fa-money-bill-wave', 'counted at the office'],
+                'bank' => ['Bank transfer', 'fa-building-columns', 'sent to ROTEH bank'],
+                'both' => ['Cash + Bank', 'fa-scale-balanced', 'part of each'],
+            ] as $value => [$title, $icon, $sub])
+                <label class="choice-card">
+                    <input type="radio" name="handover_method" value="{{ $value }}" @checked($value === 'cash')>
+                    <span class="choice-body"><span class="choice-icon"><i class="fas {{ $icon }}"></i></span>
+                        <span><span class="choice-title d-block">{{ $title }}</span><span class="choice-sub">{{ $sub }}</span></span></span>
+                </label>
+            @endforeach
+        </div>
+        <div class="form-row js-cash">
+            <div class="form-group col-6"><label>Cash ៛ received</label><input type="number" name="received_cash_khr" min="0" step="100" class="form-control js-khr js-sum"></div>
+            <div class="form-group col-6"><label>Cash $ received</label><input type="number" name="received_cash_usd" min="0" step="0.01" class="form-control js-usd js-sum" data-usd="1"></div>
+        </div>
+        <div class="form-row js-banksec">
+            <div class="form-group col-6"><label>Bank ៛ received</label><input type="number" name="received_bank_khr" min="0" step="100" class="form-control js-bkhr js-sum"></div>
+            <div class="form-group col-6"><label>Bank $ received</label><input type="number" name="received_bank_usd" min="0" step="0.01" class="form-control js-busd js-sum" data-usd="1"></div>
+            <div class="form-group col-6"><label>Bank</label>
+                <select name="handover_bank_name" class="form-control"><option value="">— Choose —</option>
+                    @foreach(\App\Services\PartnerPackageWorkflow::BANKS as $bank)<option>{{ $bank }}</option>@endforeach
+                </select></div>
+            <div class="form-group col-6"><label>Transfer ref</label><input type="text" name="handover_bank_ref" maxlength="100" class="form-control" placeholder="e.g. ABA 123456"></div>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mb-3 px-2 py-1 tw:text-sm" style="background:var(--ink-50);border-radius:var(--radius-sm);">
+            <span>Handed over</span><b class="js-total"></b>
         </div>
         <div class="form-check mb-2 js-bankrow">
             <input class="form-check-input" type="checkbox" name="bank_verified" value="1" id="bankVerified">
-            <label class="form-check-label" for="bankVerified">Bank transfers checked on the bank statement (<span class="js-bank"></span>)</label>
+            <label class="form-check-label" for="bankVerified">Customers' bank transfers checked on the bank statement (<span class="js-bank"></span>)</label>
         </div>
         <div class="form-check mb-2 js-returnsrow">
             <input class="form-check-input" type="checkbox" name="returns_received" value="1" id="returnsReceived">
             <label class="form-check-label" for="returnsReceived">Received <b class="js-returns"></b> returned package(s) from the driver</label>
         </div>
-        <div class="form-group mb-0"><label>Note <small class="text-muted">— required if the cash differs</small></label>
+        <div class="form-group mb-0"><label>Note <small class="text-muted">— required if the total differs</small></label>
             <input type="text" name="note" maxlength="500" class="form-control"></div>
     </div>
     <div class="modal-footer"><button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button><button class="btn btn-success">Close driver</button></div>
@@ -222,12 +253,29 @@
     <div class="modal-body">
         <p class="mb-2">Balance: <b class="js-net"></b></p>
         <div class="alert alert-warning py-2 js-handback">Closing hands <b class="js-hb"></b> returned package(s) back to the shop.</div>
-        <div class="form-group"><label>Settled by</label>
-            <select name="settle_method" class="form-control" required>
-                <option value="cash">Cash</option>
-                <option value="bank">Bank transfer</option>
-                <option value="wallet">ROTEH Pay wallet</option>
-                <option value="carry_over">Carry over to next statement</option>
+        <div class="form-section-title">Settled by</div>
+        <div class="choice-cards mb-3" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));">
+            @foreach([
+                'cash'       => ['Cash', 'fa-money-bill-wave'],
+                'bank'       => ['Bank transfer', 'fa-building-columns'],
+                'cash_bank'  => ['Cash + Bank', 'fa-scale-balanced'],
+                'wallet'     => ['ROTEH Pay wallet', 'fa-wallet'],
+                'carry_over' => ['Carry over', 'fa-forward'],
+            ] as $value => [$title, $icon])
+                <label class="choice-card">
+                    <input type="radio" name="settle_method" value="{{ $value }}" @checked($value === 'cash') required>
+                    <span class="choice-body"><span class="choice-icon"><i class="fas {{ $icon }}"></i></span><span class="choice-title">{{ $title }}</span></span>
+                </label>
+            @endforeach
+        </div>
+        <div class="form-row js-split">
+            <div class="form-group col-6"><label>Cash ៛</label><input type="number" name="settle_cash_khr" min="0" step="100" class="form-control js-psum"></div>
+            <div class="form-group col-6"><label>Bank ៛</label><input type="number" name="settle_bank_khr" min="0" step="100" class="form-control js-psum"></div>
+            <div class="col-12 tw:text-xs mb-2 js-split-total"></div>
+        </div>
+        <div class="form-group js-pbank"><label>Bank</label>
+            <select name="settle_bank_name" class="form-control"><option value="">— Choose —</option>
+                @foreach(\App\Services\PartnerPackageWorkflow::BANKS as $bank)<option>{{ $bank }}</option>@endforeach
             </select></div>
         <div class="form-group"><label>Reference <small class="text-muted">(bank ref / receipt no.)</small></label><input type="text" name="settle_ref" maxlength="100" class="form-control"></div>
         <div class="form-group mb-0"><label>Note</label><input type="text" name="note" maxlength="500" class="form-control"></div>
@@ -238,20 +286,73 @@
 
 @push('scripts')
 <script>
+const RATE = {{ (int) $rate }};
+const fmt = n => Math.round(n).toLocaleString() + ' ៛';
+let driverExpected = {khr: 0, usd: 0};
+
+// Driver: show the cash and/or bank fields for the chosen hand-over and total them against the expected cash.
+function driverMethod(m, prefill) {
+    const method = m.find('input[name=handover_method]:checked').val();
+    m.find('.js-cash').toggle(method !== 'bank');
+    m.find('.js-banksec').toggle(method !== 'cash');
+    if (prefill) {
+        const e = driverExpected;
+        m.find('.js-khr').val(method === 'bank' ? '' : e.khr); m.find('.js-usd').val(method === 'bank' ? '' : e.usd);
+        m.find('.js-bkhr').val(method === 'bank' ? e.khr : ''); m.find('.js-busd').val(method === 'bank' ? e.usd : '');
+    }
+    driverTotal(m);
+}
+function driverTotal(m) {
+    const method = m.find('input[name=handover_method]:checked').val();
+    let total = 0;
+    m.find([method !== 'bank' && '.js-cash .js-sum', method !== 'cash' && '.js-banksec .js-sum'].filter(Boolean).join(','))
+        .each(function () { total += (Number(this.value) || 0) * (this.dataset.usd ? RATE : 1); });
+    const diff = total - (driverExpected.khr + driverExpected.usd * RATE);
+    m.find('.js-total').html(fmt(total) + (Math.round(diff) === 0 ? ' <span class="text-success">✓ matches</span>'
+        : ' <span class="text-danger">(' + (diff > 0 ? '+' : '') + fmt(diff) + ')</span>'));
+}
+$('#driverModal').on('change', 'input[name=handover_method]', function () { driverMethod($('#driverModal'), true); })
+                 .on('input', '.js-sum', function () { driverTotal($('#driverModal')); });
+
 $('#driverModal').on('show.bs.modal', function (e) {
     const b = $(e.relatedTarget), m = $(this);
     $('#driverForm').attr('action', b.data('action'));
     m.find('.js-name').text(b.data('name'));
+    driverExpected = {khr: Number(b.data('khr')), usd: Number(b.data('usd'))};
     m.find('.js-exp').text(Number(b.data('khr')).toLocaleString() + ' ៛ + $' + Number(b.data('usd')).toFixed(2));
-    m.find('.js-khr').val(b.data('khr')); m.find('.js-usd').val(b.data('usd'));
+    m.find('input[name=handover_method][value=cash]').prop('checked', true);
+    m.find('select[name=handover_bank_name], input[name=handover_bank_ref]').val('');
+    driverMethod(m, true);
     m.find('.js-bank').text(b.data('banktext'));
     m.find('.js-bankrow').toggle(b.data('bank') == 1);
     m.find('.js-returns').text(b.data('returns'));
     m.find('.js-returnsrow').toggle(Number(b.data('returns')) > 0);
 });
+// Partner: bank name for bank settlements; cash + bank amounts must add up to the balance.
+let partnerBalance = 0;
+function partnerMethod(m) {
+    const method = m.find('input[name=settle_method]:checked').val();
+    m.find('.js-split').toggle(method === 'cash_bank');
+    m.find('.js-pbank').toggle(method === 'bank' || method === 'cash_bank');
+    partnerTotal(m);
+}
+function partnerTotal(m) {
+    let total = 0;
+    m.find('.js-psum').each(function () { total += Number(this.value) || 0; });
+    const diff = total - partnerBalance;
+    m.find('.js-split-total').html('Total ' + fmt(total) + ' of ' + fmt(partnerBalance)
+        + (diff === 0 ? ' <span class="text-success">✓</span>' : ' <span class="text-danger">(' + (diff > 0 ? '+' : '') + fmt(diff) + ')</span>'));
+}
+$('#partnerModal').on('change', 'input[name=settle_method]', function () { partnerMethod($('#partnerModal')); })
+                  .on('input', '.js-psum', function () { partnerTotal($('#partnerModal')); });
+
 $('#partnerModal').on('show.bs.modal', function (e) {
     const b = $(e.relatedTarget);
     $('#partnerForm').attr('action', b.data('action'));
+    partnerBalance = Number(b.data('balance')) || 0;
+    $(this).find('input[name=settle_method][value=cash]').prop('checked', true);
+    $(this).find('.js-psum, select[name=settle_bank_name]').val('');
+    partnerMethod($(this));
     $(this).find('.js-name').text(b.data('name'));
     $(this).find('.js-net').text(b.data('net'));
     $(this).find('.js-hb').text(b.data('returns'));

@@ -15,8 +15,8 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Daily process for Partner packages (accountant):
- *   1. close with each staff driver   — cash ៛ / cash $ received vs verified, bank checked
- *   2. close with each partner        — the day's statement settled
+ *   1. close with each staff driver   — the cash they collected handed over (in cash, by bank, or both), bank checked
+ *   2. close with each partner        — the day's statement settled (cash, bank, cash + bank, wallet, carry over)
  *   3. finish the day                 — locked and logged
  */
 class DailyClosingService
@@ -90,13 +90,23 @@ class DailyClosingService
         $e = $this->driverExpected($driver->id, $date);
         $rate = self::rate();
 
-        $receivedKhr = (int) ($in['received_cash_khr'] ?? 0);
-        $receivedUsd = round((float) ($in['received_cash_usd'] ?? 0), 2);
-        $diff = ($receivedKhr + (int) round($receivedUsd * $rate)) - ($e['cash_khr'] + (int) round($e['cash_usd'] * $rate));
+        // The driver hands over the cash they collected — in cash, by bank transfer to ROTEH, or both.
+        $method  = in_array($in['handover_method'] ?? 'cash', array_keys(DriverClosing::HANDOVER_METHODS), true) ? ($in['handover_method'] ?? 'cash') : 'cash';
+        $byCash  = $method !== 'bank';
+        $byBank  = $method !== 'cash';
+        $receivedKhr = $byCash ? (int) ($in['received_cash_khr'] ?? 0) : 0;
+        $receivedUsd = $byCash ? round((float) ($in['received_cash_usd'] ?? 0), 2) : 0.0;
+        $bankKhr     = $byBank ? (int) ($in['received_bank_khr'] ?? 0) : 0;
+        $bankUsd     = $byBank ? round((float) ($in['received_bank_usd'] ?? 0), 2) : 0.0;
+        $handedOver  = $receivedKhr + $bankKhr + (int) round(($receivedUsd + $bankUsd) * $rate);
+        $diff = $handedOver - ($e['cash_khr'] + (int) round($e['cash_usd'] * $rate));
         $bankExpected = $e['bank_khr'] > 0 || $e['bank_usd'] > 0;
 
+        if ($byBank && ($bankKhr > 0 || $bankUsd > 0) && empty($in['handover_bank_name'])) {
+            throw ValidationException::withMessages(['handover_bank_name' => 'Choose the bank the driver transferred to.']);
+        }
         if ($diff !== 0 && trim((string) ($in['note'] ?? '')) === '') {
-            throw ValidationException::withMessages(['note' => 'Cash received differs from expected — add a note.']);
+            throw ValidationException::withMessages(['note' => 'Money handed over differs from the cash expected — add a note.']);
         }
         if ($bankExpected && empty($in['bank_verified'])) {
             throw ValidationException::withMessages(['bank_verified' => 'Check the bank transfers against the bank statement first.']);
@@ -105,7 +115,7 @@ class DailyClosingService
             throw ValidationException::withMessages(['returns_received' => "Confirm you received the {$e['returned']} returned package(s) from the driver."]);
         }
 
-        return DB::transaction(function () use ($driver, $date, $e, $receivedKhr, $receivedUsd, $diff, $rate, $in, $by) {
+        return DB::transaction(function () use ($driver, $date, $e, $method, $receivedKhr, $receivedUsd, $bankKhr, $bankUsd, $diff, $rate, $in, $by) {
             $closing = DriverClosing::updateOrCreate(
                 ['driver_id' => $driver->id, 'business_date' => $date],
                 [
@@ -117,6 +127,11 @@ class DailyClosingService
                     'expected_bank_usd' => $e['bank_usd'],
                     'received_cash_khr' => $receivedKhr,
                     'received_cash_usd' => $receivedUsd,
+                    'handover_method'   => $method,
+                    'received_bank_khr' => $bankKhr,
+                    'received_bank_usd' => $bankUsd,
+                    'handover_bank_name' => $bankKhr > 0 || $bankUsd > 0 ? ($in['handover_bank_name'] ?? null) : null,
+                    'handover_bank_ref'  => $bankKhr > 0 || $bankUsd > 0 ? ($in['handover_bank_ref'] ?? null) : null,
                     'bank_verified'     => (bool) ($in['bank_verified'] ?? false),
                     'returns_received'  => (bool) ($in['returns_received'] ?? false),
                     'khr_per_usd'       => $rate,
@@ -173,6 +188,25 @@ class DailyClosingService
         [$from, $to] = PS::dayRange($date);
         $s = $this->statements->build($partner, $from, $to)['summary'];
 
+        // How the balance was settled; cash + bank must add up to it (or explain why not).
+        $method  = $in['settle_method'] ?? null;
+        $balance = abs((int) $s['net_to_partner']);
+        [$cash, $bank] = match ($method) {
+            'cash'      => [$balance, 0],
+            'bank'      => [0, $balance],
+            'cash_bank' => [(int) ($in['settle_cash_khr'] ?? 0), (int) ($in['settle_bank_khr'] ?? 0)],
+            default     => [0, 0],
+        };
+        if ($method === 'cash_bank' && ($cash <= 0 || $bank <= 0)) {
+            throw ValidationException::withMessages(['settle_cash_khr' => 'Enter both the cash and the bank amount (or choose Cash or Bank transfer).']);
+        }
+        if ($method === 'cash_bank' && $cash + $bank !== $balance && trim((string) ($in['note'] ?? '')) === '') {
+            throw ValidationException::withMessages(['note' => 'Cash + bank (' . number_format($cash + $bank) . ' ៛) differs from the balance (' . number_format($balance) . ' ៛) — add a note.']);
+        }
+        if (in_array($method, ['bank', 'cash_bank'], true) && empty($in['settle_bank_name'])) {
+            throw ValidationException::withMessages(['settle_bank_name' => 'Choose the bank used for the transfer.']);
+        }
+
         return PartnerClosing::updateOrCreate(
             ['partner_id' => $partner->id, 'business_date' => $date],
             [
@@ -183,7 +217,10 @@ class DailyClosingService
                 'roteh_pays'         => $s['roteh_pays_partner'],
                 'partner_pays'       => $s['partner_pays_roteh'],
                 'net_to_partner'     => $s['net_to_partner'],
-                'settle_method'      => $in['settle_method'] ?? null,
+                'settle_method'      => $method,
+                'settle_cash_khr'    => $cash,
+                'settle_bank_khr'    => $bank,
+                'settle_bank_name'   => $bank > 0 ? ($in['settle_bank_name'] ?? null) : null,
                 'settle_ref'         => $in['settle_ref'] ?? null,
                 'note'               => $in['note'] ?? null,
                 'closed_by'          => $by->id,
@@ -249,6 +286,10 @@ class DailyClosingService
             'totals'          => [
                 'cash_khr_received' => (int) $dc->sum('received_cash_khr'),
                 'cash_usd_received' => round((float) $dc->sum('received_cash_usd'), 2),
+                'handover_bank_khr' => (int) $dc->sum('received_bank_khr'),     // drivers who transferred instead of cash
+                'handover_bank_usd' => round((float) $dc->sum('received_bank_usd'), 2),
+                'partner_settled_cash_khr' => (int) $pc->sum('settle_cash_khr'),
+                'partner_settled_bank_khr' => (int) $pc->sum('settle_bank_khr'),
                 'bank_khr'          => (int) $dc->sum('expected_bank_khr'),
                 'bank_usd'          => round((float) $dc->sum('expected_bank_usd'), 2),
                 'driver_difference_khr' => (int) $dc->sum('difference_khr'),

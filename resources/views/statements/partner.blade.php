@@ -115,7 +115,7 @@ tfoot td { font-weight:700; background:#ecfdf3 !important; border-top:2px solid 
     </div>
     @if(!empty($s['closing']))
         <div class="balance" style="margin:0 0 10px;">
-            <div>✅ បានបិទបញ្ជីជាមួយ ROTEH · Closed with ROTEH — {{ ucfirst(str_replace('_', ' ', $s['closing']['settle_method'] ?? '')) }}
+            <div>✅ បានបិទបញ្ជីជាមួយ ROTEH · Closed with ROTEH — {{ $s['closing']['method_label'] ?? ucfirst(str_replace('_', ' ', $s['closing']['settle_method'] ?? '')) }}
                 @if(!empty($s['closing']['settle_ref'])) · {{ $s['closing']['settle_ref'] }} @endif</div>
             <div class="en">{{ \Carbon\Carbon::parse($s['closing']['closed_at'])->timezone(\App\Services\PartnerStatementService::tz())->format('d/m/Y H:i') }}</div>
         </div>

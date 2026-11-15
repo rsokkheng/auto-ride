@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\DailyClosing;
+use App\Models\DriverClosing;
 use App\Models\PartnerClosing;
 use App\Models\User;
 use App\Services\DailyClosingService;
+use App\Services\PartnerPackageWorkflow;
 use App\Services\PartnerStatementService as PS;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -38,8 +40,13 @@ class DailyClosingController extends Controller
     {
         $data = $request->validate([
             'date'              => 'required|date_format:Y-m-d',
-            'received_cash_khr' => 'required|integer|min:0',
+            'handover_method'   => 'nullable|in:' . implode(',', array_keys(DriverClosing::HANDOVER_METHODS)),
+            'received_cash_khr' => 'nullable|integer|min:0',
             'received_cash_usd' => 'nullable|numeric|min:0',
+            'received_bank_khr' => 'nullable|integer|min:0',
+            'received_bank_usd' => 'nullable|numeric|min:0',
+            'handover_bank_name' => 'nullable|in:' . implode(',', PartnerPackageWorkflow::BANKS),
+            'handover_bank_ref' => 'nullable|string|max:100',
             'bank_verified'     => 'nullable|boolean',
             'returns_received'  => 'nullable|boolean',
             'note'              => 'nullable|string|max:500',
@@ -60,8 +67,11 @@ class DailyClosingController extends Controller
     {
         $data = $request->validate([
             'date'          => 'required|date_format:Y-m-d',
-            'settle_method' => 'required|in:' . implode(',', PartnerClosing::METHODS),
-            'settle_ref'    => 'nullable|string|max:100',
+            'settle_method'    => 'required|in:' . implode(',', PartnerClosing::METHODS),
+            'settle_cash_khr'  => 'nullable|integer|min:0',
+            'settle_bank_khr'  => 'nullable|integer|min:0',
+            'settle_bank_name' => 'nullable|in:' . implode(',', PartnerPackageWorkflow::BANKS),
+            'settle_ref'       => 'nullable|string|max:100',
             'note'          => 'nullable|string|max:500',
         ]);
         $this->closing->closePartner($partner, $data['date'], $data, Auth::user());

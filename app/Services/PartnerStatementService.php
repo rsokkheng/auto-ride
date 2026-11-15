@@ -333,10 +333,11 @@ class PartnerStatementService
             ],
             // Accountant's close with this partner for the day (null = still open).
             'closing'      => $from->isSameDay($to)
-                ? \App\Models\PartnerClosing::with('closer:id,name')->where('partner_id', $partner->id)
-                    ->whereDate('business_date', $from->toDateString())->first()?->only([
-                        'settle_method', 'settle_ref', 'note', 'closed_at', 'net_to_partner',
-                    ])
+                && ($c = \App\Models\PartnerClosing::with('closer:id,name')->where('partner_id', $partner->id)
+                    ->whereDate('business_date', $from->toDateString())->first())
+                ? $c->only([
+                    'settle_method', 'settle_cash_khr', 'settle_bank_khr', 'settle_bank_name', 'settle_ref', 'note', 'closed_at', 'net_to_partner',
+                ]) + ['method_label' => $c->methodLabel()]
                 : null,
         ];
     }
