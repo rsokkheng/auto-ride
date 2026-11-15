@@ -198,7 +198,7 @@ class PartnerPackageController extends ApiController
             ->when($group === 'active', fn ($q) => $q->whereNotIn('status', $finished))
             ->when($group === 'history', fn ($q) => $q->whereIn('status', $finished))
             ->when($status && in_array($status, Delivery::PACKAGE_STATUSES, true),
-                fn ($q) => $q->whereIn('status', $this->rawStatusesFor($status)))
+                fn ($q) => $this->wherePackageStatus($q, $status))
             ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
                 ->where('recipient_name', 'like', "%{$search}%")
                 ->orWhere('recipient_phone', 'like', "%{$search}%")
@@ -266,7 +266,7 @@ class PartnerPackageController extends ApiController
         if ($deny = $this->denyUnlessPartner($user = $this->authUser($request))) return $deny;
         if ($delivery->partner_id !== $user->id) return $this->unauthorized();
 
-        if (! in_array($delivery->status, Delivery::PRE_PICKUP_STATUSES, true)) {
+        if (! $delivery->partnerCanCancel()) {
             return response()->json([
                 'success' => false,
                 'message' => $delivery->status === 'cancelled'
@@ -485,21 +485,29 @@ class PartnerPackageController extends ApiController
         ], 403);
     }
 
-    /** Raw deliveries.status values behind one Partner package status. */
-    private function rawStatusesFor(string $packageStatus): array
+    /** Rows whose Partner package status is $packageStatus (see Delivery::packageStatusFor). */
+    private function wherePackageStatus($query, string $packageStatus)
     {
-        return [
-            'pending'         => ['created'],
-            'confirmed'       => ['requested', 'pending'],
-            'driver_assigned' => ['assigned', 'accepted'],
-            'picked_up'       => ['picked_up'],
-            'in_transit'      => ['in_progress', 'in_transit'],
-            'completed'       => ['delivered', 'completed'],
-            'failed'          => ['delivery_failed'],
-            'at_roteh'        => ['at_roteh'],
-            'returned'        => ['returned'],
-            'cancelled'       => ['cancelled'],
-        ][$packageStatus] ?? [$packageStatus];
+        $delivery = fn ($q) => $q->where('leg', Delivery::LEG_DELIVERY);
+        $notDelivery = fn ($q) => $q->where(fn ($w) => $w->whereNull('leg')->orWhere('leg', '!=', Delivery::LEG_DELIVERY));
+
+        return match ($packageStatus) {
+            'driver_assigned' => $notDelivery($query->whereIn('status', ['assigned', 'accepted'])),
+            'picked_up'       => $notDelivery($query->where('status', 'picked_up')),
+            'at_office'       => $query->where(fn ($q) => $q->where('status', 'at_office')
+                ->orWhere(fn ($q) => $delivery($q->whereIn('status', ['assigned', 'accepted'])))),
+            'in_transit'      => $query->where(fn ($q) => $q->whereIn('status', ['in_progress', 'in_transit'])
+                ->orWhere(fn ($q) => $delivery($q->where('status', 'picked_up')))),
+            default           => $query->whereIn('status', [
+                'pending'   => ['created'],
+                'confirmed' => ['requested', 'pending'],
+                'completed' => ['delivered', 'completed'],
+                'failed'    => ['delivery_failed'],
+                'at_roteh'  => ['at_roteh'],
+                'returned'  => ['returned'],
+                'cancelled' => ['cancelled'],
+            ][$packageStatus] ?? [$packageStatus]),
+        };
     }
 
     private function profilePayload(User $user): array
@@ -578,7 +586,7 @@ class PartnerPackageController extends ApiController
             'returned_at'     => $d->returned_at?->toIso8601String(),
             'hub_returned_at' => $d->hub_returned_at?->toIso8601String(),
             'completed_at'    => $d->completed_at?->toIso8601String(),
-            'can_cancel'      => in_array($d->status, Delivery::PRE_PICKUP_STATUSES, true),
+            'can_cancel'      => $d->partnerCanCancel(),
             'is_live'         => in_array($d->status, array_merge(['assigned', 'accepted'], Delivery::IN_TRANSIT_STATUSES), true),
             'timeline'        => $d->trackingHistories->map(fn ($h) => [
                 'status' => $h->status,

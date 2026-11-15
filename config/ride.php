@@ -59,6 +59,13 @@ return [
     */
     'khr_per_usd' => (int) env('KHR_PER_USD', 4100),
 
+    // ROTEH office: Partner packages are brought here (pickup leg) and sent out from here (delivery leg).
+    'office' => [
+        'address' => env('ROTEH_OFFICE_ADDRESS', 'ROTEH Office'),
+        'lat'     => env('ROTEH_OFFICE_LAT') !== null ? (float) env('ROTEH_OFFICE_LAT') : null,
+        'lng'     => env('ROTEH_OFFICE_LNG') !== null ? (float) env('ROTEH_OFFICE_LNG') : null,
+    ],
+
     /*
     |------------------------------------------------------------------
     | Service Area (bounding box)

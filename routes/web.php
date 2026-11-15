@@ -82,7 +82,6 @@ Route::prefix('admin')->middleware(\App\Http\Middleware\AdminAuth::class)->group
 
     // Deliveries
     Route::get('deliveries', [AdminController::class, 'deliveries'])->name('admin.deliveries');
-    Route::get('partner-deliveries', [AdminController::class, 'partnerDeliveries'])->name('admin.partner-deliveries');
     Route::get('deliveries/{delivery}', [AdminController::class, 'showDelivery'])->name('admin.deliveries.show');
     Route::post('deliveries', [AdminController::class, 'storeDelivery'])->name('admin.deliveries.store');
     Route::put('deliveries/{delivery}', [AdminController::class, 'updateDelivery'])->name('admin.deliveries.update');
@@ -273,6 +272,9 @@ Route::prefix('admin')->middleware(\App\Http\Middleware\AdminAuth::class)->group
     Route::post('partners/{profile}/reject',          [\App\Http\Controllers\Admin\PartnerAdminController::class, 'reject'])->name('admin.partners.reject');
     Route::post('partners/{profile}/suspend',         [\App\Http\Controllers\Admin\PartnerAdminController::class, 'suspend'])->name('admin.partners.suspend');
     Route::get('partner-packages',                     [\App\Http\Controllers\Admin\PartnerAdminController::class, 'packages'])->name('admin.partner-packages');
+    Route::get('partner-deliveries',                   [\App\Http\Controllers\Admin\PartnerAdminController::class, 'deliveries'])->name('admin.partner-deliveries');
+    Route::post('partner-deliveries/{delivery}/office',   [\App\Http\Controllers\Admin\PartnerAdminController::class, 'receiveAtOffice'])->name('admin.partner-deliveries.office');
+    Route::post('partner-deliveries/{delivery}/complete', [\App\Http\Controllers\Admin\PartnerAdminController::class, 'completeDelivery'])->name('admin.partner-deliveries.complete');
     Route::post('partner-packages/{delivery}/confirm', [\App\Http\Controllers\Admin\PartnerAdminController::class, 'confirmPackage'])->name('admin.partner-packages.confirm');
     Route::post('partner-packages/assign',               [\App\Http\Controllers\Admin\PartnerAdminController::class, 'assignPackages'])->name('admin.partner-packages.assign');
     Route::post('partner-packages/return-to-shop',       [\App\Http\Controllers\Admin\PartnerAdminController::class, 'returnPackagesToShop'])->name('admin.partner-packages.return');

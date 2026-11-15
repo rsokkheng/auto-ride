@@ -111,6 +111,11 @@ class Delivery extends Model
         'returned_at',
         'hub_returned_at',
         'confirmed_at',
+        'leg',
+        'pickup_driver_id',
+        'office_received_at',
+        'office_received_by',
+        'office_dispatched_at',
         'driver_id',
         'vehicle_id',
         'pickup_address',
@@ -184,6 +189,8 @@ class Delivery extends Model
         'completed_at'       => 'datetime',
         'pickup_scanned_at'  => 'datetime',
         'delivery_scanned_at'=> 'datetime',
+        'office_received_at'   => 'datetime',
+        'office_dispatched_at' => 'datetime',
         'surge_multiplier'=> 'float',
         'fee'              => 'integer',
         'package_amount'   => 'integer',
@@ -208,12 +215,24 @@ class Delivery extends Model
     // ── Partner packages ────────────────────────────────────────────────────
 
     /** Partner-facing package statuses, in workflow order. */
-    public const PACKAGE_STATUSES = ['pending', 'confirmed', 'driver_assigned', 'picked_up', 'in_transit', 'completed', 'failed', 'at_roteh', 'returned', 'cancelled'];
+    public const PACKAGE_STATUSES = ['pending', 'confirmed', 'driver_assigned', 'picked_up', 'at_office', 'in_transit', 'completed', 'failed', 'at_roteh', 'returned', 'cancelled'];
 
-    /** Map a raw deliveries.status onto the Partner package status. */
-    public static function packageStatusFor(string $status): string
+    /**
+     * Partner packages travel in two legs (see the 2026_11_15 migration):
+     * LEG_PICKUP shop → office, then LEG_DELIVERY office → customer.
+     */
+    public const LEG_PICKUP   = 'pickup';
+    public const LEG_DELIVERY = 'delivery';
+
+    /** Map a raw deliveries.status (and leg) onto the Partner package status. */
+    public static function packageStatusFor(string $status, ?string $leg = null): string
     {
+        // Delivery leg: waiting at the office for its driver, then on the way to the customer.
+        if ($leg === self::LEG_DELIVERY && in_array($status, ['assigned', 'accepted'], true)) return 'at_office';
+        if ($leg === self::LEG_DELIVERY && $status === 'picked_up') return 'in_transit';
+
         return match ($status) {
+            'at_office'                          => 'at_office',
             'created'                            => 'pending',
             'requested', 'pending'               => 'confirmed',
             'assigned', 'accepted'               => 'driver_assigned',
@@ -230,7 +249,53 @@ class Delivery extends Model
 
     public function packageStatus(): string
     {
-        return self::packageStatusFor((string) $this->status);
+        return self::packageStatusFor((string) $this->status, $this->leg);
+    }
+
+    /** The partner may cancel until the package leaves the shop (never once it reached the office). */
+    public function partnerCanCancel(): bool
+    {
+        return in_array($this->status, self::PRE_PICKUP_STATUSES, true) && ! $this->office_received_at;
+    }
+
+    /** On the shop → office leg (picked up or not yet). */
+    public function onPickupLeg(): bool
+    {
+        return $this->leg === self::LEG_PICKUP && in_array($this->status, ['assigned', 'accepted', 'picked_up'], true);
+    }
+
+    /**
+     * Admin workflow stage for Partner Deliveries:
+     * new → pickup → at_office → out → done, or problem (failed / back at ROTEH / returned / cancelled).
+     */
+    public function workflowStage(): string
+    {
+        return match (true) {
+            in_array($this->status, ['created', 'requested', 'pending'], true)        => 'new',
+            $this->onPickupLeg()                                                      => 'pickup',
+            $this->status === 'at_office',
+            $this->leg === self::LEG_DELIVERY && in_array($this->status, ['assigned', 'accepted'], true) => 'at_office',
+            in_array($this->status, self::FINISHED_STATUSES, true)                    => 'done',
+            in_array($this->status, ['delivery_failed', 'at_roteh', 'returned', 'cancelled'], true) => 'problem',
+            default                                                                   => 'out',
+        };
+    }
+
+    /** Query scope per workflowStage() value — keep the two in step. */
+    public function scopeInStage($query, string $stage)
+    {
+        return match ($stage) {
+            'new'       => $query->whereIn('status', ['created', 'requested', 'pending']),
+            'pickup'    => $query->where('leg', self::LEG_PICKUP)->whereIn('status', ['assigned', 'accepted', 'picked_up']),
+            'at_office' => $query->where(fn ($q) => $q->where('status', 'at_office')
+                ->orWhere(fn ($q) => $q->where('leg', self::LEG_DELIVERY)->whereIn('status', ['assigned', 'accepted']))),
+            'out'       => $query->whereIn('status', ['assigned', 'accepted', 'picked_up', 'in_progress', 'in_transit'])
+                ->where(fn ($q) => $q->whereNull('leg')->orWhere('leg', self::LEG_DELIVERY))
+                ->where(fn ($q) => $q->whereIn('status', ['picked_up', 'in_progress', 'in_transit'])->orWhereNull('leg')),
+            'done'      => $query->whereIn('status', self::FINISHED_STATUSES),
+            'problem'   => $query->whereIn('status', ['delivery_failed', 'at_roteh', 'returned', 'cancelled']),
+            default     => $query,
+        };
     }
 
     public function collection(): \Illuminate\Database\Eloquent\Relations\HasOne
@@ -293,6 +358,12 @@ class Delivery extends Model
     public function driver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'driver_id');
+    }
+
+    /** Staff driver who brought a Partner package from the shop to the office. */
+    public function pickupDriver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'pickup_driver_id');
     }
 
     public function vehicle(): BelongsTo

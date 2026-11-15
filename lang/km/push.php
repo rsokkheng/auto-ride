@@ -123,4 +123,5 @@ return [
     ],
     'staff_package_assigned' => ['title' => '📦 មានកញ្ចប់ថ្មីសម្រាប់អ្នក', 'body' => ':code — ទៅយកនៅ :pickup ហើយស្កេន QR។'],
     'delivery_at_roteh_sender' => ['title' => '📦 កញ្ចប់នៅ ROTEH', 'body' => ':code មិនអាចដឹកដល់បាន ហើយឥឡូវនៅ ROTEH។ នឹងប្រគល់ត្រឡប់ទៅហាងរបស់អ្នក។'],
+    'partner_package_at_office' => ['title' => '🏢 កញ្ចប់ដល់ការិយាល័យ ROTEH', 'body' => ':code បានមកដល់ការិយាល័យ ROTEH ហើយនឹងចេញដឹកជញ្ជូនឆាប់ៗនេះ។'],
 ];

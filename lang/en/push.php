@@ -125,4 +125,5 @@ return [
     ],
     'staff_package_assigned' => ['title' => '📦 New package assigned', 'body' => ':code — pick it up at :pickup and scan the QR.'],
     'delivery_at_roteh_sender' => ['title' => '📦 Package back at ROTEH', 'body' => ':code could not be delivered and is now at ROTEH. It will be handed back to your shop.'],
+    'partner_package_at_office' => ['title' => '🏢 Package at ROTEH office', 'body' => ':code arrived at the ROTEH office and will go out for delivery soon.'],
 ];

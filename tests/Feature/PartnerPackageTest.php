@@ -166,7 +166,7 @@ class PartnerPackageTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
 
         $this->actingAs($admin)->get(route('admin.partners'))->assertOk()->assertSee('New Shop');
-        $this->actingAs($admin)->get(route('admin.partner-packages'))->assertOk()->assertSee('PKG-')->assertSee('Confirm');
+        $this->actingAs($admin)->get(route('admin.partner-deliveries'))->assertOk()->assertSee('PKG-')->assertSee('Confirm');
         $d = Delivery::whereNotNull('partner_id')->first();
         $this->actingAs($admin)->get(route('admin.deliveries.show', $d))->assertOk()->assertSee('Confirm &amp; find driver', false);
     }

@@ -861,6 +861,52 @@ class DeliveryController extends ApiController
             ], 403);
         }
 
+        // Partner packages via the ROTEH office (leg set by StaffAssignmentService).
+        if ($delivery->partner_id && $delivery->leg) {
+            $office = (string) config('ride.office.address');
+
+            // Pickup leg, at the shop: accepted → picked_up, heading to the office.
+            if ($delivery->leg === Delivery::LEG_PICKUP && in_array($delivery->status, ['assigned', 'accepted'], true)) {
+                $delivery->update(['status' => 'picked_up', 'pickup_scanned_at' => now(), 'started_at' => $delivery->started_at ?? now()]);
+                $this->firestore->syncDelivery($delivery->fresh()->load('sender', 'driver'));
+
+                return $this->success([
+                    'action'      => 'pickup_confirmed',
+                    'leg'         => Delivery::LEG_PICKUP,
+                    'message'     => 'Picked up. Bring the package to the ROTEH office and scan it there.',
+                    'destination' => ['address' => $office, 'lat' => config('ride.office.lat'), 'lng' => config('ride.office.lng')],
+                    'delivery'    => $delivery->fresh()->only(['id', 'status', 'leg']),
+                ]);
+            }
+
+            // Pickup leg, at the office: picked_up → at_office. The driver's part is done.
+            if ($delivery->onPickupLeg()) {
+                app(\App\Services\PartnerPackageWorkflow::class)->receiveAtOffice($delivery, $user);
+
+                return $this->success([
+                    'action'   => 'office_received',
+                    'leg'      => Delivery::LEG_PICKUP,
+                    'message'  => 'Package received at the ROTEH office. Thank you!',
+                    'delivery' => $delivery->fresh()->only(['id', 'status', 'leg', 'office_received_at']),
+                ]);
+            }
+
+            // Delivery leg, at the office: accepted → picked_up, out for delivery.
+            if ($delivery->leg === Delivery::LEG_DELIVERY && in_array($delivery->status, ['assigned', 'accepted'], true)) {
+                $delivery->update(['status' => 'picked_up', 'office_dispatched_at' => now()]);
+                $this->firestore->syncDelivery($delivery->fresh()->load('sender', 'driver'));
+
+                return $this->success([
+                    'action'      => 'pickup_confirmed',
+                    'leg'         => Delivery::LEG_DELIVERY,
+                    'message'     => 'Out for delivery. Proceed to the customer.',
+                    'destination' => ['address' => $delivery->dropoff_address, 'lat' => $delivery->dropoff_lat, 'lng' => $delivery->dropoff_lng],
+                    'delivery'    => $delivery->fresh()->only(['id', 'status', 'leg', 'dropoff_address', 'dropoff_lat', 'dropoff_lng', 'recipient_name', 'recipient_phone']),
+                ]);
+            }
+            // Delivery leg at the customer: falls through to the handover scan below.
+        }
+
         // Pickup scan: accepted → picked_up
         if ($delivery->status === 'accepted') {
             $delivery->update([

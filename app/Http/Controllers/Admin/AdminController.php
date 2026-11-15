@@ -740,22 +740,15 @@ class AdminController extends Controller
 
     // ─── Deliveries ──────────────────────────────────────────────────────────
 
-    /** Orders sent in by delivery partners — the same list as deliveries(), partner orders only. */
-    public function partnerDeliveries(\Illuminate\Http\Request $request)
-    {
-        return $this->deliveries($request, partnerOnly: true);
-    }
-
-    /** Admin/customer orders. Partner orders have their own list (partnerDeliveries). */
-    public function deliveries(\Illuminate\Http\Request $request, bool $partnerOnly = false)
+    /** Admin/customer orders. Partner orders run on Partners → Deliveries (PartnerAdminController). */
+    public function deliveries(\Illuminate\Http\Request $request)
     {
         $type      = $request->input('type', 'all');
         $status    = $request->input('status');
         $search    = $request->input('search');
-        $partnerId = $partnerOnly ? $request->input('partner_id') : null;
 
-        $scoped = fn () => $partnerOnly ? Delivery::whereNotNull('partner_id') : Delivery::whereNull('partner_id');
-        $query  = $scoped()->with(['sender', 'driver', 'partner.partnerProfile'])->orderBy('created_at', 'desc');
+        $scoped = fn () => Delivery::whereNull('partner_id');
+        $query  = $scoped()->with(['sender', 'driver'])->orderBy('created_at', 'desc');
 
         if ($type !== 'all') {
             $query->where('service_type', $type);
@@ -771,9 +764,6 @@ class AdminController extends Controller
                   ->orWhere('partner_reference', 'like', "%{$search}%");
             });
         }
-        if ($partnerId) {
-            $query->where('partner_id', $partnerId);
-        }
         if ($request->boolean('unassigned')) {
             $query->whereNull('driver_id')->whereNotIn('status', ['completed', 'delivered', 'cancelled']);
         }
@@ -785,20 +775,11 @@ class AdminController extends Controller
 
         return view('admin.deliveries', [
             'deliveries'    => $deliveries,
-            'senders'       => $partnerOnly
-                ? User::whereIn('id', Delivery::whereNotNull('partner_id')->select('partner_id'))->orderBy('name')->get()
-                : User::where('role', 'passenger')->orderBy('name')->get(),
+            'senders'       => User::where('role', 'passenger')->orderBy('name')->get(),
             'drivers'       => User::where('role', 'driver')->orderBy('name')->get(),
-            'partners'      => $partnerOnly
-                ? User::whereIn('id', Delivery::whereNotNull('partner_id')->select('partner_id'))->with('partnerProfile')->orderBy('name')->get()
-                    ->mapWithKeys(fn ($u) => [$u->id => $u->partnerProfile?->business_name ?: $u->name])
-                : collect(),
-            'partnerOnly'   => $partnerOnly,
-            'listRoute'     => $partnerOnly ? 'admin.partner-deliveries' : 'admin.deliveries',
             'activeType'    => $type,
             'activeStatus'  => $status,
             'search'        => $search,
-            'activePartner' => $partnerId,
             'commissionPct' => (float) \App\Models\PricingSetting::get('delivery_commission_pct', \App\Models\PricingSetting::get('driver_commission_pct', config('commission.platform_rate.owner', 25))),
             'counts'        => [
                 'all'        => $scoped()->count(),
@@ -1005,7 +986,7 @@ class AdminController extends Controller
         $delivery->update($data);
 
         return $delivery->partner_id
-            ? redirect()->route('admin.partner-deliveries')->with('success', 'Order updated successfully.')
+            ? back()->with('success', 'Package updated.')
             : redirect()->route('admin.deliveries', ['type' => $data['service_type']])->with('success', 'Order updated successfully.');
     }
 

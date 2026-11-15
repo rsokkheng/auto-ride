@@ -35,6 +35,12 @@ class DeliveryOutcomeController extends ApiController
                 'message' => 'Only a package you have picked up can be marked as not delivered.',
             ], 422);
         }
+        if ($delivery->onPickupLeg()) {
+            return response()->json([
+                'success' => false, 'code' => 'pickup_leg',
+                'message' => 'This package is on its way to the ROTEH office, not to the receiver. Bring it to the office.',
+            ], 422);
+        }
 
         $delivery->update([
             'status'         => 'delivery_failed',

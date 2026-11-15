@@ -102,7 +102,7 @@
                 $pendingDrivers    = rescue(fn() => \App\Models\User::where('role','driver')->where('approval_status','pending')->count(), 0, false);
                 $pendingTx         = rescue(fn() => \App\Models\TransactionRecord::where('status','pending')->count(), 0, false);
                 $pendingPartners   = rescue(fn() => \App\Models\PartnerProfile::where('status','pending')->count(), 0, false);
-                $pendingPackages   = rescue(fn() => \App\Models\Delivery::whereNotNull('partner_id')->where('status','created')->count(), 0, false);
+                $pendingPackages   = rescue(fn() => \App\Models\Delivery::whereNotNull('partner_id')->where(fn ($q) => $q->where('status', 'created')->orWhere('status', 'at_office'))->count(), 0, false);
                 $pendingTopup      = rescue(fn() => \App\Models\TopUpRequest::where('status','pending')->count(), 0, false);
                 $pendingWithdraw   = rescue(fn() => \App\Models\WithdrawalRequest::where('status','pending')->count(), 0, false);
 
@@ -137,8 +137,7 @@
                     ['header' => 'Business', 'items' => [
                         ['label' => 'Partners', 'icon' => 'fa-handshake', 'children' => [
                             ['Partners',      'fa-store',         'admin.partners',           ['admin.partners*'], $pendingPartners, 'badge-warning'],
-                              ['Packages',      'fa-boxes-stacked', 'admin.partner-packages',   ['admin.partner-packages*'], $pendingPackages, 'badge-warning'],
-                            ['Deliveries',    'fa-truck-fast',    'admin.partner-deliveries', ['admin.partner-deliveries']],
+                            ['Deliveries',    'fa-truck-fast',    'admin.partner-deliveries', ['admin.partner-deliveries*', 'admin.partner-packages*'], $pendingPackages, 'badge-warning'],
                             ['Daily Closing', 'fa-cash-register', 'admin.daily-closing',      ['admin.daily-closing*']],
                             ['Statements',    'fa-file-invoice',  'admin.partner-statements', ['admin.partner-statements*']],
                             ['Contracts',     'fa-file-contract', 'admin.partner-contracts',  ['admin.partner-contracts*']],

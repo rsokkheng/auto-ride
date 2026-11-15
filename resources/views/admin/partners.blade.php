@@ -5,7 +5,7 @@
 @section('content')
 
 <x-admin.page-toolbar subtitle="Passengers who registered to send packages through ROTEH. Approved Partners see Create Package, My Packages and tracking in the Passenger app — and keep booking rides.">
-    <a href="{{ route('admin.partner-packages') }}" class="btn btn-outline-primary"><i class="fas fa-boxes-stacked mr-1"></i> Partner Packages</a>
+    <a href="{{ route('admin.partner-deliveries') }}" class="btn btn-outline-primary"><i class="fas fa-truck-fast mr-1"></i> Partner Deliveries</a>
     <a href="{{ route('admin.partner-contracts') }}" class="btn btn-outline-secondary"><i class="fas fa-file-contract mr-1"></i> Contracts &amp; Prices</a>
 </x-admin.page-toolbar>
 
@@ -57,7 +57,7 @@
                         @endif
                     </td>
                     <td class="text-right">
-                        <a href="{{ route('admin.partner-packages', ['search' => $p->user->name ?? '']) }}">{{ number_format($p->packages_count ?? 0) }}</a>
+                        <a href="{{ route('admin.partner-deliveries', ['partner_id' => $p->user_id]) }}">{{ number_format($p->packages_count ?? 0) }}</a>
                     </td>
                     <td>
                         <span class="status-pill tone-{{ $tone }}">{{ ucfirst($p->status) }}</span>

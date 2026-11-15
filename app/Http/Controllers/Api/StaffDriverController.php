@@ -29,17 +29,29 @@ class StaffDriverController extends ApiController
 
         [$from, $to] = PS::dayRange(null);
         $appTz = config('app.timezone');
-        $done = \App\Models\Delivery::where('driver_id', $user->id)->whereNotNull('partner_id')
-            ->whereIn('status', ['completed', 'delivered', 'at_roteh', 'returned'])
-            ->where(fn ($q) => $q->whereBetween('completed_at', [$from->copy()->setTimezone($appTz), $to->copy()->setTimezone($appTz)])
-                ->orWhereBetween('hub_returned_at', [$from->copy()->setTimezone($appTz), $to->copy()->setTimezone($appTz)]))
+        $day  = [$from->copy()->setTimezone($appTz), $to->copy()->setTimezone($appTz)];
+        $done = \App\Models\Delivery::whereNotNull('partner_id')
+            ->where(fn ($q) => $q
+                ->where(fn ($q) => $q->where('driver_id', $user->id)
+                    ->whereIn('status', ['completed', 'delivered', 'at_roteh', 'returned'])
+                    ->where(fn ($q) => $q->whereBetween('completed_at', $day)->orWhereBetween('hub_returned_at', $day)))
+                // Pickup legs I brought to the office today (the package may have a delivery driver now).
+                ->orWhere(fn ($q) => $q->where('pickup_driver_id', $user->id)->whereBetween('office_received_at', $day)))
             ->latest('updated_at')->get();
 
         $shop = fn ($d) => $d->partner?->partnerProfile?->business_name;
+        $office = ['address' => (string) config('ride.office.address'), 'lat' => config('ride.office.lat'), 'lng' => config('ride.office.lng')];
+        // Pickup leg: shop → office. Delivery leg (and older packages): → customer.
+        $route = fn ($d) => $d->leg === \App\Models\Delivery::LEG_PICKUP
+            ? ['collect_from' => ['address' => $d->pickup_address, 'lat' => $d->pickup_lat, 'lng' => $d->pickup_lng], 'destination' => $office]
+            : ['collect_from' => $d->leg === \App\Models\Delivery::LEG_DELIVERY ? $office : ['address' => $d->pickup_address, 'lat' => $d->pickup_lat, 'lng' => $d->pickup_lng],
+               'destination'  => ['address' => $d->dropoff_address, 'lat' => $d->dropoff_lat, 'lng' => $d->dropoff_lng]];
 
         return $this->success([
-            'active' => $active->map(fn ($d) => $d->toArray() + ['shop_name' => $shop($d)])->values(),
-            'done'   => $done->map(fn ($d) => $d->toArray() + ['shop_name' => $shop($d)])->values(),
+            'active' => $active->map(fn ($d) => $d->toArray() + ['shop_name' => $shop($d)] + $route($d))->values(),
+            'done'   => $done->map(fn ($d) => $d->toArray() + ['shop_name' => $shop($d), 
+                // In the list only for the pickup leg (not finished by me on the delivery leg).
+                'brought_to_office' => ! ($d->driver_id === $user->id && in_array($d->status, ['completed', 'delivered', 'at_roteh', 'returned'], true))])->values(),
         ]);
     }
 

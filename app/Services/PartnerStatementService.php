@@ -60,7 +60,7 @@ class PartnerStatementService
     public const OPEN_GROUPS = [
         'pending'    => ['created'],
         'confirmed'  => ['requested', 'pending'],
-        'on_the_way' => ['assigned', 'accepted', 'picked_up', 'in_progress', 'in_transit'],
+        'on_the_way' => ['assigned', 'accepted', 'picked_up', 'at_office', 'in_progress', 'in_transit'],
     ];
 
     public const STATUS_LABELS = [
@@ -240,7 +240,7 @@ class PartnerStatementService
             $group = match ($ps) {
                 'pending'                                    => 'pending',
                 'confirmed'                                  => 'confirmed',
-                'driver_assigned', 'picked_up', 'in_transit' => 'on_the_way',
+                'driver_assigned', 'picked_up', 'at_office', 'in_transit' => 'on_the_way',
                 default                                      => $ps, // completed | failed | at_roteh | returned | cancelled
             };
             $tz = self::tz();

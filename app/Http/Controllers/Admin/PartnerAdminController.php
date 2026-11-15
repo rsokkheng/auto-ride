@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Delivery;
 use App\Models\PartnerProfile;
 use App\Services\FcmService;
+use App\Services\PartnerPackageWorkflow;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -81,45 +82,101 @@ class PartnerAdminController extends Controller
         return back()->with('success', "{$profile->business_name} suspended — they can no longer create packages.");
     }
 
-    // ── Packages ─────────────────────────────────────────────────────────────
+    // ── Partner Deliveries (workflow board) ─────────────────────────────────
 
-    public function packages(Request $request)
+    /** Board stages, in workflow order: [label, icon, tone]. See Delivery::workflowStage(). */
+    public const STAGES = [
+        'new'       => ['New',              'fa-inbox',        'warning'],
+        'pickup'    => ['Pickup',           'fa-motorcycle',   'info'],
+        'at_office' => ['At office',        'fa-warehouse',    'violet'],
+        'out'       => ['Out for delivery', 'fa-truck-fast',   'primary'],
+        'done'      => ['Delivered',        'fa-circle-check', 'success'],
+        'problem'   => ['Problems',         'fa-triangle-exclamation', 'danger'],
+    ];
+
+    /**
+     * Partner package flow: partner books → admin assigns a pickup driver (shop → office)
+     * → received at the office → admin assigns a delivery driver (office → customer)
+     * → completed by the driver's QR scan + payment, or by admin.
+     */
+    public function deliveries(Request $request)
     {
-        $status = $request->query('status');
-        $search = trim((string) $request->query('search', ''));
+        $stage   = array_key_exists($request->query('stage'), self::STAGES) ? $request->query('stage') : null;
+        $search  = trim((string) $request->query('search', ''));
+        $partner = $request->integer('partner_id') ?: null;
 
-        $raw = [
-            'pending' => ['created'], 'confirmed' => ['requested', 'pending'], 'driver_assigned' => ['assigned', 'accepted'],
-            'picked_up' => ['picked_up'], 'in_transit' => ['in_progress', 'in_transit'],
-            'completed' => ['delivered', 'completed'], 'failed' => ['delivery_failed'], 'at_roteh' => ['at_roteh'], 'returned' => ['returned'],
-            'cancelled' => ['cancelled'],
-        ];
-
-        $packages = Delivery::with(['partner:id,name,phone,company_name', 'driver:id,name,phone'])
+        $packages = Delivery::with(['partner.partnerProfile:id,user_id,business_name', 'driver:id,name,phone', 'pickupDriver:id,name', 'collection'])
             ->whereNotNull('partner_id')
-            ->when($status && isset($raw[$status]), fn ($q) => $q->whereIn('status', $raw[$status]))
+            ->when($stage, fn ($q) => $q->inStage($stage))
+            ->when($partner, fn ($q) => $q->where('partner_id', $partner))
             ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
                 ->where('recipient_name', 'like', "%{$search}%")
                 ->orWhere('recipient_phone', 'like', "%{$search}%")
                 ->orWhere('partner_reference', 'like', "%{$search}%")
                 ->orWhere('id', ltrim(preg_replace('/^PKG-/i', '', $search), '#0') ?: 0)
                 ->orWhereHas('partner', fn ($u) => $u->where('name', 'like', "%{$search}%"))))
-            ->orderByRaw("CASE WHEN status = 'created' THEN 0 ELSE 1 END")
+            ->orderByRaw("CASE WHEN status = 'created' THEN 0 WHEN status = 'at_office' THEN 1 ELSE 2 END")
             ->orderByDesc('id')
             ->paginate(20)->withQueryString();
 
-        $counts = Delivery::whereNotNull('partner_id')->selectRaw('status, COUNT(*) n')->groupBy('status')->pluck('n', 'status');
-        $stats = array_fill_keys(array_keys($raw), 0);
-        foreach ($counts as $s => $n) {
-            $stats[Delivery::packageStatusFor((string) $s)] = ($stats[Delivery::packageStatusFor((string) $s)] ?? 0) + (int) $n;
-        }
+        $counts = collect(self::STAGES)->map(fn ($_, $key) => Delivery::whereNotNull('partner_id')->inStage($key)->count());
 
         $staff = \App\Models\User::salariedStaff()->orderBy('name')->get(['id', 'name', 'phone']);
         $staffLoad = Delivery::whereIn('driver_id', $staff->pluck('id'))->whereNotNull('partner_id')
             ->whereIn('status', ['accepted', 'assigned', 'picked_up', 'in_progress', 'in_transit', 'delivery_failed'])
             ->selectRaw('driver_id, COUNT(*) n')->groupBy('driver_id')->pluck('n', 'driver_id');
 
-        return view('admin.partner-packages', compact('packages', 'stats', 'staff', 'staffLoad'));
+        $partners = PartnerProfile::whereIn('user_id', Delivery::whereNotNull('partner_id')->select('partner_id'))
+            ->orderBy('business_name')->pluck('business_name', 'user_id');
+
+        return view('admin.partner-deliveries', [
+            'packages'  => $packages,
+            'stage'     => $stage,
+            'counts'    => $counts,
+            'atRoteh'   => Delivery::whereNotNull('partner_id')->where('status', 'at_roteh')->count(),
+            'staff'     => $staff,
+            'staffLoad' => $staffLoad,
+            'partners'  => $partners,
+            'office'    => (string) config('ride.office.address'),
+        ]);
+    }
+
+    /** Old Partner Packages URL → the board. */
+    public function packages(Request $request)
+    {
+        return redirect()->route('admin.partner-deliveries', $request->query());
+    }
+
+    /** End of the pickup leg: admin marks the package received at the office. */
+    public function receiveAtOffice(Delivery $delivery)
+    {
+        if (! app(PartnerPackageWorkflow::class)->receiveAtOffice($delivery, Auth::user())) {
+            return back()->with('error', "PKG-{$delivery->id} is not on its way to the office.");
+        }
+
+        return back()->with('success', "PKG-{$delivery->id} received at the office — now assign a delivery driver.");
+    }
+
+    /** Admin completes the drop-off for the driver, recording the money received. */
+    public function completeDelivery(Request $request, Delivery $delivery)
+    {
+        if (! $delivery->partner_id || $delivery->onPickupLeg() || $delivery->status === 'at_office'
+            || ! in_array($delivery->status, PartnerPackageWorkflow::HANDOVER_STATUSES, true)) {
+            return back()->with('error', "PKG-{$delivery->id} is not out for delivery.");
+        }
+        if (! $delivery->driver_id) {
+            return back()->with('error', "Assign a delivery driver to PKG-{$delivery->id} first — the money is recorded against them.");
+        }
+
+        $data   = $request->validate(\App\Http\Controllers\Api\DeliveryCollectionController::rules());
+        $flow   = app(PartnerPackageWorkflow::class);
+        $result = $flow->collect($delivery, $delivery->driver_id, $data);
+        if (isset($result['error'])) {
+            return back()->withInput()->with('error', $result['error']['message'])->with('completeId', $delivery->id);
+        }
+        $flow->finish($delivery);
+
+        return back()->with('success', "PKG-{$delivery->id} delivered and completed.");
     }
 
     /** Confirm a pending package and offer it to nearby drivers. */
@@ -142,7 +199,7 @@ class PartnerAdminController extends Controller
             report($e);
         }
 
-        return back()->with('success', "Package #{$delivery->id} confirmed — now assign a ROTEH staff driver.");
+        return back()->with('success', "Package #{$delivery->id} confirmed — now assign a pickup driver.");
     }
 
     /** Packages brought back to ROTEH → handed back to the shop. */

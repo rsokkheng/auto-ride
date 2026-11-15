@@ -123,4 +123,5 @@ return [
     ],
     'staff_package_assigned' => ['title' => '📦 新包裹已分配给您', 'body' => ':code——请到 :pickup 取件并扫描二维码。'],
     'delivery_at_roteh_sender' => ['title' => '📦 包裹已回到 ROTEH', 'body' => ':code 未能送达，现已回到 ROTEH，将退还给您的店铺。'],
+    'partner_package_at_office' => ['title' => '🏢 包裹已到 ROTEH 办公室', 'body' => ':code 已到达 ROTEH 办公室，即将安排派送。'],
 ];

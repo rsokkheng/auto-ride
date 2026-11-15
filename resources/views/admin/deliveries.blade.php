@@ -1,32 +1,24 @@
 @extends('admin.layout')
-@section('title', $partnerOnly ? 'Partner Deliveries' : 'Deliveries')
-@section('page-title', $partnerOnly ? 'Partner Deliveries' : 'Deliveries')
+@section('title', 'Deliveries')
+@section('page-title', 'Deliveries')
 
 @section('content')
 
-@if($partnerOnly)
-    <x-admin.page-toolbar subtitle="Orders sent in by delivery partners only. Admin and customer orders are under Operations → Deliveries.">
-        <a href="{{ route('admin.partner-packages') }}" class="btn btn-outline-primary"><i class="fas fa-boxes-stacked mr-1"></i> Partner Packages</a>
-    </x-admin.page-toolbar>
-@else
-    <x-admin.page-toolbar subtitle="Package deliveries and moving jobs. Orders from delivery partners are under Partners → Deliveries.">
-        <button class="btn btn-secondary" onclick="openCreate('moving')"><i class="fas fa-truck-moving mr-1"></i> New Moving Order</button>
-        <button class="btn btn-primary" onclick="openCreate('delivery')"><i class="fas fa-plus mr-1"></i> New Delivery</button>
-    </x-admin.page-toolbar>
-@endif
+<x-admin.page-toolbar subtitle="Package deliveries and moving jobs. Orders from delivery partners are under Partners → Deliveries.">
+    <button class="btn btn-secondary" onclick="openCreate('moving')"><i class="fas fa-truck-moving mr-1"></i> New Moving Order</button>
+    <button class="btn btn-primary" onclick="openCreate('delivery')"><i class="fas fa-plus mr-1"></i> New Delivery</button>
+</x-admin.page-toolbar>
 
-<x-admin.stat-grid :cols="$partnerOnly ? 3 : 5">
+<x-admin.stat-grid :cols="5">
     <x-admin.stat-card label="All Orders" :value="number_format($counts['all'])" icon="fa-layer-group" tone="primary"
-                       :href="route($listRoute)" :active="$activeType === 'all' && ! request('unassigned')" />
-    @unless($partnerOnly)
+                       :href="route('admin.deliveries')" :active="$activeType === 'all' && ! request('unassigned')" />
     <x-admin.stat-card label="Deliveries" :value="number_format($counts['delivery'])" icon="fa-box" tone="info"
-                       :href="route($listRoute, ['type' => 'delivery'])" :active="$activeType === 'delivery'" />
+                       :href="route('admin.deliveries', ['type' => 'delivery'])" :active="$activeType === 'delivery'" />
     <x-admin.stat-card label="Moving Jobs" :value="number_format($counts['moving'])" icon="fa-truck-moving" tone="warning"
-                       :href="route($listRoute, ['type' => 'moving'])" :active="$activeType === 'moving'" />
-    @endunless
+                       :href="route('admin.deliveries', ['type' => 'moving'])" :active="$activeType === 'moving'" />
     <x-admin.stat-card label="In Progress" :value="number_format($counts['active'])" icon="fa-route" tone="violet" sub="not finished yet" />
     <x-admin.stat-card label="Need a Driver" :value="number_format($counts['unassigned'])" icon="fa-user-plus" tone="danger"
-                       :href="route($listRoute, ['unassigned' => 1])" :active="request()->boolean('unassigned')" />
+                       :href="route('admin.deliveries', ['unassigned' => 1])" :active="request()->boolean('unassigned')" />
 </x-admin.stat-grid>
 
 @php
@@ -42,12 +34,9 @@
 @endphp
 <div class="card">
     <div class="card-header">
-        <x-admin.filter-bar :action="route($listRoute)" placeholder="Recipient, sender, phone or partner ref" :count="$deliveries->total()" noun="order">
+        <x-admin.filter-bar :action="route('admin.deliveries')" placeholder="Recipient, sender, phone or partner ref" :count="$deliveries->total()" noun="order">
             <input type="hidden" name="type" value="{{ $activeType }}">
             <x-admin.filter-select name="status" :options="collect($statuses)->mapWithKeys(fn ($s) => [$s => ucfirst(str_replace('_', ' ', $s))])->all()" all="All statuses" />
-            @if($partnerOnly && count($partners) > 0)
-                <x-admin.filter-select name="partner_id" :options="$partners->all()" all="All partners" />
-            @endif
         </x-admin.filter-bar>
     </div>
 
@@ -104,8 +93,6 @@
                         'payment_model'     => $d->payment_model ?? 'customer_pays',
                         'split_pct_customer'=> $d->split_pct_customer ?? 50,
                         'partner_reference' => $d->partner_reference ?? '',
-                        'status_label'      => ucfirst(str_replace('_', ' ', $d->partner_id ? $d->packageStatus() : $d->status)),
-                        'driver_label'      => $d->driver?->name ?? 'Not assigned yet',
                     ]) }}">
                     <td>
                         <div class="tw:flex tw:items-center tw:gap-3">
@@ -126,7 +113,7 @@
                         <div>{{ $d->sender_name ?? $d->sender?->name ?? '—' }} <i class="fas fa-arrow-right mx-1 text-muted" style="font-size:.6rem;"></i> {{ $d->recipient_name ?? '—' }}</div>
                         <div class="text-muted tw:text-xs">
                             {{ $d->recipient_phone ?? '' }}
-                            @if($d->partner) · <i class="fas fa-handshake"></i> {{ $d->partner->partnerProfile?->business_name ?: $d->partner->name }}@endif
+                            @if($d->partner) · <i class="fas fa-handshake"></i> {{ $d->partner->name }}@endif
                             @if($d->partner_reference) · ref {{ $d->partner_reference }}@endif
                         </div>
                         <button type="button" class="btn btn-link p-0 tw:text-xs"
@@ -191,7 +178,7 @@
                     </td>
                 </tr>
             @empty
-                <x-admin.empty-row colspan="8" icon="fa-box" title="No orders yet" :clear="route($listRoute)" />
+                <x-admin.empty-row colspan="8" icon="fa-box" title="No orders yet" :clear="route('admin.deliveries')" />
             @endforelse
             </tbody>
         </table>
@@ -220,7 +207,7 @@
                 <input type="hidden" name="service_type" id="f-service-type" value="delivery">
 
                 {{-- ── Service-type selector (partner orders are always deliveries) ── --}}
-                <div class="modal-body pb-1" @if($partnerOnly) hidden @endif>
+                <div class="modal-body pb-1">
                     <div class="form-group mb-3">
                         <label class="font-weight-bold d-block mb-2">Service Type <span class="text-danger">*</span></label>
                         <div class="d-flex" style="gap:10px;">
@@ -249,7 +236,7 @@
                     {{-- Sender --}}
                     <div class="form-row">
                         <div class="form-group col-md-6">
-                            <label>{{ $partnerOnly ? 'Partner Account' : 'Sender Account' }} <span class="text-danger">*</span></label>
+                            <label>Sender Account <span class="text-danger">*</span></label>
                             <select name="sender_id" id="f-sender" class="form-control" required>
                                 <option value="">— Select account —</option>
                                 @foreach($senders as $s)
@@ -496,19 +483,13 @@
 
                     {{-- Driver --}}
                     <div class="form-group">
-                        <label>{{ $partnerOnly ? 'Driver' : 'Assign Driver' }}</label>
-                        @if($partnerOnly)
-                            <input type="hidden" name="driver_id" id="f-driver">
-                            <input type="text" id="f-driver-label" class="form-control" readonly>
-                            <small class="text-muted">Assign ROTEH staff from Partner Packages.</small>
-                        @else
-                            <select name="driver_id" id="f-driver" class="form-control">
-                                <option value="">— Unassigned —</option>
-                                @foreach($drivers as $dr)
-                                    <option value="{{ $dr->id }}">{{ $dr->name }}{{ $dr->phone ? ' — '.$dr->phone : '' }}</option>
-                                @endforeach
-                            </select>
-                        @endif
+                        <label>Assign Driver</label>
+                        <select name="driver_id" id="f-driver" class="form-control">
+                            <option value="">— Unassigned —</option>
+                            @foreach($drivers as $dr)
+                                <option value="{{ $dr->id }}">{{ $dr->name }}{{ $dr->phone ? ' — '.$dr->phone : '' }}</option>
+                            @endforeach
+                        </select>
                     </div>
 
                     {{-- Addresses --}}
@@ -525,21 +506,14 @@
                     <div class="form-row">
                         <div class="form-group col-md-3">
                             <label>Status <span class="text-danger">*</span></label>
-                            @if($partnerOnly)
-                                {{-- Partner orders change status through Partner Packages and the driver app, not here. --}}
-                                <input type="hidden" name="status" id="f-status">
-                                <input type="text" id="f-status-label" class="form-control" readonly>
-                                <small class="text-muted">Change it from Partner Packages.</small>
-                            @else
-                                <select name="status" id="f-status" class="form-control" required>
-                                    <option value="requested">Requested</option>
-                                    <option value="pending">Pending</option>
-                                    <option value="accepted">Accepted</option>
-                                    <option value="in_progress">In Progress</option>
-                                    <option value="completed">Completed</option>
-                                    <option value="cancelled">Cancelled</option>
-                                </select>
-                            @endif
+                            <select name="status" id="f-status" class="form-control" required>
+                                <option value="requested">Requested</option>
+                                <option value="pending">Pending</option>
+                                <option value="accepted">Accepted</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="completed">Completed</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
                         </div>
                         <div class="form-group col-md-3">
                             <label>Total Fee (KHR ៛)</label>
@@ -684,7 +658,6 @@
 @push('scripts')
 <script>
 const storeUrl   = "{{ route('admin.deliveries.store') }}";
-const PARTNER_ONLY = @json($partnerOnly);
 const updateBase = '/admin/deliveries/';
 
 // ── Elevator toggle ──────────────────────────────────────────────────────────
@@ -857,11 +830,11 @@ function openEdit(btn) {
     const d = JSON.parse(btn.getAttribute('data-delivery'));
 
     document.getElementById('modalTitle').textContent =
-        (PARTNER_ONLY ? 'Edit Partner Delivery' : d.service_type === 'moving' ? 'Edit Moving Order' : 'Edit Delivery') + ' #' + d.id;
+        (d.service_type === 'moving' ? 'Edit Moving Order' : 'Edit Delivery') + ' #' + d.id;
     document.getElementById('deliveryForm').action = updateBase + d.id;
     document.getElementById('formMethod').value    = 'PUT';
 
-    setServiceType(PARTNER_ONLY ? 'delivery' : (d.service_type || 'delivery'));
+    setServiceType(d.service_type || 'delivery');
 
     document.getElementById('f-sender').value           = d.sender_id;
     document.getElementById('f-sender-name').value      = d.sender_name;
@@ -872,10 +845,6 @@ function openEdit(btn) {
     document.getElementById('f-pickup').value           = d.pickup_address;
     document.getElementById('f-dropoff').value          = d.dropoff_address;
     document.getElementById('f-status').value           = d.status;
-    if (PARTNER_ONLY) {
-        document.getElementById('f-status-label').value = d.status_label;
-        document.getElementById('f-driver-label').value = d.driver_label;
-    }
     document.getElementById('f-fee').value              = d.fee;
     const pkgAmt = document.getElementById('f-package-amount');
     if (pkgAmt) pkgAmt.value = d.package_amount || '';

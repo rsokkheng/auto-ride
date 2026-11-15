@@ -377,6 +377,8 @@ a.stat-card.is-active { border-color: var(--primary); box-shadow: 0 0 0 1px var(
 .tone-info    { background: var(--info-soft);    color: var(--info); }
 .tone-muted   { background: var(--ink-100);      color: var(--ink-600); }
 .tone-violet  { background: #ede9fe;             color: var(--violet); }
+.btn-violet { background: var(--violet); border-color: var(--violet); color: #fff; }
+.btn-violet:hover, .btn-violet:focus { background: #6d28d9; border-color: #6d28d9; color: #fff; }
 
 .filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 .filter-bar .form-control { width: auto; min-width: 150px; }

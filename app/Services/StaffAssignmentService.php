@@ -10,13 +10,15 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Admin assigns Partner packages to ROTEH staff drivers (no broadcast, no
- * online/offline). The package goes straight onto the driver's list as
- * "driver assigned" — they scan it at the shop to pick it up.
+ * online/offline). Every package goes through the ROTEH office in two legs:
+ *   pickup leg   — not at the office yet: the driver scans it at the shop and brings it in;
+ *   delivery leg — at the office: the driver scans it there and takes it to the customer.
+ * The leg follows from where the package is, so admin uses the same Assign for both.
  */
 class StaffAssignmentService
 {
-    /** Statuses a package can be (re)assigned from — before the pickup scan. */
-    public const ASSIGNABLE = ['created', 'requested', 'pending', 'assigned', 'accepted'];
+    /** Statuses a package can be (re)assigned from — before that leg's pickup scan. */
+    public const ASSIGNABLE = ['created', 'requested', 'pending', 'assigned', 'accepted', 'at_office'];
 
     public function assign(Delivery $delivery, User $staff): Delivery
     {
@@ -26,19 +28,21 @@ class StaffAssignmentService
         if (! $staff->isSalariedStaff()) {
             throw ValidationException::withMessages(['driver_id' => 'Partner packages can only be assigned to ROTEH staff drivers.']);
         }
-        if (! in_array($delivery->status, self::ASSIGNABLE, true) || $delivery->pickup_scanned_at) {
+        if (! self::canAssign($delivery)) {
             throw ValidationException::withMessages(['delivery' => "PKG-{$delivery->id} is already picked up or closed ({$delivery->status})."]);
         }
 
-        $previous = $delivery->driver_id && $delivery->driver_id !== $staff->id ? $delivery->driver_id : null;
+        $leg      = $delivery->office_received_at ? Delivery::LEG_DELIVERY : Delivery::LEG_PICKUP;
+        $previous = $delivery->driver_id && $delivery->driver_id !== $staff->id && $delivery->status !== 'at_office' ? $delivery->driver_id : null;
 
         $delivery->update([
             'driver_id'       => $staff->id,
             'status'          => 'accepted',            // shows as "driver assigned"
+            'leg'             => $leg,
             'assigned_at'     => now(),
             'confirmed_at'    => $delivery->confirmed_at ?? now(),
             'assignment_type' => 'manual',
-        ]);
+        ] + ($leg === Delivery::LEG_PICKUP ? ['pickup_driver_id' => $staff->id] : []));
 
         try {
             SyncFirestore::dispatch('syncDelivery', [$delivery->fresh(['sender', 'driver', 'vehicle'])]);
@@ -49,6 +53,21 @@ class StaffAssignmentService
         $this->notify($delivery, $staff, $previous);
 
         return $delivery->fresh();
+    }
+
+    /** Assignable now: not yet scanned out on its current leg, and not closed. */
+    public static function canAssign(Delivery $delivery): bool
+    {
+        if (! in_array($delivery->status, self::ASSIGNABLE, true)) return false;
+        if ($delivery->status === 'at_office') return true;
+
+        return $delivery->office_received_at ? ! $delivery->office_dispatched_at : ! $delivery->pickup_scanned_at;
+    }
+
+    /** Where the driver collects the package on this leg: the shop, or the ROTEH office. */
+    public static function collectFrom(Delivery $delivery): string
+    {
+        return $delivery->leg === Delivery::LEG_DELIVERY ? (string) config('ride.office.address') : (string) $delivery->pickup_address;
     }
 
     private function notify(Delivery $delivery, User $staff, ?int $previous): void
@@ -63,7 +82,7 @@ class StaffAssignmentService
             app(FcmService::class)->sendToUser($staff,
                 ...FcmService::message('staff_package_assigned', [
                     'code'   => 'PKG-' . str_pad((string) $delivery->id, 6, '0', STR_PAD_LEFT),
-                    'pickup' => (string) $delivery->pickup_address,
+                    'pickup' => self::collectFrom($delivery),
                 ]),
                 data: ['type' => 'staff_package_assigned', 'delivery_id' => (string) $delivery->id]
             );

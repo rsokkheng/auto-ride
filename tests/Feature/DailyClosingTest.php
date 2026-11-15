@@ -189,7 +189,7 @@ class DailyClosingTest extends TestCase
         $this->as($this->staff)->postJson("/api/v1/deliveries/{$d->id}/fail", ['reason' => 'wrong_address']);
         $this->as($this->staff)->postJson("/api/v1/deliveries/{$d->id}/return");
 
-        $this->actingAs($this->admin)->get(route('admin.partner-packages'))->assertOk()->assertSee('package(s) at ROTEH');
+        $this->actingAs($this->admin)->get(route('admin.partner-deliveries'))->assertOk()->assertSee('package(s) at ROTEH');
         $this->actingAs($this->admin)->post(route('admin.partner-packages.return'), ['ids' => [$d->id]])->assertSessionHas('success');
         $this->assertSame('returned', $d->fresh()->status);
     }

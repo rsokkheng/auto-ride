@@ -108,7 +108,8 @@ class StaffAssignmentTest extends TestCase
     public function test_admin_page_shows_staff_and_checkboxes(): void
     {
         $this->package('created');
-        $this->actingAs($this->admin)->get(route('admin.partner-packages'))->assertOk()
-            ->assertSee('Assign to ROTEH staff')->assertSee($this->staffA->name)->assertSee('name="ids[]"', false);
+        $this->actingAs($this->admin)->get(route('admin.partner-packages'))->assertRedirect(route('admin.partner-deliveries'));
+        $this->actingAs($this->admin)->get(route('admin.partner-deliveries'))->assertOk()
+            ->assertSee('Assign staff driver')->assertSee($this->staffA->name)->assertSee('name="ids[]"', false);
     }
 }
