@@ -109,14 +109,14 @@ class AdminPartnerDeliveriesTest extends TestCase
 
         // Leg 2 — delivery driver: office → customer.
         $this->assign($d, $this->deliveryStaff)->assertSessionHas('success');
-        $this->assertSame(['accepted', 'delivery', $this->deliveryStaff->id], [$d->fresh()->status, $d->fresh()->leg, $d->fresh()->driver_id]);
-        $this->assertSame('at_office', $this->partnerStatus($d));
+        // Assigned at the office = handed over: on the way, no scan at the office.
+        $this->assertSame(['in_transit', 'delivery', $this->deliveryStaff->id], [$d->fresh()->status, $d->fresh()->leg, $d->fresh()->driver_id]);
+        $this->assertSame('in_transit', $this->partnerStatus($d));
         $list = $this->withToken($this->deliveryStaff->api_token)->getJson('/api/v1/driver/staff/packages')->assertOk();
         $this->assertSame('ROTEH HQ, Toul Kork', $list->json('data.active.0.collect_from.address'));
         $this->assertSame('Customer, Sen Sok', $list->json('data.active.0.destination.address'));
 
-        $this->scan($this->deliveryStaff, $d)->assertOk()->assertJsonPath('data.action', 'pickup_confirmed')->assertJsonPath('data.leg', 'delivery');
-        $this->assertSame('in_transit', $this->partnerStatus($d));
+        // At the receiver: scan → confirm the money → completed.
         $this->scan($this->deliveryStaff, $d)->assertOk()->assertJsonPath('data.action', 'verify_payment');
         $this->withToken($this->deliveryStaff->api_token)->postJson("/api/v1/deliveries/{$d->id}/collect", ['cash_khr' => 20000])->assertOk();
 

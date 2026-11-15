@@ -17,8 +17,11 @@ use Illuminate\Validation\ValidationException;
  */
 class StaffAssignmentService
 {
-    /** Statuses a package can be (re)assigned from — before that leg's pickup scan. */
-    public const ASSIGNABLE = ['created', 'requested', 'pending', 'assigned', 'accepted', 'at_office'];
+    /**
+     * Statuses a package can be (re)assigned from: before the shop pickup scan
+     * (pickup leg), or at / out from the office until the handover (delivery leg).
+     */
+    public const ASSIGNABLE = ['created', 'requested', 'pending', 'assigned', 'accepted', 'at_office', 'in_transit'];
 
     public function assign(Delivery $delivery, User $staff): Delivery
     {
@@ -37,12 +40,17 @@ class StaffAssignmentService
 
         $delivery->update([
             'driver_id'       => $staff->id,
-            'status'          => 'accepted',            // shows as "driver assigned"
             'leg'             => $leg,
             'assigned_at'     => now(),
             'confirmed_at'    => $delivery->confirmed_at ?? now(),
             'assignment_type' => 'manual',
-        ] + ($leg === Delivery::LEG_PICKUP ? ['pickup_driver_id' => $staff->id] : []));
+        ] + ($leg === Delivery::LEG_PICKUP
+            // Pickup leg: driver assigned → scans the package at the shop.
+            ? ['status' => 'accepted', 'pickup_driver_id' => $staff->id]
+            // Delivery leg: the office hands the package over with the
+            // assignment — no scan at the office; straight on the way to the
+            // receiver (scan + confirm money at handover).
+            : ['status' => 'in_transit', 'office_dispatched_at' => now(), 'started_at' => $delivery->started_at ?? now()]));
 
         try {
             SyncFirestore::dispatch('syncDelivery', [$delivery->fresh(['sender', 'driver', 'vehicle'])]);
@@ -61,7 +69,11 @@ class StaffAssignmentService
         if (! in_array($delivery->status, self::ASSIGNABLE, true)) return false;
         if ($delivery->status === 'at_office') return true;
 
-        return $delivery->office_received_at ? ! $delivery->office_dispatched_at : ! $delivery->pickup_scanned_at;
+        // Delivery leg: reassignable until the handover (scan / money recorded).
+        if ($delivery->office_received_at) {
+            return ! $delivery->delivery_scanned_at && ! $delivery->collection()->exists();
+        }
+        return $delivery->status !== 'in_transit' && ! $delivery->pickup_scanned_at;
     }
 
     /** Where the driver collects the package on this leg: the shop, or the ROTEH office. */
